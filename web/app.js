@@ -221,6 +221,84 @@
     return { path, options };
   }
 
+  // Waypoints (Shift+click): the next allocation goes through them in order, each leg the shortest legal way from the
+  // previous one, so a longer route can be forced. Cleared after it's used, on Esc, and when the root changes.
+  let waypoints = [];
+  const routeTo = (target, option = null, remembered = false) => (waypoints.length ? waypointPlan(target, option, remembered) : findPath(target, option, remembered));
+  // Shortest way from `from` (with no `from`, from any node in `have`) to `target`, passing nodes in `have` for free. Same
+  // steps and rules as searchPath. Returns the ids to add in allocation order (partners right after their node), or null.
+  // Every new node on the way is kept, even past a node in `have`, so the route really runs through `from`.
+  function segmentPath(from, target, have) {
+    const prev = new Map(), queue = [];
+    for (const n of from ? [from] : [...have].map(id => byId.get(id))) { prev.set(n.id, null); queue.push(n); }
+    let found = false;
+    for (let qi = 0; qi < queue.length && !found; qi++) {
+      const cur = queue[qi];
+      const steps = cur.adj.filter(m => m.tier !== 'WORMHOLE_EXIT');
+      if (have.has(cur.id) || cur.tier === 'WORMHOLE' || cur.tier === 'SOCKET') { const p = partnerOf(cur); if (p) steps.push(p); }
+      for (const m of steps) {
+        if (prev.has(m.id) || switchedOff(m)) continue;
+        if (m.id !== target.id && !have.has(m.id) && staticBlock(m)) continue;
+        prev.set(m.id, cur.id);
+        if (m.id === target.id) { found = true; break; }
+        queue.push(m);
+      }
+    }
+    if (!found) return null;
+    const back = [];
+    for (let id = target.id; id != null; id = prev.get(id)) if (!have.has(id)) back.push(id);
+    const out = [];
+    for (const id of back.reverse()) {
+      if (!out.includes(id)) out.push(id);
+      const p = partnerOf(byId.get(id));
+      if (p && !have.has(p.id) && !out.includes(p.id) && !back.includes(p.id)) out.push(p.id);
+    }
+    return out;
+  }
+  // findPath through the waypoints: same result shape ({ path (target first), options } or { path: null, block }).
+  function waypointPlan(target, option = null, remembered = false) {
+    if (!state.root || sat(target.id) || switchedOff(target)) return { path: null, block: null };
+    const name = n => effectiveType(n).name;
+    const have = new Set([state.root, ...state.alloc]);
+    const order = [];
+    let from = null;
+    // Clicking a waypoint itself goes through the ones before it; the later ones stay for the next click.
+    const at = waypoints.indexOf(target);
+    for (const t of [...(at >= 0 ? waypoints.slice(0, at) : waypoints), target]) {
+      if (!have.has(t.id)) {
+        if (switchedOff(t)) return { path: null, block: { text: `Waypoint ${name(t)} needs ${t.tier === 'WORMHOLE' ? 'core wormholes' : 'faction volumes'} on.` } };
+        if (t.tier === 'WORMHOLE_EXIT' && !partnerOf(t)) return { path: null, block: { text: `${name(t)} opens only through an anchor linked in a subroutine socket.` } };
+        const seg = segmentPath(from, t, have);
+        if (!seg) return { path: null, block: { text: from ? `No legal way from ${name(from)} to ${name(t)}.` : `No legal way to reach ${name(t)}.` } };
+        for (const id of seg) { have.add(id); order.push(id); }
+      }
+      from = t;
+    }
+    const list = rules().list.slice(), options = new Map();
+    for (const id of order) {
+      const n = byId.get(id);
+      const p = id === target.id && option ? { option, block: blockOf(n, option, list) }
+        : placement(n, list, isChoice(n) ? (remembered && lastChoice.get(n.type.id)) || defaultOption(n) : null);
+      if (p.block) return { path: null, block: { ...p.block, node: n } };
+      options.set(id, p.option);
+      list.push(entryFor(n, p.option));
+    }
+    return { path: order.reverse(), options };
+  }
+  function toggleWaypoint(n) {
+    if (n.id === state.root) { toast('Every path starts from the root, so it can\'t be a waypoint.'); return; }
+    const i = waypoints.indexOf(n);
+    if (i >= 0) waypoints.splice(i, 1); else waypoints.push(n);
+    waypointsChanged();
+  }
+  function clearWaypoints() { if (waypoints.length) { waypoints = []; waypointsChanged(); } }
+  function waypointsChanged() {
+    updatePreview();
+    renderChrome();
+    if (hover) showTooltip(hover, lastMouse.x, lastMouse.y);
+    requestDraw();
+  }
+
   // Ids that removing `n` takes away: itself, its wormhole partner, and everything no longer joined to the root.
   function removalSet(n) {
     if (!state.alloc.has(n.id)) return null;
@@ -265,15 +343,18 @@
     pushUndo();
     state.root = n.id;
     state.alloc.clear(); state.choice.clear(); state.links.clear(); state.subs.clear(); state.template = null;
+    waypoints = [];
     changed();
   }
   // remembered: true picks each choice node on the path from lastChoice (falling back to the root default).
   function allocate(target, option, remembered = false) {
-    const found = findPath(target, option || null, remembered);
+    const found = routeTo(target, option || null, remembered);
     const path = found.path;
     if (!path) { if (found.block) toast(refusalText(target, found.block)); return false; }
     if (used() + path.length > state.cap) { toast(`That needs ${path.length} nodes; only ${Math.max(0, state.cap - used())} left under the cap.`); return false; }
     pushUndo();
+    const at = waypoints.indexOf(target);
+    waypoints = at >= 0 ? waypoints.slice(at + 1) : [];
     // Add in build order (nearest the build first) so allocation order, and exported template steps, read naturally.
     for (const id of [...path].reverse()) {
       state.alloc.add(id);
@@ -417,6 +498,7 @@
   function resetBuild() {
     pushUndo();
     state.root = null; state.alloc.clear(); state.choice.clear(); state.links.clear(); state.subs.clear(); state.template = null;
+    waypoints = [];
     changed();
   }
 
@@ -1317,6 +1399,7 @@
     for (const n of nodes) if (n.tier !== 'ROOT') drawNode(n, view, z, treeAlpha);
     for (const n of roots) drawRoot(n, view, z, choosing);
     if (targets.mode) drawTargetMarks(view, z);
+    if (waypoints.length) drawWaypoints(view, z);
     if (flash) {
       const age = time - flash.start;
       if (age > FLASH_SECONDS || age < 0) flash = null;
@@ -1914,8 +1997,11 @@
     const tm = state.root ? state.template : null;
     els.tplGroup.hidden = !tm;
     if (tm) { els.tplCurrent.textContent = tm.name; els.tplEdited.hidden = templateSig() === tm.sig; }
-    els.banner.hidden = !!state.root || targets.mode;
-    els.banner.textContent = S['ui.node.startingRootPrompt'] || 'Choose a root';
+    if (!state.root) waypoints = [];
+    els.banner.hidden = targets.mode || (!!state.root && !waypoints.length);
+    els.banner.textContent = !state.root ? S['ui.node.startingRootPrompt'] || 'Choose a root'
+      : `${waypoints.length} waypoint${waypoints.length === 1 ? '' : 's'}: click a node to allocate a path through them in order. Shift+click a waypoint to drop it, Esc to clear.`;
+    els.banner.classList.toggle('small', !!state.root);
   }
 
   function renderPanel() {
@@ -2132,12 +2218,19 @@
     } else if (switchedOff(n)) {
       html += `<div class="tt-warn">${n.tier === 'WORMHOLE' ? 'Core wormholes' : 'Faction volumes'} are off. Turn them on in the top bar.</div>`;
     } else {
-      const found = findPath(n);
+      const found = routeTo(n);
       const path = found.path;
-      if (!path && found.block) html += `<div class="tt-warn">Can't be allocated. ${esc(refusalText(n, found.block))}</div>`;
+      const via = waypoints.includes(n) ? waypoints.indexOf(n) : waypoints.length;
+      const viaText = via ? ` through ${via} waypoint${via > 1 ? 's' : ''}` : '';
+      if (!path && found.block) html += `<div class="tt-warn">Can't be allocated${viaText}. ${esc(refusalText(n, found.block))}</div>`;
       else if (!path) html += `<div class="tt-warn">${n.tier === 'WORMHOLE_EXIT' ? 'Link an anchor in a subroutine socket to reach this.' : 'Not reachable from your allocated nodes.'}</div>`;
-      else if (used() + path.length > state.cap) html += `<div class="tt-warn">Needs ${path.length} node${path.length > 1 ? 's' : ''}; ${Math.max(0, state.cap - used())} left under the cap.</div>`;
-      else html += `<div class="tt-note">Click to allocate${path.length > 1 ? ` (${path.length} nodes)` : ''}${isChoice(n) ? ' and pick an option' : ''}.</div>`;
+      else if (used() + path.length > state.cap) html += `<div class="tt-warn">Needs ${path.length} node${path.length > 1 ? 's' : ''}${viaText}; ${Math.max(0, state.cap - used())} left under the cap.</div>`;
+      else html += `<div class="tt-note">Click to allocate${path.length > 1 ? ` (${path.length} nodes${viaText})` : viaText}${isChoice(n) ? ' and pick an option' : ''}.</div>`;
+    }
+    if (state.root && n.id !== state.root) {
+      const wi = waypoints.indexOf(n);
+      if (wi >= 0) html += `<div class="tt-note">Waypoint ${wi + 1}. Shift+click to drop it.</div>`;
+      else if (waypoints.length) html += `<div class="tt-note">Shift+click to make it waypoint ${waypoints.length + 1}.</div>`;
     }
     if (state.root && isChoice(n) && (sat(n.id) || pathTo(n))) {
       const last = types.get(lastChoice.get(n.type.id));
@@ -2214,7 +2307,7 @@
       const gone = removalSet(hover);
       if (gone) preview = { remove: new Set(gone) };
     } else {
-      const path = pathTo(hover);
+      const path = routeTo(hover).path;
       if (path) preview = { add: new Set(path) };
     }
   }
@@ -2281,8 +2374,8 @@
         } else if (switchedOff(n)) {
           html += `<div class="sub" style="padding:2px 0">${n.tier === 'WORMHOLE' ? 'Core wormholes' : 'Faction volumes'} are off, so this can't be allocated.</div>`;
         } else {
-          const path = pathTo(n);
-          html += path ? `<button data-act="alloc">Allocate (${path.length} node${path.length === 1 ? '' : 's'})</button>`
+          const path = routeTo(n).path;
+          html += path ? `<button data-act="alloc">Allocate (${path.length} node${path.length === 1 ? '' : 's'}${waypoints.length ? ', through the waypoints' : ''})</button>`
             : '<div class="sub" style="padding:2px 0">Not reachable from your build yet.</div>';
         }
       }
@@ -2436,11 +2529,12 @@
   });
 
   // ------------------------------------------------------------------ actions
-  function primaryAction(n, sx, sy, quick = false) {
+  function primaryAction(n, sx, sy, quick = false, shift = false) {
     // Wormholes: Ctrl/Cmd+click travels to the other end (as in the mod); a plain click offers jump or allocate/remove.
     const jump = jumpTarget(n);
     if (jump && quick) { jumpTo(jump); return; }
     if (targets.mode && state.root) { cycleTarget(n); return; }
+    if (shift && state.root) { toggleWaypoint(n); return; }
     if (jump && (n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT')) { openPicker(n, sx, sy); return; }
     if (!state.root) { if (n.tier === 'ROOT') chooseRoot(n); return; }
     if (n.id === state.root) return;
@@ -2449,7 +2543,7 @@
       const opt = lastChoice.get(n.type.id);
       if (!opt) { toast('Pick an option once; Ctrl+click then reuses it.'); openPicker(n, sx, sy); return; }
       if (sat(n.id)) setChoice(n, opt);
-      else if (pathTo(n)) allocate(n, opt, true);
+      else if (routeTo(n, opt, true).path) allocate(n, opt, true);
       return;
     }
     if (sat(n.id)) {
@@ -2458,7 +2552,7 @@
       return;
     }
     if (switchedOff(n)) { toast(`${n.tier === 'WORMHOLE' ? 'Core wormholes' : 'Faction volumes'} are off. Turn them on in the top bar.`); return; }
-    const found = findPath(n);
+    const found = routeTo(n);
     const path = found.path;
     if (!path) {
       // A choice node is refused only when every option is; the picker then shows each option's reason.
@@ -2530,7 +2624,8 @@
     if (targets.mode === on) return;
     targets.mode = on;
     closePicker();
-    els.banner.hidden = !!state.root || on;
+    waypoints = [];
+    renderChrome();
     targetsChanged();
   }
   function setTargetKeep(on) { targets.keep = on; targetsChanged(); }
@@ -2845,6 +2940,29 @@
       }
     }
   }
+  // Waypoints: a gold ring with the waypoint's number in a badge at its upper right.
+  function drawWaypoints(view, z) {
+    const px = 1 / z;
+    waypoints.forEach((n, i) => {
+      if (!inView(view, n.x, n.y, n.fp * 2)) return;
+      const dot = n.fp * z < 5;
+      const r = dot ? Math.max(6 * px, n.fp * 0.6) : n.fp * 0.66;
+      const lw = dot ? 2 * px : Math.max(2 * px, n.fp * 0.06);
+      ctx.globalAlpha = 1;
+      for (const [col, extra] of [['rgba(0,0,0,0.8)', lw * 1.2], [rgba(SEARCH_GOLD, 0.95), 0]]) {
+        ctx.strokeStyle = col; ctx.lineWidth = lw + extra;
+        ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.stroke();
+      }
+      const br = Math.max(8 * px, n.fp * 0.22), bx = n.x + r * 0.75, by = n.y - r * 0.75;
+      ctx.fillStyle = rgba(SEARCH_GOLD, 1);
+      ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.font = `600 ${br * 1.3}px ${FONT}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(i + 1), bx, by + br * 0.05);
+    });
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  }
   function targetTooltipNote(n) {
     if (n.id === state.root) return '<div class="tt-note">Starting root: always in the build.</div>';
     const st = targets.want.has(n.id) ? 'Wanted' : targets.forbid.has(n.id) ? 'Forbidden' : '';
@@ -2935,7 +3053,7 @@
         }
         if (n) {
           if (wasDrag.button === 2) secondaryAction(n, e.clientX, e.clientY);
-          else if (wasDrag.button === 0) primaryAction(n, e.clientX, e.clientY, e.ctrlKey || e.metaKey);
+          else if (wasDrag.button === 0) primaryAction(n, e.clientX, e.clientY, e.ctrlKey || e.metaKey, e.shiftKey);
         }
       }
     }
@@ -3849,7 +3967,7 @@
     else if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey) togglePanel();
     else if (e.key.toLowerCase() === 'x' && !e.ctrlKey && !e.metaKey && !e.altKey) { setMarkRefused(!markRefused); toast(markRefused ? 'Refused nodes marked with an X.' : 'Refused nodes no longer marked.'); }
     else if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey && !e.altKey) setTargetMode(!targets.mode);
-    else if (e.key === 'Escape') { if (!els.picker.hidden) closePicker(); else if (targets.mode) setTargetMode(false); }
+    else if (e.key === 'Escape') { if (!els.picker.hidden) closePicker(); else if (waypoints.length) clearWaypoints(); else if (targets.mode) setTargetMode(false); }
     else if (e.key === '/') { e.preventDefault(); els.search.focus(); }
   });
   window.addEventListener('resize', resize);
@@ -3887,6 +4005,7 @@
     templateToCode, codeToTemplate, pathTo, removalSet, allocate: id => allocate(byId.get(id)), chooseRoot: id => chooseRoot(byId.get(id)), totals, describe, serialize,
     findPath: (id, opt) => findPath(byId.get(id), opt), blockOf: (id, opt) => blockOf(byId.get(id), opt || null, rules().list),
     problems: () => [...rules().problems].map(([id, b]) => ({ id, text: b.text })), setShip, setAffinitySplit,
+    waypoints: () => waypoints.map(n => n.id), toggleWaypoint: id => toggleWaypoint(byId.get(id)), clearWaypoints, routeTo: (id, opt) => routeTo(byId.get(id), opt),
     targets, setTargetMode, setTargetKeep, cycleTarget: id => cycleTarget(byId.get(id)), plan: () => currentPlan(), applyPlan,
     socketSub: (socket, id, extra) => socketSub(byId.get(socket), id, extra), setGrants: (socket, ids) => setGrants(byId.get(socket), ids), subState: () => subState(), typesExclusive: (a, b) => typesExclusive(types.get(a), types.get(b)) };
 })();

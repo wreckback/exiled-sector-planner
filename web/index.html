@@ -272,7 +272,7 @@
       <tr><td><kbd>T</kbd></td><td>Turn target mode on or off</td></tr>
       <tr><td><kbd>/</kbd></td><td>Jump to the search box</td></tr>
       <tr><td><kbd>?</kbd></td><td>Show or hide this list</td></tr>
-      <tr><td><kbd>Esc</kbd></td><td>Close this list or the option/anchor picker, or leave target mode</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Close this list or the option/anchor picker, clear waypoints, or leave target mode</td></tr>
     </table>
     <p class="muted">Keys don't work while you're typing in the search, cap or hull fields.</p>
 
@@ -288,6 +288,7 @@
       <tr><td>Left-click an allocated node</td><td>Remove it and anything cut off from the root</td></tr>
       <tr><td>Left-click an allocated affinity node or socket</td><td>Open its picker (switch option, change anchor)</td></tr>
       <tr><td><kbd>Ctrl</kbd>+click an affinity or other choice node <span class="muted">(<kbd>Cmd</kbd>+click on Mac)</span></td><td>Allocate it with the option you last picked for that kind of node (choice nodes along the path get it too), or switch an allocated one to it</td></tr>
+      <tr><td><kbd>Shift</kbd>+click a node</td><td>Add it as the next waypoint, or drop it if it already is one. The next allocation then goes through the waypoints in order, each leg the shortest legal way from the one before, so you can force a longer route. <kbd>Esc</kbd> clears them</td></tr>
       <tr><td>Right-click an allocated node</td><td>Remove it (any node type)</td></tr>
       <tr><td>Right-click your starting root</td><td>Asks first, then resets the build so you can choose a root again (like Reset)</td></tr>
       <tr><td>Click a wormhole or linked wormhole exit</td><td>Menu: jump to the other end, or allocate/remove</td></tr>
@@ -311,7 +312,7 @@
 </div>
 
 <div id="help">
-  <b>Click</b> allocate (finds the shortest path) · <b>Click</b> an allocated node to remove it and anything cut off ·
+  <b>Click</b> allocate (finds the shortest path) · <b>Shift+click</b> waypoints to force a route · <b>Click</b> an allocated node to remove it and anything cut off ·
   <b>Right-click</b> your root to reset · <b>X</b> marks refused nodes · <b>T</b> target mode ·
   <b>Drag</b>/<b>arrows</b> pan · <b>Wheel</b>/<b>PgUp</b>/<b>PgDn</b> zoom · <b>?</b> all shortcuts
 </div>

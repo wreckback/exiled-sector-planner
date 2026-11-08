@@ -183,6 +183,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 #targets-status.bad { color: var(--bad); }
 #btn-targets.on { border-color: var(--accent); color: var(--accent); }
 @media (min-width: 960px) { body.panel-open #targets { left: calc((100vw - 380px) / 2); } }
+#banner.small { font-size: 13px; font-weight: 400; }
 #toast {
   position: fixed; left: 50%; bottom: calc(40px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
   z-index: 50; /* above the dialogs (40) so copy confirmations show over them */

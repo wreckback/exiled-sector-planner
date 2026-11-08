@@ -112,6 +112,10 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - The node rules are replayed on the plan in allocation order. A node that clashes with a wanted one is routed around, and a wanted node that can't be had is reported.
 - "Keep current build" off plans from the root alone and removes what the plan doesn't need.
 
+**Waypoints**
+- Shift+click marks numbered waypoints, and the next allocation runs through them in order, each leg the shortest legal path from the waypoint before. This forces longer routes, for example to raise a Root Conduit's route count. The preview, tooltip and wormhole picker follow the waypoint route, a banner shows the count, and Esc clears them.
+- Clicking a waypoint itself uses only the ones before it. The rules are checked on the whole route, as with a plain click.
+
 **Affinity nodes in bulk**
 - A block under the affinity totals sets every allocated affinity node to one option, or to a typed Low / Mid / High split that changes as few nodes as possible. Each is one Undo step.
 
