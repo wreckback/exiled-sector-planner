@@ -45,7 +45,7 @@ The last line says either "All checks passed, no rule files changed", in which c
 
 ## Use it
 
-1. **Pick a root:** Low Tech, Midline or High Tech, near the centre.
+1. **Pick a root:** Low Tech, Midline or High Tech, near the centre. To change it later, right-click your root (or use Reset). It asks first, because changing the root clears the build. Undo brings the build back. The game itself never lets a ship drop its root; this is only a planning shortcut.
 2. **Allocate:**
    - Click a glowing node next to your build, or click any node to take the shortest path to it. Hovering previews the path in green.
    - Clicking an allocated node removes it and anything cut off from the root (orange preview). Right-click removes any node.

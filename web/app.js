@@ -1429,7 +1429,7 @@
     if (jt && (n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT')) {
       html += `<div class="tt-note">Click for options (jump${state.root && n.id !== state.root ? (allocated ? ', remove' : ', allocate') : ''}). Ctrl+click to jump to ${esc(placeName(jt))}.</div>`;
     } else if (!state.root) html += n.tier === 'ROOT' ? '<div class="tt-note">Click to start from this root.</div>' : '';
-    else if (n.id === state.root) html += '<div class="tt-note">Starting root.</div>';
+    else if (n.id === state.root) html += '<div class="tt-note">Starting root. Right-click to reset the build.</div>';
     else if (allocated) {
       const gone = removalSet(n) || [];
       if (n.tier === 'SOCKET') html += `<div class="tt-note">Click to ${state.links.get(n.id) ? 'change or unlink the anchor' : 'link an anchor'}. Right-click to remove.</div>`;
@@ -1511,7 +1511,14 @@
     pickerFor = n;
     hideTooltip();
     let html = '';
-    if (isChoice(n)) {
+    if (n.id === state.root) {
+      // The game never removes a starting root; here it's a shortcut to Reset, so warn first.
+      const count = state.alloc.size;
+      html += '<h4>Reset the build?</h4>';
+      html += `<div class="sub" style="padding:2px 0 6px">This removes the ${esc(n.type.name)} root${count ? ` and all ${count} allocated node${count === 1 ? '' : 's'}` : ''}, so you can choose a root again. Undo brings it back.</div>`;
+      html += '<button data-act="reset" class="danger">Reset build</button>';
+      html += '<button data-act="cancel">Cancel</button>';
+    } else if (isChoice(n)) {
       const cur = state.choice.get(n.id);
       html += `<h4>${esc(n.type.name)}: choose an option</h4>`;
       for (const id of n.type.options) {
@@ -1576,6 +1583,7 @@
     else if (b.dataset.act === 'alloc') allocate(n);
     else if (b.dataset.act === 'unlink') unlinkSocket(n);
     else if (b.dataset.act === 'remove') deallocate(n);
+    else if (b.dataset.act === 'reset') { closePicker(); resetBuild(); toast('Build cleared. Undo brings it back.'); return; }
     closePicker();
   });
 
@@ -1606,8 +1614,9 @@
     if (isChoice(n)) { openPicker(n, sx, sy); return; }
     if (allocate(n) && n.tier === 'SOCKET') openPicker(n, sx, sy);
   }
-  function secondaryAction(n) {
-    if (!state.root || n.id === state.root) return;
+  function secondaryAction(n, sx, sy) {
+    if (!state.root) return;
+    if (n.id === state.root) { openPicker(n, sx, sy); return; }
     if (sat(n.id)) deallocate(n);
   }
 
@@ -1678,12 +1687,14 @@
           if (!n) { hideTooltip(); setHover(null); lastTouchNode = null; return; }
           if (lastTouchNode !== n) { lastTouchNode = n; setHover(n); showTooltip(n, e.clientX, e.clientY - 60); return; }
           lastTouchNode = null; hideTooltip();
-          primaryAction(n, e.clientX, e.clientY);
+          // Touch has no right-click, so a second tap on the chosen root offers the reset.
+          if (n.id === state.root) secondaryAction(n, e.clientX, e.clientY);
+          else primaryAction(n, e.clientX, e.clientY);
           setHover(null);
           return;
         }
         if (n) {
-          if (wasDrag.button === 2) secondaryAction(n);
+          if (wasDrag.button === 2) secondaryAction(n, e.clientX, e.clientY);
           else if (wasDrag.button === 0) primaryAction(n, e.clientX, e.clientY, e.ctrlKey || e.metaKey);
         }
       }

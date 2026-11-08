@@ -94,6 +94,7 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - Arrow keys pan and Page Up / Page Down zoom; holding a key keeps the view moving.
 - Home re-centres, S toggles the summary, / focuses search, ? opens the shortcuts list, Ctrl+Z undoes, Esc closes things.
 - The shortcuts dialog lists every keyboard, mouse and touch control.
+- Right-clicking the starting root (a double tap on touch) opens a warning that the build will be reset, with Reset build and Cancel buttons. The game never removes a root, so this is only a shortcut to Reset.
 
 **Styling**
 - At your request, the CSS was cut down for function over looks: system font (dropping the Google font), solid panels, no shadows, gradients, transitions or rounded corners, and plain-case labels.
