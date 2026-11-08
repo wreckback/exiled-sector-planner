@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Exiled Sector Planner</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="tree"></canvas>
+
+<header id="topbar">
+  <div class="brand">
+    <span class="brand-title">Exiled Sector</span>
+    <span class="brand-sub">Skill Tree Planner</span>
+  </div>
+
+  <div class="bar-group" id="root-group">
+    <span class="label">Root</span>
+    <span id="root-name" class="value muted">Choose a root</span>
+  </div>
+
+  <div class="bar-group">
+    <span class="label">Nodes</span>
+    <span class="value"><span id="used">0</span> / <input id="cap" type="number" min="1" max="999" value="60" title="Node cap (mod default is 60)"></span>
+  </div>
+
+  <div class="bar-group">
+    <label class="label" for="hull">Hull</label>
+    <select id="hull">
+      <option value="frigate">Frigate</option>
+      <option value="destroyer">Destroyer</option>
+      <option value="cruiser" selected>Cruiser</option>
+      <option value="capitalShip">Capital</option>
+    </select>
+  </div>
+
+  <div class="bar-group">
+    <label title="The paired wormholes that link the tech regions"><input id="opt-core" type="checkbox" checked> Core wormholes</label>
+    <label title="Anchors in subroutine sockets that open wormholes to the faction volumes"><input id="opt-volumes" type="checkbox" checked> Faction volumes</label>
+  </div>
+
+  <div class="bar-group search">
+    <input id="search" type="search" placeholder="Search nodes…" autocomplete="off">
+    <span id="search-count" class="muted"></span>
+  </div>
+
+  <div class="bar-group actions">
+    <button id="btn-fit" title="Frame the core tree (Home)">Center</button>
+    <button id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="btn-reset" title="Clear the build and choose a new root">Reset</button>
+    <button id="btn-share" class="primary" title="Copy a link to this build">Copy link</button>
+    <button id="btn-export" title="Import and export in-game skill tree templates" aria-haspopup="dialog" aria-controls="export">Templates</button>
+    <button id="btn-panel" title="Show or hide the summary (S)">Summary</button>
+    <button id="btn-keys" title="Show all shortcuts (?)" aria-haspopup="dialog" aria-controls="keys">Shortcuts</button>
+  </div>
+</header>
+
+<aside id="panel">
+  <div class="panel-head">
+    <h2>Build summary</h2>
+    <span id="panel-sub" class="muted"></span>
+  </div>
+  <div id="affinity"></div>
+  <div class="panel-tabs">
+    <button data-tab="stats" class="active">Effects</button>
+    <button data-tab="nodes">Notables &amp; keystones</button>
+    <button data-tab="search" id="tab-search" hidden>Search</button>
+  </div>
+  <div id="panel-body"></div>
+  <footer id="panel-foot"></footer>
+</aside>
+
+<div id="banner" hidden></div>
+<div id="tooltip" hidden></div>
+<div id="picker" hidden></div>
+<div id="toast" hidden></div>
+
+<div id="export" role="dialog" aria-modal="true" aria-labelledby="export-title" hidden>
+  <div class="keys-head">
+    <h2 id="export-title">Templates</h2>
+    <button id="export-close" title="Close (Esc)">Close</button>
+  </div>
+  <div class="keys-body">
+    <p>The game keeps skill tree templates for every save in one file, <code>exiledSector_skillTreeTemplates.json.data</code>, in the <code>saves/common</code> folder of your Starsector install (for example <code>C:\Program Files (x86)\Fractal Softworks\Starsector\saves\common</code>). It re-reads that file whenever the skill tree opens, so changes show up while the game is running.</p>
+
+    <h3>Templates file</h3>
+    <p id="tf-status"></p>
+    <div class="export-actions">
+      <button id="tf-link" class="primary">Link templates file…</button>
+      <button id="tf-reconnect" hidden>Reconnect</button>
+      <button id="tf-reload" hidden>Reload</button>
+      <button id="tf-forget" hidden>Forget</button>
+    </div>
+    <p id="tf-note" class="muted"></p>
+
+    <h3>Import</h3>
+    <div id="tf-list"><p class="muted">Link the file to see its templates.</p></div>
+
+    <h3>Export this build</h3>
+    <p><label for="tpl-name">Template name</label><br>
+      <input id="tpl-name" type="text" maxlength="32" autocomplete="off" style="width:100%"></p>
+    <p id="tpl-summary" class="muted"></p>
+    <p class="muted">If the file already has a template with this name and root, it's replaced and keeps its id, so ships using it stay assigned. Otherwise it's added. Other templates are kept as they are.</p>
+
+    <div class="export-actions">
+      <button id="tpl-save" class="primary">Save into linked file</button>
+    </div>
+    <p id="tpl-save-note" class="muted"></p>
+
+    <div id="tpl-conflict" role="group" aria-labelledby="tpl-conflict-msg" hidden>
+      <p id="tpl-conflict-msg"></p>
+      <div class="export-actions">
+        <button id="tpl-keep" class="primary"></button>
+        <button id="tpl-change"></button>
+      </div>
+      <p><label for="tpl-newname">Or save as a new template named</label><br>
+        <input id="tpl-newname" type="text" maxlength="32" autocomplete="off" style="width:100%"></p>
+      <div class="export-actions">
+        <button id="tpl-asnew">Save as new template</button>
+        <button id="tpl-cancel">Cancel</button>
+      </div>
+    </div>
+
+    <h3>Share as code</h3>
+    <p class="muted">A code holds one template as text, for pasting into chat when sending the file isn't practical. Loading a code works like loading a template from the file; save it into the file afterwards to use it in game.</p>
+    <div class="export-actions">
+      <button id="code-copy">Copy code for this build</button>
+    </div>
+    <p><label for="code-box">Template code</label><br>
+      <textarea id="code-box" rows="3" spellcheck="false" autocomplete="off" placeholder="Paste a code here (starts with ES1.)"></textarea></p>
+    <div class="export-actions">
+      <button id="code-load">Load code</button>
+    </div>
+    <p id="code-status" role="status"></p>
+
+    <h3>Other ways to export</h3>
+    <div class="export-actions">
+      <button id="tpl-merge">Add to a file and download it…</button>
+      <button id="tpl-new">Download as a new file</button>
+      <button id="tpl-copy">Copy template JSON</button>
+    </div>
+    <p class="muted">Downloads land in your Downloads folder; move the file into <code>saves/common</code>. "Download as a new file" holds only this template, so placing it over an existing file drops the templates already there.</p>
+    <input id="tpl-file" type="file" accept=".data,.json,application/json" hidden>
+    <p id="tpl-status" role="status"></p>
+  </div>
+</div>
+
+<div id="keys" role="dialog" aria-modal="true" aria-labelledby="keys-title" hidden>
+  <div class="keys-head">
+    <h2 id="keys-title">Shortcuts</h2>
+    <button id="keys-close" title="Close (Esc)">Close</button>
+  </div>
+  <div class="keys-body">
+    <h3>Keyboard</h3>
+    <table>
+      <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd></td><td>Pan (hold to keep moving)</td></tr>
+      <tr><td><kbd>Page Up</kbd></td><td>Zoom in (hold to keep zooming)</td></tr>
+      <tr><td><kbd>Page Down</kbd></td><td>Zoom out (hold to keep zooming)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> <span class="muted">(<kbd>Cmd</kbd>+<kbd>Z</kbd> on Mac)</span></td><td>Undo the last change</td></tr>
+      <tr><td><kbd>Home</kbd></td><td>Re-centre on the core tree</td></tr>
+      <tr><td><kbd>S</kbd></td><td>Show or hide the summary panel</td></tr>
+      <tr><td><kbd>/</kbd></td><td>Jump to the search box</td></tr>
+      <tr><td><kbd>?</kbd></td><td>Show or hide this list</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Close this list or the option/anchor picker</td></tr>
+    </table>
+    <p class="muted">Keys don't work while you're typing in the search, cap or hull fields.</p>
+
+    <h3>In the search box</h3>
+    <table>
+      <tr><td><kbd>Enter</kbd></td><td>Go to the next match (press again to cycle); the Search tab in the summary panel lists them all, click one to jump</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Clear the search and leave the box</td></tr>
+    </table>
+
+    <h3>Mouse</h3>
+    <table>
+      <tr><td>Left-click a node</td><td>Allocate it, taking the shortest path there</td></tr>
+      <tr><td>Left-click an allocated node</td><td>Remove it and anything cut off from the root</td></tr>
+      <tr><td>Left-click an allocated affinity node or socket</td><td>Open its picker (switch option, change anchor)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+click an affinity or other choice node <span class="muted">(<kbd>Cmd</kbd>+click on Mac)</span></td><td>Allocate it with the option you last picked for that kind of node (choice nodes along the path get it too), or switch an allocated one to it</td></tr>
+      <tr><td>Right-click an allocated node</td><td>Remove it (any node type)</td></tr>
+      <tr><td>Click a wormhole or linked wormhole exit</td><td>Menu: jump to the other end, or allocate/remove</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+click a wormhole, linked socket or linked exit <span class="muted">(<kbd>Cmd</kbd>+click on Mac)</span></td><td>Jump straight to the other end (the view moves; the build doesn't change)</td></tr>
+      <tr><td>Click a tree's name (when zoomed out)</td><td>Zoom into that tree</td></tr>
+      <tr><td>Drag</td><td>Pan</td></tr>
+      <tr><td>Scroll wheel</td><td>Zoom toward the cursor</td></tr>
+    </table>
+
+    <h3>Touch</h3>
+    <table>
+      <tr><td>Tap a node</td><td>Show its tooltip</td></tr>
+      <tr><td>Tap the same node again</td><td>Act on it, like a left-click</td></tr>
+      <tr><td>Drag</td><td>Pan</td></tr>
+      <tr><td>Pinch</td><td>Zoom</td></tr>
+    </table>
+  </div>
+</div>
+
+<div id="help">
+  <b>Click</b> allocate (finds the shortest path) · <b>Click</b> an allocated node to remove it and anything cut off ·
+  <b>Drag</b>/<b>arrows</b> pan · <b>Wheel</b>/<b>PgUp</b>/<b>PgDn</b> zoom · <b>?</b> all shortcuts
+</div>
+
+<script src="data/planner-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
