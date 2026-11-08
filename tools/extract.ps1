@@ -3,7 +3,9 @@
 
   Reads the mod checkout (default: ..\ExiledSector) and writes:
     web\data\planner-data.js   tree, skill types, effect wording (as a JS global, so the page also works from file://)
-    web\assets\...             every image the planner draws, at its mod-relative path
+
+  The art isn't copied: the page reads it from the mod folder each user chooses (the Mod art dialog). This only
+  reports which images the data refers to that the mod doesn't ship (vanilla art, drawn as placeholders).
 
   Run again whenever the mod's tree or skill types change:
     powershell -ExecutionPolicy Bypass -File tools\extract.ps1 [-ModRoot <path>]
@@ -516,17 +518,9 @@ foreach ($d in $tree.decorations) {
 }
 foreach ($p in 'graphics/fx/star_halo.png', 'graphics/planets/aurorae.png') { [void]$images.Add($p) }
 
-$copied = 0; $absent = @()
+$present = 0; $absent = @()
 foreach ($rel in $images) {
-    $src = Join-Path $ModRoot ($rel -replace '/', '\')
-    $dst = Join-Path "$WebRoot\assets" ($rel -replace '/', '\')
-    if (Test-Path $src) {
-        New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
-        if (-not (Test-Path $dst) -or (Get-Item $src).LastWriteTime -gt (Get-Item $dst).LastWriteTime) {
-            Copy-Item $src $dst -Force
-        }
-        $copied++
-    } else { $absent += $rel }
+    if (Test-Path (Join-Path $ModRoot ($rel -replace '/', '\'))) { $present++ } else { $absent += $rel }
 }
-Write-Host "Images: $copied copied or current, $($absent.Count) not in the mod (vanilla art; drawn as placeholders)"
+Write-Host "Images: $present in the mod, $($absent.Count) not in the mod (vanilla art; drawn as placeholders)"
 if ($absent.Count) { $absent | Sort-Object | ForEach-Object { Write-Host "  $_" } }

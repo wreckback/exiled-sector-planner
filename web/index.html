@@ -62,6 +62,7 @@
     <button id="btn-story" title="Story gates and unlocks your campaign has reached" aria-haspopup="dialog" aria-controls="story">Story rules</button>
     <button id="btn-export" title="Import and export in-game skill tree templates" aria-haspopup="dialog" aria-controls="export">Templates</button>
     <button id="btn-checkfile" title="Check the linked templates file for changes the game made (also reconnects it after a browser restart)" hidden>Check file</button>
+    <button id="btn-art" aria-haspopup="dialog" aria-controls="art">Show mod art</button>
     <button id="btn-panel" title="Show or hide the summary (S)">Summary</button>
     <button id="btn-keys" title="Show all shortcuts (?)" aria-haspopup="dialog" aria-controls="keys">Shortcuts</button>
   </div>
@@ -244,6 +245,28 @@
     <p class="muted">Downloads land in your Downloads folder; move the file into <code>saves/common</code>. "Download as a new file" holds only this template, so placing it over an existing file drops the templates already there.</p>
     <input id="tpl-file" type="file" accept=".data,.json,application/json" hidden>
     <p id="tpl-status" role="status"></p>
+  </div>
+</div>
+
+<div id="art" role="dialog" aria-modal="true" aria-labelledby="art-title" hidden>
+  <div class="keys-head">
+    <h2 id="art-title">Mod art</h2>
+    <button id="art-close" title="Close (Esc)">Close</button>
+  </div>
+  <div class="keys-body">
+    <p>The planner doesn't include Exiled Sector's art: it belongs to the mod and the authors it credits. To see the icons, nebulae and planets, choose the mod's folder on your computer. It's usually <code>mods\ExiledSector</code> in your Starsector install (for example <code>C:\Program Files (x86)\Fractal Softworks\Starsector\mods\ExiledSector</code>). Choosing the Starsector folder or its <code>mods</code> folder works too.</p>
+    <p>The planner only reads the images it draws. Nothing is uploaded or changed.</p>
+
+    <h3>Mod folder</h3>
+    <p id="art-status"></p>
+    <div class="export-actions">
+      <button id="art-choose" class="primary">Choose mod folderâ€¦</button>
+      <button id="art-reconnect" hidden>Reconnect</button>
+      <button id="art-forget" hidden>Forget</button>
+    </div>
+    <p id="art-note"></p>
+    <p id="art-browser" class="muted"></p>
+    <input id="art-files" type="file" webkitdirectory multiple hidden>
   </div>
 </div>
 

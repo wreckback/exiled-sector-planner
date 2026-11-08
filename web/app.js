@@ -803,9 +803,9 @@
   function nodeIconHtml(n, t = effectiveType(n)) {
     if (n.tier === 'SOCKET') {
       const e = state.subs.get(n.id), d = e && SUBS.get(e.id);
-      return d && d.icon ? `<img src="assets/${esc(d.icon)}" alt="">` : `<span class="icon-svg">${SOCKET_SVG}</span>`;
+      return d && d.icon ? iconImg(d.icon, d.name) : `<span class="icon-svg">${SOCKET_SVG}</span>`;
     }
-    return t && t.icon ? `<img src="assets/${esc(t.icon)}" alt="">` : '<span class="icon-svg"></span>';
+    return t && t.icon ? iconImg(t.icon, t.name) : '<span class="icon-svg"></span>';
   }
   function unlockText(t) {
     const parts = (t.unlockConditions || []).map(c => {
@@ -1257,18 +1257,54 @@
   const groupOf = name => (GROUPS.find(([, re]) => re.test(name)) || ['Other'])[0];
 
   // ------------------------------------------------------------------ images
+  // The planner ships none of the mod's art. It's read from the Exiled Sector folder the user picks (the Mod art
+  // dialog), by the mod-relative paths in the data, and turned into blob URLs. Without a folder, `artUrl` is null and
+  // everything draws as a placeholder (lettered icons, a drawn halo, no nebula or planet images).
+  const artUrls = new Map(); // mod-relative path -> blob URL
   const images = new Map();
+  const HALO_PATH = 'graphics/fx/star_halo.png';
+  const artUrl = path => (path && artUrls.get(path)) || null;
   function img(path) {
     if (!path) return null;
     let rec = images.get(path);
     if (!rec) {
       rec = { el: new Image(), ok: false, dim: null, tinted: new Map() };
-      rec.el.onload = () => { rec.ok = true; requestDraw(); };
-      rec.el.onerror = () => { rec.failed = true; };
-      rec.el.src = 'assets/' + path;
+      const url = artUrl(path);
+      if (url) {
+        rec.el.onload = () => { rec.ok = true; requestDraw(); };
+        rec.el.onerror = () => { rec.failed = true; };
+        rec.el.src = url;
+      } else rec.failed = true;
       images.set(path, rec);
     }
     return rec;
+  }
+  // Every image the planner can draw, as mod-relative paths.
+  function artPaths() {
+    const set = new Set([HALO_PATH]);
+    for (const t of D.types) if (t.icon) set.add(t.icon);
+    for (const s of D.subroutines || []) if (s.icon) set.add(s.icon);
+    for (const d of D.decorations || []) for (const k of ['imagePath', 'ringArtPath', 'overlayPath']) if (d[k]) set.add(d[k]);
+    return [...set];
+  }
+  // Swaps in a new set of art (a Map of path -> blob URL, or null for placeholders) and redraws everything.
+  function setArt(urls) {
+    for (const u of artUrls.values()) URL.revokeObjectURL(u);
+    artUrls.clear();
+    if (urls) for (const [k, v] of urls) artUrls.set(k, v);
+    images.clear();
+    for (const t of D.types) img(t.icon);
+    requestDraw();
+  }
+  // A short stand-in for an icon: the first letters of the first two words ("Flux Capacity" -> "FC").
+  function initials(name) {
+    const words = String(name || '?').replace(/[^A-Za-z0-9 ]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || '?').slice(0, 2)).toUpperCase();
+  }
+  // An icon for the HTML lists: the mod's image when the art is loaded, else a lettered box.
+  function iconImg(path, name) {
+    const url = artUrl(path);
+    return url ? `<img src="${esc(url)}" alt="">` : `<span class="icon-ph" aria-hidden="true">${esc(initials(name))}</span>`;
   }
   function dimmed(rec) {
     // Unallocated icons draw at about 35% brightness, like the mod's (90,90,90) tint.
@@ -1301,8 +1337,6 @@
     }
     return c;
   }
-  const halo = img('graphics/fx/star_halo.png');
-  for (const t of D.types) img(t.icon);
 
   // ------------------------------------------------------------------ canvas + camera
   const canvas = document.getElementById('tree');
@@ -1675,10 +1709,15 @@
     const stateA = allocated ? 1 : UNALLOCATED_ALPHA;
     ctx.globalAlpha = alpha;
     if (n.tier === 'NOTABLE') {
-      if (halo.ok) {
-        const s = fp * 3.2 * 0.6;
-        ctx.globalAlpha = alpha * stateA * 0.55;
-        ctx.drawImage(tinted(halo, NOTABLE_GLOW), n.x - s / 2, n.y - s / 2, s, s);
+      const halo = img(HALO_PATH);
+      const s = fp * 3.2 * 0.6;
+      ctx.globalAlpha = alpha * stateA * 0.55;
+      if (halo.ok) ctx.drawImage(tinted(halo, NOTABLE_GLOW), n.x - s / 2, n.y - s / 2, s, s);
+      else { // drawn stand-in for the halo sprite
+        const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, s / 2);
+        g.addColorStop(0, rgba(NOTABLE_GLOW, 0.5)); g.addColorStop(0.45, rgba(NOTABLE_GLOW, 0.18)); g.addColorStop(1, rgba(NOTABLE_GLOW, 0));
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(n.x, n.y, s / 2, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = alpha * stateA;
       const base = fp * ICON_INSET / 2;
@@ -1715,7 +1754,7 @@
         const rec = img(t.icon);
         ctx.globalAlpha = alpha;
         if (rec && rec.ok) ctx.drawImage(lit ? rec.el : dimmed(rec), n.x - iconSize / 2, n.y - iconSize / 2, iconSize, iconSize);
-        else { ctx.fillStyle = lit ? '#555' : '#222'; ctx.beginPath(); ctx.arc(n.x, n.y, iconSize / 2, 0, Math.PI * 2); ctx.fill(); }
+        else drawPlaceholderIcon(n, t, iconSize, lit, z);
       }
     }
     drawRingState(n, allocated, alpha, ac, pAdd, pRem, z, false);
@@ -1779,9 +1818,26 @@
     ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.stroke();
   }
 
+  // Without the mod's art: a disc with the type's initials (once they're big enough to read).
+  const initialsCache = new Map();
+  function drawPlaceholderIcon(n, t, size, lit, z) {
+    ctx.fillStyle = lit ? '#4a5560' : '#1c2329';
+    ctx.beginPath(); ctx.arc(n.x, n.y, size / 2, 0, Math.PI * 2); ctx.fill();
+    if (size * z < 18) return;
+    let text = initialsCache.get(t.id);
+    if (!text) initialsCache.set(t.id, text = initials(t.name));
+    ctx.fillStyle = lit ? '#f0f0f0' : '#7d8890';
+    ctx.font = `600 ${size * 0.36}px ${FONT}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, n.x, n.y + size * 0.02);
+  }
   function drawSplitIcon(n, size, alpha) {
     const opts = n.type.options.map(id => types.get(id)).filter(Boolean);
     const k = opts.length;
+    if (!opts.some(o => { const r = img(o.icon); return r && r.ok; })) {
+      ctx.save(); ctx.globalAlpha = alpha; drawPlaceholderIcon(n, n.type, size, false, cam.zoom); ctx.restore();
+      return;
+    }
     ctx.save();
     ctx.globalAlpha = alpha;
     for (let i = 0; i < k; i++) {
@@ -2360,7 +2416,7 @@
         if (!o) continue;
         const line = typeLines(o).map(plain).join(' ');
         const b = cur === id ? null : blockOf(n, id, others);
-        html += `<button data-opt="${esc(id)}" class="${cur === id ? 'current' : ''}" ${b ? 'disabled' : ''}><img src="assets/${esc(o.icon)}" alt=""><span><div>${esc(o.name)}</div><div class="sub">${esc(line)}</div>${b ? `<div class="sub bad">${esc(b.text)}</div>` : ''}</span></button>`;
+        html += `<button data-opt="${esc(id)}" class="${cur === id ? 'current' : ''}" ${b ? 'disabled' : ''}>${iconImg(o.icon, o.name)}<span><div>${esc(o.name)}</div><div class="sub">${esc(line)}</div>${b ? `<div class="sub bad">${esc(b.text)}</div>` : ''}</span></button>`;
       }
       if (sat(n.id)) html += `<button data-act="remove" class="danger">Remove node</button>`;
     } else if (n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT') {
@@ -2402,7 +2458,7 @@
     const def = e && SUBS.get(e.id);
     let html = '';
     if (def) {
-      html += `<h4>Socketed subroutine</h4><div class="sub-current"><img src="assets/${esc(def.icon)}" alt=""><div><div>${esc(def.name)}</div><div class="sub">${esc(subSummary(def, e, n))}</div>${def.unobtainable ? `<div class="sub bad">${UNOBTAINABLE_TEXT}</div>` : ''}</div></div>`;
+      html += `<h4>Socketed subroutine</h4><div class="sub-current">${iconImg(def.icon, def.name)}<div><div>${esc(def.name)}</div><div class="sub">${esc(subSummary(def, e, n))}</div>${def.unobtainable ? `<div class="sub bad">${UNOBTAINABLE_TEXT}</div>` : ''}</div></div>`;
       if (def.kind === 'ROOT_CONDUIT') {
         html += '<div class="sub">Affinity (rolled per item; pick the one yours shows):</div><div class="pick-row">' +
           AFFINITY_KEYS.map(k => `<button data-aff="${k}" class="${e.aff === k ? 'current' : ''}">${esc(affinityName(k))}</button>`).join('') + '</div>';
@@ -2428,7 +2484,7 @@
       const current = def && s.id === def.id;
       const problem = current ? null : subLimitProblem(s, n.id);
       const sub = current ? 'Socketed. Click to remove.' : problem || subKindText(s);
-      html += `<button data-sub="${esc(s.id)}" class="${current ? 'current' : ''}" ${problem ? 'disabled' : ''} title="${current ? 'Remove from this socket' : 'Socket into this socket'}"><img src="assets/${esc(s.icon)}" alt=""><span><div>${esc(s.name)}</div><div class="sub">${esc(sub)}</div>${s.unobtainable ? `<div class="sub bad">${UNOBTAINABLE_TEXT}</div>` : ''}</span></button>`;
+      html += `<button data-sub="${esc(s.id)}" class="${current ? 'current' : ''}" ${problem ? 'disabled' : ''} title="${current ? 'Remove from this socket' : 'Socket into this socket'}">${iconImg(s.icon, s.name)}<span><div>${esc(s.name)}</div><div class="sub">${esc(sub)}</div>${s.unobtainable ? `<div class="sub bad">${UNOBTAINABLE_TEXT}</div>` : ''}</span></button>`;
     }
     return html;
   }
@@ -3274,7 +3330,7 @@
   function toggleKeys(show = keysEl.hidden) {
     keysEl.hidden = !show;
     keysBtn.setAttribute('aria-expanded', String(show));
-    if (show) { closePicker(); hideTooltip(); if (!exportEl.hidden) toggleExport(false); if (!storyEl.hidden) toggleStory(false); document.getElementById('keys-close').focus(); }
+    if (show) { closePicker(); hideTooltip(); if (!exportEl.hidden) toggleExport(false); if (!storyEl.hidden) toggleStory(false); if (!artEl.hidden) toggleArt(false); document.getElementById('keys-close').focus(); }
     else if (keysEl.contains(document.activeElement)) keysBtn.focus();
   }
   keysBtn.addEventListener('click', () => toggleKeys());
@@ -3380,7 +3436,7 @@
     storyEl.hidden = !show;
     storyBtn.setAttribute('aria-expanded', String(show));
     if (show) {
-      closePicker(); hideTooltip(); toggleKeys(false); if (!exportEl.hidden) toggleExport(false);
+      closePicker(); hideTooltip(); toggleKeys(false); if (!exportEl.hidden) toggleExport(false); if (!artEl.hidden) toggleArt(false);
       renderStory();
       document.getElementById('story-close').focus();
     } else if (storyEl.contains(document.activeElement)) storyBtn.focus();
@@ -3960,7 +4016,7 @@
     exportEl.hidden = !show;
     exportBtn.setAttribute('aria-expanded', String(show));
     if (show) {
-      closePicker(); hideTooltip(); toggleKeys(false); if (!storyEl.hidden) toggleStory(false);
+      closePicker(); hideTooltip(); toggleKeys(false); if (!storyEl.hidden) toggleStory(false); if (!artEl.hidden) toggleArt(false);
       if (!tpl.name.value) {
         let saved = null;
         try { saved = localStorage.getItem('esp.tplName'); } catch { /* ignore */ }
@@ -4181,13 +4237,237 @@
     });
   }
 
+  // ------------------------------------------------------------------ mod art (the Mod art dialog)
+  // The art is read from the user's own Exiled Sector folder (see setArt). Chrome and Edge keep the folder's handle in
+  // IndexedDB, so it only needs a click to reconnect after a browser restart. Other browsers have no folder handles:
+  // they use a folder input, picked again each visit. Only the images in artPaths() are read; nothing is written.
+  const artEl = document.getElementById('art');
+  const artBtn = document.getElementById('btn-art');
+  const artUi = {
+    status: document.getElementById('art-status'),
+    choose: document.getElementById('art-choose'),
+    reconnect: document.getElementById('art-reconnect'),
+    forget: document.getElementById('art-forget'),
+    note: document.getElementById('art-note'),
+    browser: document.getElementById('art-browser'),
+    files: document.getElementById('art-files'),
+  };
+  const canPickFolder = typeof window.showDirectoryPicker === 'function';
+  let artHandle = null;   // FileSystemDirectoryHandle the user picked (Chrome/Edge)
+  let artAccess = 'none'; // 'none' | 'prompt' (needs a click) | 'loading' | 'ready'
+  let artInfo = null;     // { folder, version, count } of the art on show
+  let artError = '';
+  let artGen = 0;         // drops a slow read when a newer pick has started
+
+  const rememberArt = h => handleStore('readwrite', s => (h ? s.put(h, 'modFolder') : s.delete('modFolder'))).catch(() => {});
+  const recallArt = () => handleStore('readonly', s => s.get('modFolder')).catch(() => null);
+
+  // mod_info.json is loose JSON (the game allows comments), so read the two fields by pattern.
+  function parseModInfo(text) {
+    const id = (/"id"\s*:\s*"([^"]+)"/.exec(text) || [])[1];
+    if (!id || id.toLowerCase() !== 'exiledsector') return null;
+    const vs = /"version"\s*:\s*"([^"]+)"/.exec(text);
+    const vo = /"version"\s*:\s*\{\s*"major"\s*:\s*"?(\d+)"?\s*,\s*"minor"\s*:\s*"?(\d+)"?\s*,\s*"patch"\s*:\s*"?([\w.-]+)"?/.exec(text);
+    return { version: vs ? vs[1] : vo ? `${vo[1]}.${vo[2]}.${vo[3]}` : '' };
+  }
+  // A child entry by name, falling back to a case-insensitive match (the game runs on case-insensitive file systems).
+  async function child(dir, name, kind) {
+    try { return kind === 'file' ? await dir.getFileHandle(name) : await dir.getDirectoryHandle(name); }
+    catch (e) { if (e.name === 'NotAllowedError' || e.name === 'SecurityError') throw e; }
+    const low = name.toLowerCase();
+    for await (const h of dir.values()) if (h.kind === kind && h.name.toLowerCase() === low) return h;
+    return null;
+  }
+  async function readModInfo(dir) {
+    const h = await child(dir, 'mod_info.json', 'file');
+    return h ? parseModInfo(await (await h.getFile()).text()) : null;
+  }
+  // The mod's folder: the one picked, or one inside it (so the Starsector folder or its mods folder also work).
+  async function findModDir(dir) {
+    const info = await readModInfo(dir);
+    if (info) return { dir, info };
+    const inside = async parent => {
+      for await (const h of parent.values()) {
+        if (h.kind !== 'directory') continue;
+        const i = await readModInfo(h);
+        if (i) return { dir: h, info: i };
+      }
+      return null;
+    };
+    const mods = await child(dir, 'mods', 'directory');
+    return (mods && await inside(mods)) || await inside(dir);
+  }
+  const notModFolder = name => new Error(`"${name}" isn't the Exiled Sector folder and doesn't contain it: no Exiled Sector mod_info.json there, in its mods folder, or in a folder inside it.`);
+  // Reads every image the planner draws from a folder handle. Resolves to { urls, info } or throws.
+  async function readArtFolder(handle) {
+    const found = await findModDir(handle);
+    if (!found) throw notModFolder(handle.name);
+    const dirs = new Map([['', Promise.resolve(found.dir)]]);
+    const dirAt = path => {
+      if (!dirs.has(path)) {
+        const cut = path.lastIndexOf('/');
+        const parent = cut < 0 ? '' : path.slice(0, cut);
+        dirs.set(path, dirAt(parent).then(d => d && child(d, path.slice(cut + 1), 'directory')));
+      }
+      return dirs.get(path);
+    };
+    const paths = artPaths(), urls = new Map();
+    let next = 0;
+    const worker = async () => {
+      while (next < paths.length) {
+        const p = paths[next++];
+        const cut = p.lastIndexOf('/');
+        const d = await dirAt(cut < 0 ? '' : p.slice(0, cut));
+        const h = d && await child(d, p.slice(cut + 1), 'file');
+        if (h) urls.set(p, URL.createObjectURL(await h.getFile()));
+      }
+    };
+    try { await Promise.all(Array.from({ length: 8 }, worker)); }
+    catch (e) { for (const u of urls.values()) URL.revokeObjectURL(u); throw e; }
+    return { urls, info: { folder: found.dir.name, version: found.info.version, count: urls.size } };
+  }
+  // The same from a folder input's file list (browsers without folder handles).
+  async function readArtFiles(files) {
+    const list = [...files];
+    const rel = f => f.webkitRelativePath || f.name;
+    const infos = list.filter(f => /(^|\/)mod_info\.json$/i.test(rel(f))).sort((a, b) => rel(a).length - rel(b).length);
+    let prefix = null, info = null, folder = '';
+    for (const f of infos) {
+      info = parseModInfo(await f.text());
+      if (info) { const p = rel(f).slice(0, -'mod_info.json'.length); prefix = p.toLowerCase(); folder = p.replace(/\/$/, '').split('/').pop(); break; }
+    }
+    if (prefix === null) throw notModFolder((rel(list[0] || { name: 'That folder' }).split('/')[0]));
+    const byPath = new Map();
+    for (const f of list) { const r = rel(f).toLowerCase(); if (r.startsWith(prefix)) byPath.set(r.slice(prefix.length), f); }
+    const urls = new Map();
+    for (const p of artPaths()) { const f = byPath.get(p.toLowerCase()); if (f) urls.set(p, URL.createObjectURL(f)); }
+    return { urls, info: { folder, version: info.version, count: urls.size } };
+  }
+
+  function showArt(result) {
+    if (!result.urls.size) throw new Error(`Found Exiled Sector in "${result.info.folder}", but none of the images the planner uses are in it.`);
+    setArt(result.urls);
+    artInfo = result.info; artAccess = 'ready'; artError = '';
+    renderArt(); renderPanel();
+  }
+  // Runs one read (a pick or a reconnect). On failure, whatever art was showing stays.
+  async function runArtRead(read, onDone) {
+    const gen = ++artGen;
+    const before = artAccess;
+    artAccess = 'loading'; artError = ''; renderArt();
+    try {
+      const result = await read();
+      if (gen !== artGen) { for (const u of result.urls.values()) URL.revokeObjectURL(u); return false; }
+      showArt(result);
+      if (onDone) onDone();
+      return true;
+    } catch (e) {
+      if (gen !== artGen) return false;
+      artAccess = artInfo ? 'ready' : before === 'loading' ? 'none' : before;
+      artError = e && e.message ? e.message : String(e);
+      renderArt();
+      return false;
+    }
+  }
+  // The remembered folder: read it if access is granted, ask for access when `request` (needs a click).
+  async function connectArt(request) {
+    if (!artHandle) return false;
+    let p = 'prompt';
+    try {
+      p = await artHandle.queryPermission({ mode: 'read' });
+      if (p !== 'granted' && request) p = await artHandle.requestPermission({ mode: 'read' });
+    } catch { /* treated as needing a click */ }
+    if (p !== 'granted') { artAccess = 'prompt'; renderArt(); return false; }
+    return runArtRead(() => readArtFolder(artHandle));
+  }
+  async function chooseArtFolder() {
+    if (!canPickFolder) { artUi.files.value = ''; artUi.files.click(); return; }
+    let h;
+    try { h = await window.showDirectoryPicker({ id: 'esp-mod-folder', mode: 'read' }); }
+    catch (e) { if (e.name !== 'AbortError') { artError = e.message; renderArt(); } return; }
+    await runArtRead(() => readArtFolder(h), () => { artHandle = h; rememberArt(h); });
+  }
+  artUi.files.addEventListener('change', () => {
+    const files = artUi.files.files;
+    if (files && files.length) runArtRead(() => readArtFiles(files));
+  });
+  function forgetArt() {
+    artGen++;
+    artHandle = null; artInfo = null; artAccess = 'none'; artError = '';
+    rememberArt(null);
+    setArt(null);
+    renderArt(); renderPanel();
+  }
+
+  function renderArt() {
+    artBtn.textContent = artAccess === 'ready' ? 'Mod art' : artAccess === 'loading' ? 'Loading art…' : artAccess === 'prompt' ? 'Reconnect art' : 'Show mod art';
+    artBtn.title = artAccess === 'prompt'
+      ? `Allow the planner to read the mod folder "${artHandle ? artHandle.name : ''}" again, to show the mod's art`
+      : 'Show the mod\'s art, read from your own Exiled Sector folder';
+    let status;
+    if (artAccess === 'loading') status = 'Reading the art…';
+    else if (artInfo) status = `Showing the art from <b>${esc(artInfo.folder)}</b>${artInfo.version ? ` (Exiled Sector ${esc(artInfo.version)})` : ''}, ${artInfo.count} images.`;
+    else if (artAccess === 'prompt') status = `The browser needs your permission again to read <b>${esc(artHandle.name)}</b>. Click Reconnect.`;
+    else status = 'No mod folder chosen. The tree shows placeholders: lettered icons, and no nebula or planet art.';
+    artUi.status.innerHTML = status;
+    const notes = [];
+    if (artError) notes.push(`<span class="bad">${esc(artError)}</span>`);
+    if (artInfo && artInfo.version && D.modVersion && artInfo.version !== D.modVersion) {
+      notes.push(`This folder has Exiled Sector ${esc(artInfo.version)}, and the planner's tree is from ${esc(D.modVersion)}. Icons of node types that changed between them may be missing or different.`);
+    }
+    artUi.note.innerHTML = notes.join('<br>');
+    artUi.choose.textContent = artInfo || artHandle ? 'Choose another folder…' : 'Choose mod folder…';
+    artUi.choose.disabled = artAccess === 'loading';
+    artUi.reconnect.hidden = artAccess !== 'prompt';
+    artUi.forget.hidden = !artHandle && !artInfo;
+    artUi.browser.textContent = canPickFolder
+      ? 'This browser remembers the folder. After a browser restart, it asks once for permission again (Reconnect art in the top bar).'
+      : 'This browser can\'t remember folders, so choose it again on each visit. It may ask to confirm "uploading" the files: nothing leaves your computer, the page only reads them. Chrome or Edge remember the folder.';
+  }
+  function toggleArt(show = artEl.hidden) {
+    artEl.hidden = !show;
+    artBtn.setAttribute('aria-expanded', String(show));
+    if (show) {
+      closePicker(); hideTooltip(); toggleKeys(false); if (!storyEl.hidden) toggleStory(false); if (!exportEl.hidden) toggleExport(false);
+      renderArt();
+      document.getElementById('art-close').focus();
+    } else if (artEl.contains(document.activeElement)) artBtn.focus();
+  }
+  // In the top bar, a lapsed folder reconnects straight away (the click is what lets the browser ask).
+  artBtn.addEventListener('click', () => { if (artAccess === 'prompt') connectArt(true); else toggleArt(); });
+  artUi.choose.addEventListener('click', chooseArtFolder);
+  artUi.reconnect.addEventListener('click', () => connectArt(true));
+  artUi.forget.addEventListener('click', forgetArt);
+  document.getElementById('art-close').addEventListener('click', () => toggleArt(false));
+  document.addEventListener('pointerdown', e => {
+    if (!artEl.hidden && !artEl.contains(e.target) && e.target !== artBtn) toggleArt(false);
+  });
+  // Restore the folder from the last visit; on a first visit, say once where the art went.
+  (async () => {
+    const h = canPickFolder && window.indexedDB ? await recallArt() : null;
+    if (h) { artHandle = h; await connectArt(false); return; }
+    renderArt();
+    let told = false;
+    try { told = localStorage.getItem('esp.artHint') === '1'; localStorage.setItem('esp.artHint', '1'); } catch { /* storage unavailable */ }
+    if (!told) toast('', 'The mod\'s art isn\'t included with the planner. Click <b>Show mod art</b> in the top bar to read it from your Exiled Sector folder.');
+  })();
+  // Testing: link(handle) reads a stand-in folder handle (getDirectoryHandle, getFileHandle, values, queryPermission,
+  // name) as if it had been picked, without remembering it.
+  window.plannerArtTest = {
+    link: h => runArtRead(() => readArtFolder(h), () => { artHandle = h; }),
+    files: list => runArtRead(() => readArtFiles(list)),
+    forget: forgetArt,
+    status: () => ({ access: artAccess, info: artInfo, error: artError, images: artUrls.size }),
+  };
+
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !exportEl.hidden) { toggleExport(false); return; }
     if (e.key === 'Escape' && !keysEl.hidden) { toggleKeys(false); return; }
     if (e.key === 'Escape' && !storyEl.hidden) { toggleStory(false); return; }
+    if (e.key === 'Escape' && !artEl.hidden) { toggleArt(false); return; }
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
     if (CAM_KEYS.includes(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      if (!keysEl.hidden || !exportEl.hidden || !storyEl.hidden || !els.picker.hidden) return; // open lists keep the keys for scrolling
+      if (!keysEl.hidden || !exportEl.hidden || !storyEl.hidden || !artEl.hidden || !els.picker.hidden) return; // open lists keep the keys for scrolling
       e.preventDefault();
       camKeys.add(e.key);
       return;

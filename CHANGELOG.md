@@ -4,7 +4,7 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 
 ## Data extraction (`tools/extract.ps1`)
 
-- Reads the mod checkout and writes `web/data/planner-data.js` (as a JS global, so the page also works from disk) plus every image the tree uses into `web/assets/`.
+- Reads the mod checkout and writes `web/data/planner-data.js` (as a JS global, so the page also works from disk). It used to copy every image the tree uses into `web/assets/` as well; see Mod art from the user's folder.
 - Effect wording comes from the mod's string files plus regex parsing of the Java effect enums: mode, stat key, lower-is-better, and description arguments with Java constants resolved. Generated weapon effects are matched by name pattern. Wording was found for 273 of 284 effects.
 - Other tables extracted:
   - affinity threshold bonuses (`AffinitySteps`)
@@ -19,7 +19,7 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - The checks run without a browser: unfilled wording placeholders, effects newly without wording, newly missing art, unknown node types and tiers, missing, one-way or non-mutual links, the template format versions, and the default node cap.
 - The project folder is now a git repo, so each sync can be one commit (`-Commit`).
 - `tools/release.ps1` tags releases and pre-releases as `vX.Y.Z[-alpha.N|-beta.N|-rc.N]+es<mod release>`. It numbers pre-releases, moves them through the stages, releases them, bumps from the last release, and refuses on a dirty tree or stale data. The tag message lists the changes. The first internal test build, tagged `v0.2.0-rc.1`, was renamed `v0.2.0-alpha.1`.
-- `tools/package.ps1` builds the ready-to-use zip for a tag: the site from the tag (`git archive`), the art from `web/assets` (checked against the tag's mod release), a README.txt and the mod's CREDITS.md.
+- `tools/package.ps1` builds the ready-to-use zip for a tag: the site from the tag (`git archive`) and a README.txt. It no longer includes art or the mod's CREDITS.md.
 
 ## Local server (`tools/serve.ps1`)
 
@@ -123,6 +123,11 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - **Check file** in the top bar checks the linked file on demand, in any mode, with the same notice. It also reconnects the file after a browser restart. When the game or anything else changes it, a notice lists the templates added, changed or removed, and the Templates list refreshes.
 - If the template the build came from changed, the notice offers to load the new version, warning about unsaved edits (Undo brings the build back). A removed template keeps the build.
 - The planner's own saves, and rewrites with the same templates, are ignored. Checking pauses while the tab is hidden and runs at once when it's shown again.
+
+**Mod art from the user's folder**
+- To avoid redistributing the mod's art, the planner no longer ships any. The **Mod art** dialog (top bar: **Show mod art**) reads it from the Exiled Sector folder the user chooses, finding the mod by its `mod_info.json` in that folder, its `mods` folder or a folder inside. Chrome and Edge remember the folder (**Reconnect art** after a browser restart). Other browsers use a folder input each visit.
+- Without a folder, the tree draws placeholders: lettered icons on the canvas and in lists, tooltips and pickers, and a drawn notable halo. Nebula, planet and ring belt images are skipped. A one-time hint on the first visit points to the button.
+- `extract.ps1` no longer copies art into `web/assets`. It only reports images the mod doesn't ship. `update.ps1` checks those against the mod folder.
 
 **Waypoints**
 - Shift+click marks numbered waypoints, and the next allocation runs through them in order, each leg the shortest legal path from the waypoint before. This forces longer routes, for example to raise a Root Conduit's route count. The preview, tooltip and wormhole picker follow the waypoint route, a banner shows the count, and Esc clears them.

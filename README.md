@@ -6,18 +6,18 @@ A web planner for the ship skill tree of the Exiled Sector Starsector mod. It's 
 
 - `ExiledSector/`: the mod checkout, which is the data source. Nothing edits its files; `update.ps1` only switches it to a release tag.
 - `tools/update.ps1`: moves the mod to a release, runs the extractor and reports anything that needs a look
-- `tools/extract.ps1`: copies the tree, skill types, effect wording, rename tables and art from the mod into `web/`
+- `tools/extract.ps1`: copies the tree, skill types, effect wording and rename tables from the mod into `web/data/`
 - `tools/mod-sync.json`: the mod release the data was last built from (written by `update.ps1`)
 - `tools/serve.ps1`: a small local web server (no Node or Python needed)
-- `web/`: the site. `data/planner-data.js` and `assets/` are generated. `assets/` (the mod's art) isn't in git; see below.
+- `web/`: the site. `data/planner-data.js` is generated. It holds none of the mod's art; see below.
 
 ## Set up after cloning
 
-The repository holds the code and the extracted data, but not the art. The art belongs to the mod and the authors it credits (see the mod's `CREDITS.md`), so it isn't republished here.
+The repository holds the code and the extracted data, but not the art. The art belongs to the mod and the authors it credits (see the mod's `CREDITS.md`), so neither the repository nor the release zip republishes it. Each user points the page at their own copy of the mod instead (see Mod art below).
 
 1. Clone the mod into `ExiledSector\` inside this folder: `git clone https://github.com/ExiledPortals/ExiledSector.git ExiledSector`.
-2. Run `powershell -ExecutionPolicy Bypass -File tools\extract.ps1`. It copies the art into `web\assets\` and rebuilds the data.
-3. Run the planner as below. Without step 2, nodes draw as placeholders.
+2. Run `powershell -ExecutionPolicy Bypass -File tools\extract.ps1` to rebuild the data. The data is committed, so this is only needed after a mod change.
+3. Run the planner as below, and choose a mod folder under **Show mod art** (the installed mod, or `ExiledSector\` itself).
 
 ## Run it
 
@@ -74,13 +74,23 @@ powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Bump minor -Pre alph
 - It refuses when the working tree has changes, when the version isn't newer than the last release, or when `ExiledSector\` or `planner-data.js` doesn't match `tools\mod-sync.json`. Run `update.ps1` first after a mod release.
 - Tags that don't look like `vX.Y.Z`, such as the earlier `0.11.1-alpha`, are ignored.
 
-To build the ready-to-use zip for a tag (the site, its data, the art, a README.txt and the mod's CREDITS.md, in one folder that runs from a double-clicked `index.html`):
+To build the ready-to-use zip for a tag (the site, its data and a README.txt, in one folder that runs from a double-clicked `index.html`):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Tag "v0.2.0-rc.1+es0.11.1-alpha"   # or no -Tag for the tag on HEAD
 ```
 
-It writes `dist\exiled-sector-planner-<tag>.zip`. The site files come from the tag itself, so any tag can be packaged. The art comes from `web\assets`, which has to be extracted from the same mod release; the script refuses otherwise. Attach the zip to the GitHub release for that tag, marked as a pre-release for an alpha, beta or rc. The zip's README.txt says which stage it is. The art belongs to the mod and the authors it credits, so the zip goes on releases, never into the repository.
+It writes `dist\exiled-sector-planner-<tag>.zip`. The site files come from the tag itself, so any tag can be packaged. The zip has no art: its README.txt tells users to choose their mod folder under **Show mod art**. Attach the zip to the GitHub release for that tag, marked as a pre-release for an alpha, beta or rc. The zip's README.txt says which stage it is.
+
+## Mod art
+
+The planner ships no images. Click **Show mod art** in the top bar and choose the Exiled Sector folder, usually `mods\ExiledSector` in the Starsector install. The Starsector folder or its `mods` folder work too: the planner looks for the mod's `mod_info.json` there, then in `mods\`, then in each folder inside. It only reads the images it draws (317 for mod 0.11.1). Nothing is uploaded or changed.
+
+- **Chrome and Edge** remember the folder. After a browser restart they need permission once more: the button then reads **Reconnect art**, and one click asks for it.
+- **Other browsers** can't remember folders, so they use a folder input that you pick again each visit.
+- **Without a folder,** node icons are lettered placeholders ("FC" for Flux Capacity), the notable halo is drawn in code, and nebulae, planets and ring belts aren't drawn.
+- If the folder holds a different mod version than the planner's data, the dialog says so. Icons of node types that changed may be missing.
+- Picking a folder that isn't the mod keeps the art already showing and explains why.
 
 ## Use it
 
@@ -273,4 +283,3 @@ The settings are kept in your browser, and the dialog says which method is runni
   - What a doctrine archive actually rolls (see Subroutines), and subroutine corruption implicits.
 - **Placeholder magnitudes:** the mod marks its magnitudes as placeholders pending balance.
 - **Simplified art:** stars, wormholes, sockets, roots, keystone belts and notable rings are drawn in code as simple versions of the mod's effects. The mod uses vanilla sprites and custom OpenGL for these.
-- **Slow image loading:** the local server sends images one at a time, so art fills in a few seconds after the page loads.

@@ -137,8 +137,8 @@ $newNoWording = if ($null -ne $prevNoWording) { @($noWording | Where-Object { $_
 if ($newNoWording.Count) { Flag "newly without wording (shown by name): $(Join-Short $newNoWording)" }
 else { Ok "effects without wording: $($noWording.Count)$(if ($null -ne $prevNoWording) { ', none new' })" }
 
-# Art: anything referenced but not in web\assets is vanilla art the mod doesn't ship. Only new ones are worth a look.
-$absent = @(Get-Images $new | Where-Object { -not (Test-Path (Join-Path "$Web\assets" ($_ -replace '/', '\'))) } | Sort-Object)
+# Art: anything referenced but not in the mod is vanilla art the mod doesn't ship. Only new ones are worth a look.
+$absent = @(Get-Images $new | Where-Object { -not (Test-Path (Join-Path $ModRoot ($_ -replace '/', '\'))) } | Sort-Object)
 $prevAbsent = if ($state -and $null -ne $state.absentImages) { @($state.absentImages) } else { $null }
 $newAbsent = if ($null -ne $prevAbsent) { @($absent | Where-Object { $_ -notin $prevAbsent }) } else { @() }
 if ($newAbsent.Count) { Flag "newly missing images (drawn as placeholders): $(Join-Short $newAbsent)" }

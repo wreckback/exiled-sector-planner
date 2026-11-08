@@ -8,29 +8,29 @@ A static web planner for the ship skill tree of the Exiled Sector Starsector mod
 
 - `ExiledSector/` is the mod's own git checkout. It is the data source only: read it, never edit it. It has its own `CLAUDE.md`, which applies when working inside it. `tools/update.ps1` is the only thing that moves it, by checking out a release tag.
 - The planner folder is its own git repo (branch `main`, pushed to a private GitHub repo).
-  - Ignored: `ExiledSector/`, personal template files, and `web/assets/`. The art belongs to the mod and the authors it credits, so it isn't republished, and `extract.ps1` recreates it.
+  - Ignored: `ExiledSector/`, personal template files, and `web/assets/` (an old local art copy, no longer read or written).
+  - The art belongs to the mod and the authors it credits, so it's never republished: not in git, not in the release zip. The page reads it from the mod folder each user chooses (see Mod art below).
   - The generated `planner-data.js` is committed, so each mod sync shows up as one diff.
   - History was rewritten once to drop the art, before the first push. Don't re-add `web/assets`.
-- `tools/extract.ps1` builds `web/data/planner-data.js` and `web/assets/` from the mod. Both are generated, so don't hand-edit them.
+- `tools/extract.ps1` builds `web/data/planner-data.js` from the mod. It's generated, so don't hand-edit it.
 - `web/` is the whole site: `index.html`, `style.css` and `app.js`.
 
 ## Commands (Windows; no Node or Python on this machine)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\update.ps1    # mod -> newest release tag, extract, check, diff, record (-Tag, -NoCheckout, -NoFetch, -Commit)
-powershell -ExecutionPolicy Bypass -File tools\extract.ps1   # rebuild data + assets from ExiledSector/ as checked out
+powershell -ExecutionPolicy Bypass -File tools\extract.ps1   # rebuild the data from ExiledSector/ as checked out
 powershell -ExecutionPolicy Bypass -File tools\serve.ps1     # http://localhost:8765/  (-Port to change)
 powershell -ExecutionPolicy Bypass -File tools\release.ps1   # tag vX.Y.Z[-alpha.N|-beta.N|-rc.N]+es<mod release> (-Version, -Bump, -Pre, -RC, -Plain, -Push, -DryRun)
 ```
 
-- `package.ps1 [-Tag <tag>]` builds `dist\exiled-sector-planner-<tag>.zip`, with the site files from `git archive` of the tag and the art from `web\assets`. It checks that the art is from the tag's mod release. `dist/` is excluded in `.git/info/exclude`.
+- `package.ps1 [-Tag <tag>]` builds `dist\exiled-sector-planner-<tag>.zip` from `git archive` of the tag plus a README.txt. It holds no art. `dist/` is excluded in `.git/info/exclude`.
 - `release.ps1` takes the mod release from `tools/mod-sync.json` and refuses on a dirty tree or stale data. With neither `-Version` nor `-Bump`, it continues the newest open pre-release (`-Pre alpha|beta|rc`) or releases it (no `-Pre`). Stages only move forward (alpha, beta, rc). The user chose alpha for internal test builds. Only create or push real tags when the user asks.
 
-- `extract.ps1` prints how many effects have no wording, plus any image the mod doesn't ship. A jump in either usually means the mod's Java or CSV layout changed and a regex in the extractor needs updating.
+- `extract.ps1` prints how many effects have no wording, plus any image the data refers to that the mod doesn't ship. A jump in either usually means the mod's Java or CSV layout changed and a regex in the extractor needs updating.
 - `update.ps1` compares against `tools/mod-sync.json` (last synced release and commit, plus the lists of effects without wording and absent images, so only new ones are flagged). Its `$rulePattern` lists the mod files whose logic the planner reimplements. Add a class there when you port new mod logic into `app.js` or `extract.ps1`. If app.js's template versions change, update `$PlannerTemplateVersion` and `$PlannerFileVersion` at its top.
 - The scripts must stay ASCII. Windows PowerShell 5.1 reads BOM-less files as ANSI, so a character like `…` gets garbled.
 - The page also runs from `file://`, because data loads as a `<script>`, not via `fetch`. The Claude in Chrome extension refuses `file://`, so test through `serve.ps1`.
-- `serve.ps1` is single-threaded and serves ~270 images one at a time, so art appears a few seconds after load. That's expected.
 
 ## Verifying changes
 
@@ -81,6 +81,10 @@ The sections run top to bottom in this order:
      - The radius is `nodesInRadius`: straight-line distance from the socket, Exotech excluded, sizes from `nodeRadii`.
      - Granted nodes are `held()`, not `sat()`. They give effects and count in `buildEntries`, but they aren't neighbours, don't take a slot, and can't be path targets.
      - `totals()` drops silenced nodes, moves gated nodes into `gated` (live-in-combat effects × strength, from the extractor's `live` flag), and adds the Empty Shell and Conduit affinity.
+   - **Mod art:** `img(path)` and the HTML helper `iconImg(path, name)` use `artUrls` (mod-relative path to blob URL). Without art they give placeholders: `drawPlaceholderIcon` (initials on a disc), a drawn halo, a lettered `.icon-ph` box, and no decoration images. `setArt(urls|null)` swaps the art and clears the image cache. `artPaths()` lists every image the page draws.
+     - The source is the Mod art dialog (`#art`, `#btn-art`), near the end of the file. Chrome/Edge: `showDirectoryPicker`, with the handle in IndexedDB (`handles` store, key `modFolder`) and read permission re-asked through **Reconnect art**. Elsewhere: a `webkitdirectory` input (`readArtFiles`). `findModDir` accepts the mod folder, or finds it in `mods/` or a direct subfolder, by a `mod_info.json` with id `exiledSector`. Lookups fall back to case-insensitive names.
+     - A failed pick keeps the current art. `artGen` drops stale reads.
+     - Test without the picker: `plannerArtTest.link(dirHandle)` with a stand-in handle (`name`, `getDirectoryHandle`, `getFileHandle`, `values`, `queryPermission`), `.files(fileList)`, `.forget()` and `.status()`. Headless Edge with a scratch `--user-data-dir` and `--dump-dom` works when the Chrome extension isn't connected.
 4. **Templates:** `templateSteps` is a port of the mod's `TemplateCapture`. `buildTemplate` and `mergeTemplate` follow `TemplateCodec` and `SkillTreeTemplateStore`. `importTemplate` replays steps over several passes.
    - Template codes: `templateToCode` and `codeToTemplate` produce `ES1.` + base64url(deflate-raw(JSON of the file entry without `id`, plus `mod` version)). The uncompressed fallback is `ES0.`. Codes keep node ids, not indices, so renames still map on import.
 5. **Serialization:** the share link is `#b=` plus base64url JSON of node ids, and the same JSON is saved to `localStorage['esp.build']`.
@@ -95,7 +99,7 @@ The sections run top to bottom in this order:
    - `steinerExact` (node-weighted directed Dreyfus-Wagner) runs for up to `TARGET_EXACT_MAX` wanted units, and `steinerGreedy` (shortest-path heuristic) above that, followed by `pruneTree` and `planOrder` (breadth-first from the base).
    - The rules are then replayed with `placement`. A refused non-wanted node, or the non-wanted side of a clash, logistics or shield refusal, is avoided and the search reruns, up to `TARGET_RETRIES` times. Anything else is reported as not possible.
    - `applyPlan` is one undo step.
-9. **DOM wiring:** toolbar, summary panel, tooltip, pickers, shortcuts dialog (`#keys`), Story rules dialog (`#story`, `renderStory`), Templates dialog (`#export`), and keyboard, pointer and touch input. Opening one dialog closes the others.
+9. **DOM wiring:** toolbar, summary panel, tooltip, pickers, shortcuts dialog (`#keys`), Story rules dialog (`#story`, `renderStory`), Templates dialog (`#export`), Mod art dialog (`#art`, `renderArt`), and keyboard, pointer and touch input. Opening one dialog closes the others.
    - Ship rules are the summary panel's Ship tab. It's `#panel-ship`, a persistent form beside `#panel-body`, so re-renders don't lose typing. `renderPanel` shows it when `panelTab === 'ship'` and calls `renderShipPane`.
    - Every change to ship or story rules goes through `setShip(fn)`, which pushes undo and warns about new problems.
 
