@@ -50,6 +50,7 @@
   <div class="bar-group search">
     <input id="search" type="search" placeholder="Search nodes…" autocomplete="off">
     <span id="search-count" class="muted"></span>
+    <button id="btn-themes" title="Filter nodes by the mod's theme tags (Flux, Speed, Weapons and so on)" aria-haspopup="true" aria-expanded="false" aria-pressed="false" aria-controls="theme-filter">Themes</button>
   </div>
 
   <div class="bar-group actions">
@@ -163,6 +164,7 @@
     <button id="fn-dismiss">Dismiss</button>
   </div>
 </div>
+<div id="theme-filter" role="group" aria-label="Filter by theme" hidden></div>
 <div id="tooltip" hidden></div>
 <div id="picker" hidden></div>
 <div id="toast" hidden></div>
@@ -261,7 +263,7 @@
     <h3>Mod folder</h3>
     <p id="art-status"></p>
     <div class="export-actions">
-      <button id="art-choose" class="primary">Choose mod folderâ€¦</button>
+      <button id="art-choose" class="primary">Choose mod folder…</button>
       <button id="art-reconnect" hidden>Reconnect</button>
       <button id="art-forget" hidden>Forget</button>
     </div>
@@ -316,7 +318,7 @@
       <tr><td><kbd>T</kbd></td><td>Turn target mode on or off</td></tr>
       <tr><td><kbd>/</kbd></td><td>Jump to the search box</td></tr>
       <tr><td><kbd>?</kbd></td><td>Show or hide this list</td></tr>
-      <tr><td><kbd>Esc</kbd></td><td>Close this list or the option/anchor picker, clear waypoints, or leave target mode</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Close this list, the theme filter or the option/anchor picker, clear waypoints, or leave target mode</td></tr>
     </table>
     <p class="muted">Keys don't work while you're typing in the search, cap or hull fields.</p>
 

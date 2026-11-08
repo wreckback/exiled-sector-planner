@@ -146,6 +146,17 @@ button:disabled { opacity: 0.5; cursor: default; }
 .node-row .match { font-size: 12px; color: var(--muted); }
 .node-row .have { color: var(--accent); font-weight: 400; font-size: 12px; margin-left: 4px; }
 .search-head { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+#btn-themes { flex: none; }
+#theme-filter {
+  position: fixed; z-index: 30;
+  width: min(340px, calc(100vw - 32px)); max-height: min(70vh, 560px); overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--accent); padding: 8px 12px 12px;
+  user-select: none;
+}
+#theme-filter .theme-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+#theme-filter .theme-list { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
+#theme-filter .theme-list label { white-space: nowrap; cursor: pointer; padding: 2px 0; }
+#theme-filter p { font-size: 12px; margin: 8px 0; }
 .node-row.keystone .nm { color: var(--keystone); }
 .node-row.notable .nm { color: var(--notable); }
 

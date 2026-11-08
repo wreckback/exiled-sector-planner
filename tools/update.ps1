@@ -276,7 +276,7 @@ $rulePattern = '/src/main/java/.*/(AllocationCheck|TemplateCapture|TemplateCodec
                'AffinitySteps|AffinityOptions|AffinityScaling|SkillTier|NodeReplacements|ShipLevelConfig|SkillTreeNodeConnectorRenderer|' +
                'WormholeAnchorLinks|WormholeAnchorDefinitions|ScopedWeaponEffect|WeaponStatFamily|HullSizeTable|StatMode|' +
                'NodeEligibility|AllocatedNode|SkillType|HullModConflicts|LogisticsNodes|NodeRequirements|LowBaseArmorBonus|' +
-               'SkillTypeUnlockStatus|NodeGates|ShieldSkillEffect|' +
+               'SkillTypeUnlockStatus|NodeGates|ShieldSkillEffect|SkillTags|' +
                'Subroutine|SubroutineKind|SubroutineDefinitions|SubroutineRadius|SubroutineSocketLimits|NodeRadii|NodeRadiusCache|ExoshipNodes|' +
                'RootConduits|EmptyShells|GatedSubroutines|SkillTreeEffectSource|ModspecCaches|NodeAllocator|DoctrineOverrides|DoctrineArchive|StatTarget)\.java$'
 $wordingPattern = '/src/main/java/.*SkillEffect\.java$'

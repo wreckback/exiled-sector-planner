@@ -81,6 +81,16 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
   - When the hulls differ, saving asks first: keep the existing hull, change it, or save as a new template under a free name.
   - The summary line warns ahead of time.
 
+**Stronger search highlight**
+- Search and theme-filter matches get a pulsing gold glow under the node and an outlined gold ring with a ripple over it, each with a minimum size on screen so they show even fully zoomed out (where hit dots also turn gold). The result Enter stepped to gets a second, wider ring. The outline is dark in the dark theme and white in the light theme.
+- Less dimming while searching: lanes stay at 75% (were 35%) and other nodes at 45% (were 30%).
+
+**Theme filter**
+- A **Themes** button beside the search box lists the mod's theme tags (`SkillTags.THEME`, with names from `theme.*`), each with its node count, plus "No theme".
+- Ticked themes highlight their nodes and list them in the Search tab, matching any or all ticked, and combined with any search text. Choice nodes take the themes of all their options, and structural nodes never match.
+- Affinity nodes are left out unless **Include affinity nodes** is ticked, because the mod tags the affinity options with Flux, Hull and Armor.
+- Tooltips show a "Themes:" line. The extractor writes the theme list to the data (`themes`), and `update.ps1` watches `SkillTags`.
+
 **Search results list**
 - While a search is active, a **Search (N)** tab in the summary panel lists every match. Each row shows tier, location (faction volume, or side of the core), an "allocated" tag, and the effect or flavour line that matched when the name doesn't.
 - Clicking a row jumps to the node with the gold flash.

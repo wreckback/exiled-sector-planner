@@ -126,9 +126,14 @@ The planner ships no images. Click **Show mod art** in the top bar and choose th
 5. **Read the results:**
    - The summary panel (S) totals every effect for the hull size you pick. It also shows affinity totals and the threshold bonuses they unlock.
    - **Search** with `/`:
-     - Matching nodes are highlighted on the map.
+     - Matching nodes get a pulsing gold glow and an outlined gold ring, visible at any zoom, in both themes and with or without the mod's art. The result Enter last stepped to gets a second ring. Other nodes and the lanes are dimmed only lightly, so the tree's shape stays readable.
      - A **Search** tab in the summary panel lists every match with its location, an "allocated" tag, and the line that matched. Click a result to jump to it, or press Enter to step through them.
      - Clearing the search puts the panel back how it was.
+   - **Themes** (next to the search box) filters by the mod's own theme tags: Flux, Shield, Armor, Hull, Speed, Weapons, Strikecraft, Logistics and so on, each with its node count.
+     - Ticked themes highlight and list their nodes the same way as search. Match **any ticked** or **all ticked**, and combine with search text (for example Weapons plus "emp").
+     - A choice node matches if any of its options has the theme. Roots, wormholes and sockets never match. **No theme** finds the few nodes without a theme tag.
+     - **Include affinity nodes** is off by default. The mod tags the affinity options too (Low Tech: Hull, Armor; Midline: Flux, Hull; High Tech: Flux), so the 155 affinity nodes would otherwise drown out Flux, Hull and Armor.
+     - Tooltips list a node's themes.
    - When zoomed out, each tree is labelled. Click a label to zoom into that tree.
 6. **Node rules:** the planner refuses nodes the game would refuse, with the game's own reason in the tooltip or a toast. See the section below.
 7. **Save and share:**

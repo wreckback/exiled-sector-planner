@@ -1419,7 +1419,7 @@
       label: { KEYSTONE: '#d6caff', NOTABLE: '#ffc4f2', SMALL: '#c9d1d8' }, labelHalo: 'rgba(0,0,0,0.85)',
       socketFill: 'rgba(10,16,24,0.85)', rootFill: 'rgba(4,6,10,0.92)', hover: 'rgba(255,255,255,0.85)',
       regionBg: '#0b1118', regionEdge: '#3a5566', regionText: '#e6e6e6', regionMuted: '#9aa4ad', regionOff: '#fc6300',
-      badgeText: '#000',
+      badgeText: '#000', searchOutline: 'rgba(0,0,0,0.85)',
     },
     light: {
       bg: '#e8ecf0', star: [40, 55, 80], starA: 0.35,
@@ -1429,7 +1429,7 @@
       label: { KEYSTONE: '#4a35b5', NOTABLE: '#a0157f', SMALL: '#27313a' }, labelHalo: 'rgba(255,255,255,0.9)',
       socketFill: 'rgba(250,251,252,0.92)', rootFill: 'rgba(252,253,254,0.95)', hover: 'rgba(10,20,30,0.85)',
       regionBg: '#ffffff', regionEdge: '#9aabb8', regionText: '#14191e', regionMuted: '#56626c', regionOff: '#c04400',
-      badgeText: '#fff',
+      badgeText: '#fff', searchOutline: 'rgba(255,255,255,0.95)',
     },
   };
   let themeSetting = 'dark';
@@ -1495,9 +1495,11 @@
     const choosing = !state.root;
     const treeAlpha = choosing ? 0.35 : 1;
     drawConnectors(view, z, treeAlpha);
+    drawSearchGlow(view, z);
     drawSubroutines(z);
     for (const n of nodes) if (n.tier !== 'ROOT') drawNode(n, view, z, treeAlpha);
     for (const n of roots) drawRoot(n, view, z, choosing);
+    drawSearchRings(view, z);
     drawNodeLabels(view, z, treeAlpha);
     if (targets.mode) drawTargetMarks(view, z);
     if (waypoints.length) drawWaypoints(view, z);
@@ -1690,7 +1692,7 @@
     }
     ctx.lineCap = 'round';
     // dull lanes: two thin edges (wide grey stroke with a black core)
-    const searchDim = searchHits ? 0.35 : 1;
+    const searchDim = searchHits ? SEARCH_DIM_LANE : 1;
     ctx.globalAlpha = treeAlpha * searchDim;
     ctx.strokeStyle = rgba(DULL, simple ? 0.45 : 0.6);
     ctx.lineWidth = laneW;
@@ -1745,9 +1747,56 @@
     }
   }
 
+  // ---- search and theme-filter highlight, the same in both themes and with or without the mod's art.
+  // Non-matching nodes and lanes are dimmed (not too far, so the tree's shape stays readable). Matches get a pulsing
+  // gold glow under the node and an outlined gold ring with a ripple over it, each with a minimum size on screen so
+  // they show at any zoom. The result Enter last stepped to gets a second, wider ring.
+  const SEARCH_DIM_NODE = 0.45;
+  const SEARCH_DIM_LANE = 0.75;
+  const SEARCH_PULSE = 1.6; // seconds
+  function drawSearchGlow(view, z) {
+    if (!searchHits || !searchHits.size) return;
+    const px = 1 / z;
+    const pulse = 0.75 + 0.25 * Math.sin(time * Math.PI * 2 / SEARCH_PULSE);
+    ctx.globalAlpha = 1;
+    for (const id of searchHits) {
+      const n = byId.get(id);
+      const r = Math.max(n.fp * 1.6, 28 * px);
+      if (!inView(view, n.x, n.y, r)) continue;
+      const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r);
+      g.addColorStop(0, rgba(SEARCH_GOLD, 0.85 * pulse)); g.addColorStop(0.45, rgba(SEARCH_GOLD, 0.4 * pulse)); g.addColorStop(1, rgba(SEARCH_GOLD, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  function drawSearchRings(view, z) {
+    if (!searchHits || !searchHits.size) return;
+    const px = 1 / z;
+    const t = (time / SEARCH_PULSE) % 1;
+    const current = searchCursor >= 0 ? searchOrder[searchCursor] : null;
+    const ring = (n, r, lw, a) => {
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = P.searchOutline; ctx.lineWidth = lw + 2.5 * px;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = rgba(SEARCH_GOLD, 1); ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.stroke();
+    };
+    for (const id of searchHits) {
+      const n = byId.get(id);
+      const r = Math.max(n.fp * (n.tier === 'ROOT' ? 0.58 : 0.7), 10 * px);
+      if (!inView(view, n.x, n.y, r * 2)) continue;
+      const lw = Math.max(3.5 * px, n.fp * 0.09);
+      ring(n, r, lw, 1);
+      ctx.globalAlpha = (1 - t) * 0.7;
+      ctx.strokeStyle = rgba(SEARCH_GOLD, 1); ctx.lineWidth = lw * 0.7;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r * (1 + 1.1 * t), 0, Math.PI * 2); ctx.stroke();
+      if (n === current) ring(n, r * 1.45 + 3 * px, lw, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
   function nodeAlpha(n, treeAlpha) {
     const off = switchedOff(n) ? 0.25 : 1;
-    if (searchHits && !searchHits.has(n.id)) return treeAlpha * 0.3 * off;
+    if (searchHits && !searchHits.has(n.id)) return treeAlpha * SEARCH_DIM_NODE * off;
     return treeAlpha * off;
   }
   function canAllocateNow(n) {
@@ -1771,7 +1820,7 @@
     const refused = markRefused && isMarkedRefused(n);
     if (screenSize < 5) { // far away: a dot
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = refused ? rgba(RULE_PROBLEM, 0.9) : allocated ? rgba(ac, 1) : n.tier === 'KEYSTONE' ? rgba(DEFAULT_AURORA, 0.9) : n.tier === 'NOTABLE' ? rgba(NOTABLE_PINK, 0.8) : P.dot;
+      ctx.fillStyle = searchHits && searchHits.has(n.id) ? rgba(SEARCH_GOLD, 1) : refused ? rgba(RULE_PROBLEM, 0.9) : allocated ? rgba(ac, 1) : n.tier === 'KEYSTONE' ? rgba(DEFAULT_AURORA, 0.9) : n.tier === 'NOTABLE' ? rgba(NOTABLE_PINK, 0.8) : P.dot;
       const r = Math.max(1.5 * px, fp * 0.35);
       ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1;
@@ -1873,11 +1922,7 @@
     else if (allocated && rules().problems.has(n.id)) { col = RULE_PROBLEM; a = 0.6 + 0.4 * breath(); }
     else if (allocated) col = ac;
     else if (canAllocateNow(n)) { col = ac; a = breath(); }
-    if (searchHits && searchHits.has(n.id)) {
-      ctx.strokeStyle = rgba(SEARCH_GOLD, 0.95);
-      ctx.lineWidth = w * 1.6;
-      ctx.beginPath(); ctx.arc(n.x, n.y, r + w * 2.5, 0, Math.PI * 2); ctx.stroke();
-    }
+
     if (wormhole && !col) return;
     if (!col) { ctx.strokeStyle = rgba(DULL, 0.55); ctx.lineWidth = w; }
     else {
@@ -2081,7 +2126,7 @@
     const r = n.fp / 2;
     const chosen = state.root === n.id;
     const allocated = sat(n.id);
-    const alpha = searchHits && !searchHits.has(n.id) ? 0.35 : 1;
+    const alpha = searchHits && !searchHits.has(n.id) ? SEARCH_DIM_NODE : 1;
     const pulse = choosing ? breath() : 1;
     ctx.globalAlpha = alpha;
     // circuit glow
@@ -2417,6 +2462,8 @@
       const lines = typeLines(t);
       if (lines.length) html += `<div class="tt-effects">${lines.map(l => `<div>${l}</div>`).join('')}</div>`;
     }
+    const nodeTheme = nodeThemes(n);
+    if (nodeTheme && nodeTheme.size) html += `<div class="tt-note">Themes: ${esc([...nodeTheme].map(themeName).join(', '))}</div>`;
     const reqs = (t.tags || []).filter(x => x.startsWith('req_')).map(x => humanize(x.slice(4)));
     if (reqs.length) html += `<div class="tt-note">Needs a ship with: ${esc(reqs.join(', '))}</div>`;
     if (n.gates.length) html += `<div class="tt-note">In game, unlocked by: ${esc(n.gates.map(g => humanize(g.slice(5))).join(', '))}</div>`;
@@ -3418,9 +3465,11 @@
     return '';
   }
   function searchResultsHtml() {
-    if (!searchOrder.length) return '<div class="empty">No nodes match that search.</div>';
+    if (!searchOrder.length) return `<div class="empty">No nodes match ${themeFilter.size && searchTerms.length ? 'that search and theme filter' : themeFilter.size ? 'that theme filter' : 'that search'}.</div>`;
     const have = searchOrder.filter(n => sat(n.id)).length;
-    let html = `<div class="search-head">${searchOrder.length} match${searchOrder.length === 1 ? '' : 'es'}` +
+    const themesText = themeFilter.size
+      ? ` with ${themeFilter.size > 1 ? (themeMatchAll ? 'all of' : 'any of') : 'the theme'} ${[...themeFilter].map(themeName).join(', ')}` : '';
+    let html = `<div class="search-head">${searchOrder.length} match${searchOrder.length === 1 ? '' : 'es'}${esc(themesText)}` +
       `${state.root ? `, ${have} allocated` : ''}. Click one to jump to it.</div>`;
     searchOrder.forEach((n, i) => {
       const t = effectiveType(n);
@@ -3450,17 +3499,123 @@
       panelOpenedBySearch = false;
     }
   }
-  els.search.addEventListener('input', () => {
+  // ---- theme filter: the mod's theme tags (SkillTags.THEME, names from theme.*), combined with the search text.
+  // A choice node has the themes of all its options; roots, wormholes, exits and sockets have none and never match.
+  const THEME_LIST = D.themes || [];
+  const THEME_IDS = new Set(THEME_LIST.map(t => t.id));
+  const NO_THEME = '_none';
+  const STRUCTURAL_TIERS = new Set(['ROOT', 'WORMHOLE', 'WORMHOLE_EXIT', 'SOCKET']);
+  const themeName = id => (id === NO_THEME ? 'No theme' : (THEME_LIST.find(t => t.id === id) || {}).name || humanize(id));
+  const nodeThemeCache = new Map();
+  function nodeThemes(n) {
+    if (STRUCTURAL_TIERS.has(n.tier)) return null;
+    let set = nodeThemeCache.get(n.id);
+    if (!set) {
+      const ts = isChoice(n) ? n.type.options.map(id => types.get(id)).filter(Boolean) : [n.type];
+      set = new Set(ts.flatMap(t => (t.tags || []).filter(x => THEME_IDS.has(x))));
+      nodeThemeCache.set(n.id, set);
+    }
+    return set;
+  }
+  const themeFilter = new Set(); // theme ids, plus NO_THEME
+  let themeMatchAll = false;
+  // The mod tags the affinity options too (Low Tech: hull, armour; Midline: flux, hull; High Tech: flux), so all 155
+  // affinity nodes would match Flux, Hull or Armor. They're left out unless asked for.
+  let themeAffinity = false;
+  const isAffinityNode = n => isChoice(n) && n.type.options.every(id => OPTION_TINT[id]);
+  const hasTheme = (set, id) => (id === NO_THEME ? set.size === 0 : set.has(id));
+  function themeMatch(n) {
+    const set = nodeThemes(n);
+    if (!set || (!themeAffinity && isAffinityNode(n))) return false;
+    const ids = [...themeFilter];
+    return themeMatchAll ? ids.every(id => hasTheme(set, id)) : ids.some(id => hasTheme(set, id));
+  }
+  // The search box and the theme filter together decide searchHits (dimming on the canvas) and the Search tab list.
+  function runFilter() {
     const q = els.search.value.trim().toLowerCase();
-    if (q.length < 2) { searchHits = null; searchOrder = []; searchTerms = []; els.searchCount.textContent = ''; updateSearchTab(false); requestDraw(); return; }
-    searchTerms = q.split(/\s+/);
-    searchOrder = sortSearchResults(nodes.filter(n => { const s = nodeSearchText(n); return searchTerms.every(t => s.includes(t)); }));
+    const textOn = q.length >= 2, themesOn = themeFilter.size > 0;
+    if (!textOn && !themesOn) {
+      searchHits = null; searchOrder = []; searchTerms = []; els.searchCount.textContent = '';
+      updateSearchTab(false); requestDraw(); return;
+    }
+    searchTerms = textOn ? q.split(/\s+/) : [];
+    searchOrder = sortSearchResults(nodes.filter(n => {
+      if (themesOn && !themeMatch(n)) return false;
+      if (!textOn) return true;
+      const s = nodeSearchText(n);
+      return searchTerms.every(t => s.includes(t));
+    }));
     searchHits = new Set(searchOrder.map(n => n.id));
     searchCursor = -1;
     els.searchCount.textContent = `${searchOrder.length}`;
     updateSearchTab(true);
     requestDraw();
+  }
+  els.search.addEventListener('input', runFilter);
+
+  const themeEl = document.getElementById('theme-filter');
+  const themeBtnEl = document.getElementById('btn-themes');
+  // Node counts per theme, without and with the affinity nodes.
+  const themeCountSets = [false, true].map(withAffinity => {
+    const counts = new Map([[NO_THEME, 0]]);
+    for (const n of nodes) {
+      const set = nodeThemes(n);
+      if (!set || (!withAffinity && isAffinityNode(n))) continue;
+      if (!set.size) counts.set(NO_THEME, counts.get(NO_THEME) + 1);
+      for (const id of set) counts.set(id, (counts.get(id) || 0) + 1);
+    }
+    return counts;
   });
+  const affinityNodeCount = nodes.filter(isAffinityNode).length;
+  function renderThemeFilter() {
+    themeBtnEl.textContent = themeFilter.size ? `Themes (${themeFilter.size})` : 'Themes';
+    themeBtnEl.setAttribute('aria-pressed', String(themeFilter.size > 0));
+    if (themeEl.hidden) return;
+    const themeCounts = themeCountSets[themeAffinity ? 1 : 0];
+    const row = id => `<label><input type="checkbox" data-theme-tag="${esc(id)}"${themeFilter.has(id) ? ' checked' : ''}> ${esc(themeName(id))} <span class="muted">${themeCounts.get(id) || 0}</span></label>`;
+    const used = THEME_LIST.filter(t => themeCounts.get(t.id)).map(t => t.id);
+    themeEl.innerHTML =
+      `<div class="theme-head"><b>Filter by theme</b><label>Match <select id="theme-match">` +
+      `<option value="any"${themeMatchAll ? '' : ' selected'}>any ticked</option><option value="all"${themeMatchAll ? ' selected' : ''}>all ticked</option></select></label></div>` +
+      `<div class="theme-list">${used.map(row).join('')}${themeCounts.get(NO_THEME) ? row(NO_THEME) : ''}</div>` +
+      `<p><label title="The mod tags affinity options with the stats their thresholds lean to (Low Tech: Hull, Armor; Midline: Flux, Hull; High Tech: Flux)"><input type="checkbox" id="theme-affinity"${themeAffinity ? ' checked' : ''}> Include affinity nodes <span class="muted">${affinityNodeCount}</span></label></p>` +
+      `<p class="muted">The mod's own theme tags. Matching nodes are highlighted and listed in the Search tab, together with any search text. Numbers are nodes in all trees.</p>` +
+      `<div class="export-actions"><button id="theme-clear"${themeFilter.size ? '' : ' disabled'}>Clear</button><button id="theme-close">Close</button></div>`;
+  }
+  function toggleThemeFilter(show = themeEl.hidden) {
+    themeEl.hidden = !show;
+    themeBtnEl.setAttribute('aria-expanded', String(show));
+    if (show) {
+      closePicker(); hideTooltip();
+      renderThemeFilter();
+      const r = themeBtnEl.getBoundingClientRect();
+      themeEl.style.top = `${Math.round(r.bottom + 4)}px`;
+      themeEl.style.left = `${Math.round(Math.max(16, Math.min(r.left, window.innerWidth - themeEl.offsetWidth - 16)))}px`;
+      const first = themeEl.querySelector('input');
+      if (first) first.focus();
+    } else if (themeEl.contains(document.activeElement)) themeBtnEl.focus();
+  }
+  themeBtnEl.addEventListener('click', () => toggleThemeFilter());
+  themeEl.addEventListener('change', e => {
+    const box = e.target.matches('[data-theme-tag]') ? e.target : null;
+    if (box) { if (box.checked) themeFilter.add(box.dataset.themeTag); else themeFilter.delete(box.dataset.themeTag); }
+    else if (e.target.id === 'theme-match') themeMatchAll = e.target.value === 'all';
+    else if (e.target.id === 'theme-affinity') { themeAffinity = e.target.checked; renderThemeFilter(); document.getElementById('theme-affinity').focus(); }
+    else return;
+    const clear = document.getElementById('theme-clear');
+    if (clear) clear.disabled = !themeFilter.size;
+    themeBtnEl.textContent = themeFilter.size ? `Themes (${themeFilter.size})` : 'Themes';
+    themeBtnEl.setAttribute('aria-pressed', String(themeFilter.size > 0));
+    runFilter();
+  });
+  themeEl.addEventListener('click', e => {
+    if (e.target.id === 'theme-clear') { themeFilter.clear(); renderThemeFilter(); runFilter(); }
+    else if (e.target.id === 'theme-close') toggleThemeFilter(false);
+  });
+  document.addEventListener('pointerdown', e => {
+    if (!themeEl.hidden && !themeEl.contains(e.target) && e.target !== themeBtnEl) toggleThemeFilter(false);
+  });
+  renderThemeFilter();
   els.search.addEventListener('keydown', e => {
     if (e.key === 'Enter' && searchOrder.length) {
       searchCursor = (searchCursor + 1) % searchOrder.length;
@@ -4650,10 +4805,13 @@
     link: h => runArtRead(() => readArtFolder(h), () => { artHandle = h; }),
     files: list => runArtRead(() => readArtFiles(list)),
     forget: forgetArt,
+    // placeholders(true) shows the art-free look without forgetting the folder; placeholders(false) reads it again.
+    placeholders: on => (on ? (setArt(null), renderPanel()) : connectArt(false)),
     status: () => ({ access: artAccess, info: artInfo, error: artError, images: artUrls.size }),
   };
 
   window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !themeEl.hidden) { toggleThemeFilter(false); return; }
     if (e.key === 'Escape' && !exportEl.hidden) { toggleExport(false); return; }
     if (e.key === 'Escape' && !keysEl.hidden) { toggleKeys(false); return; }
     if (e.key === 'Escape' && !storyEl.hidden) { toggleStory(false); return; }

@@ -444,6 +444,20 @@ if ($aof) {
     }
 }
 
+# Theme tags (SkillTags.THEME, in the mod's order) with their display names (theme.<id>), for the theme filter.
+$themes = @()
+$stf = $javaFiles | Where-Object { $_.BaseName -eq 'SkillTags' } | Select-Object -First 1
+if ($stf) {
+    $block = [regex]::Match([IO.File]::ReadAllText($stf.FullName), 'THEME\s*=\s*List\.of\((.*?)\);', 'Singleline')
+    foreach ($m in [regex]::Matches($block.Groups[1].Value, '"([^"]+)"')) {
+        $id = $m.Groups[1].Value
+        $name = if ($strings.ContainsKey("theme.$id")) { $strings["theme.$id"] } else { $id }
+        $themes += [pscustomobject]@{ id = $id; name = $name }
+    }
+}
+if ($themes.Count) { Write-Host "Themes: $($themes.Count)" }
+else { Write-Host '  ! no theme list found (SkillTags.THEME); the theme filter will be empty' -ForegroundColor Yellow }
+
 # UI strings the planner reuses.
 foreach ($k in $strings.Keys) {
     if ($k -like 'ui.node.*' -or $k -like 'tier.*' -or $k -like 'node.block.*' -or $k -like 'node.requires.*' -or $k -like 'socketable.anchor.gate.*' -or
@@ -492,6 +506,7 @@ $data = [ordered]@{
     nodeRenames      = $nodeRenames
     typeRenames      = $typeRenames
     retiredOptions   = $retiredOptions
+    themes           = @($themes)
     strings          = $neededStrings
 }
 $modInfo = "$ModRoot\mod_info.json"
