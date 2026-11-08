@@ -2,6 +2,11 @@
 
 A web planner for the ship skill tree of the Exiled Sector Starsector mod. It's a static site with no build step: plain HTML, CSS and JS drawing on a canvas. It reads its data from the mod checkout in `ExiledSector/`, and can import and export the game's skill tree templates. See `CHANGELOG.md` for what's been built.
 
+The mod itself:
+
+- Forum thread: [Exiled Sector on the Fractal Softworks forum](https://fractalsoftworks.com/forum/index.php?topic=36072.0)
+- Source: [ExiledPortals/ExiledSector on GitHub](https://github.com/ExiledPortals/ExiledSector)
+
 ## Layout
 
 - `ExiledSector/`: the mod checkout, which is the data source. Nothing edits its files; `update.ps1` only switches it to a release tag.

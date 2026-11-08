@@ -103,6 +103,9 @@ $readme += @(
     'the mod. Its tree data (node layout, names and effect wording) is'
     'extracted from the mod''s data files. Starsector is by Fractal Softworks.'
     'The planner is a free, non-commercial fan tool for Exiled Sector players.'
+    ''
+    'Exiled Sector forum thread: https://fractalsoftworks.com/forum/index.php?topic=36072.0'
+    'Exiled Sector on GitHub:    https://github.com/ExiledPortals/ExiledSector'
 )
 [IO.File]::WriteAllText((Join-Path $dir 'README.txt'), (($readme -join "`r`n") + "`r`n"), $utf8)
 
