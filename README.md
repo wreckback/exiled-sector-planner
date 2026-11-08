@@ -9,7 +9,15 @@ A web planner for the ship skill tree of the Exiled Sector Starsector mod. It's 
 - `tools/extract.ps1`: copies the tree, skill types, effect wording, rename tables and art from the mod into `web/`
 - `tools/mod-sync.json`: the mod release the data was last built from (written by `update.ps1`)
 - `tools/serve.ps1`: a small local web server (no Node or Python needed)
-- `web/`: the site. `data/planner-data.js` and `assets/` are generated.
+- `web/`: the site. `data/planner-data.js` and `assets/` are generated. `assets/` (the mod's art) isn't in git; see below.
+
+## Set up after cloning
+
+The repository holds the code and the extracted data, but not the art. The art belongs to the mod and the authors it credits (see the mod's `CREDITS.md`), so it isn't republished here.
+
+1. Clone the mod into `ExiledSector\` inside this folder: `git clone https://github.com/ExiledPortals/ExiledSector.git ExiledSector`.
+2. Run `powershell -ExecutionPolicy Bypass -File tools\extract.ps1`. It copies the art into `web\assets\` and rebuilds the data.
+3. Run the planner as below. Without step 2, nodes draw as placeholders.
 
 ## Run it
 

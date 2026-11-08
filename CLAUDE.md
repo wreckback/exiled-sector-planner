@@ -7,7 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A static web planner for the ship skill tree of the Exiled Sector Starsector mod. It's plain HTML, CSS and JS on a canvas: no framework, no build step, no package manager, no tests or linters. `README.md` is the user guide and `CHANGELOG.md` lists what has been built.
 
 - `ExiledSector/` is the mod's own git checkout. It is the data source only: read it, never edit it. It has its own `CLAUDE.md`, which applies when working inside it. `tools/update.ps1` is the only thing that moves it, by checking out a release tag.
-- The planner folder is its own git repo (branch `main`), with `ExiledSector/` and personal template files ignored. Generated data and assets are committed, so each mod sync shows up as one diff.
+- The planner folder is its own git repo (branch `main`, pushed to a private GitHub repo).
+  - Ignored: `ExiledSector/`, personal template files, and `web/assets/`. The art belongs to the mod and the authors it credits, so it isn't republished, and `extract.ps1` recreates it.
+  - The generated `planner-data.js` is committed, so each mod sync shows up as one diff.
+  - History was rewritten once to drop the art, before the first push. Don't re-add `web/assets`.
 - `tools/extract.ps1` builds `web/data/planner-data.js` and `web/assets/` from the mod. Both are generated, so don't hand-edit them.
 - `web/` is the whole site: `index.html`, `style.css` and `app.js`.
 
