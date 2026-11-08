@@ -27,7 +27,7 @@ powershell -ExecutionPolicy Bypass -File tools\serve.ps1     # http://localhost:
 
 ## Verifying changes
 
-There is no test suite. Verify in the browser through the debug hook `window.planner` at the bottom of `app.js`. It exposes `state`, `byId`, `cam`, `pathTo`, `removalSet`, `allocate`, `chooseRoot`, `click(id, ctrl)`, `pick`, `load(json)`, `serialize`, `totals`, `describe`, `setWormholeOption`, `templateSteps`, `buildTemplate`, `mergeTemplate`, `importTemplate` and `currentNodeId`. `window.plannerTemplatesTest(text)` shows a template file's list without the file picker, which needs a real user click.
+There is no test suite. Verify in the browser through the debug hook `window.planner` at the bottom of `app.js`. It exposes `state`, `byId`, `cam`, `pathTo`, `findPath(id, opt)`, `blockOf(id, opt)`, `problems()`, `setShip(fn)`, `typesExclusive(a, b)`, `setAffinitySplit({option: count})`, `removalSet`, `allocate`, `chooseRoot`, `click(id, ctrl)`, `pick`, `load(json)`, `serialize`, `totals`, `describe`, `setWormholeOption`, `templateSteps`, `buildTemplate`, `mergeTemplate`, `importTemplate` and `currentNodeId`. Ship rules can be set in a test build through `load` (the `ship` field of the serialized JSON). `window.plannerTemplatesTest(text)` shows a template file's list without the file picker, which needs a real user click.
 
 The user often has their own build open in the same browser, and it persists in `localStorage`. When testing in their tab:
 - Save `planner.serialize()` first and `planner.load(saved)` afterwards, inside `try/finally`.
@@ -44,7 +44,10 @@ The sections run top to bottom in this order:
    - Curves store the point the curve passes through. The quadratic control point is `2*through - midpoint`, as in the mod's `SkillTreeNodeConnectorRenderer`.
    - `hiddenConnectors` (wormhole pair links) are adjacent but not drawn.
    - `regions` holds one entry per tree (core plus each faction volume) for the zoomed-out labels. It uses the median centre because some volume nodes sit far from their tree.
-2. **Build state:** `state = { root, alloc (insertion-ordered Set, root excluded), choice, links (socket→exit), hull, cap, coreWormholes, volumes }`.
+2. **Build state:** `state = { root, alloc (insertion-ordered Set, root excluded), choice, links (socket→exit), hull, cap, coreWormholes, volumes, ship }`.
+   - `ship` (`blankShip()`) holds both kinds of setting. Ship rules are the `SHIP_KEYS` (shield, armor, the tri-state facts, hull mods, extra logistics), where `null` means "not set, don't check". Story rules are `lockedGates` and `lockedTypes`.
+   - Both serialize under `ship` in the build JSON.
+   - `subs` maps socket → `{id, aff?, grants?}`, serialized as `sb`. A socket holds an anchor (`links`) or a subroutine, never both. Dropped with its socket (`dropOrphanSubs`) and on reset or template import.
    - Every mutation goes through `pushUndo()` and then `changed()`. `changed()` recomputes totals, the preview, chrome, panel and persistence, and clears the URL hash.
 3. **Rules,** mirroring the mod's `AllocationCheck`:
    - `sat(id)`: allocated, or the chosen root.
@@ -55,6 +58,21 @@ The sections run top to bottom in this order:
    - `pruneSwitchedOff()`: cleanup after a toggle or a load.
    - `jumpTarget(n)` is for navigation only. It uses `pairedWith` directly, so it works even when a toggle is off, unlike `partnerOf`. `jumpTo` moves the camera and sets `flash`. In `primaryAction`, Ctrl+click jumps for wormholes, sockets and exits, and only reaches the choice-node quick pick when there's no jump target.
    - New rules belong in these functions so allocation, preview, tooltips and import all stay consistent.
+   - **Node rules** port `NodeEligibility.check`. `blockOf(n, option, list)` returns `{kind, text}` or null for allocating `n` after the entries in `list` (built by `buildEntries`/`entryFor`, in allocation order). It checks, in the game's order: locked gates and types, hull size, `req_*` hull tags, ship hull mods, node conflicts (`typesExclusive` over `typeRules`: own hull mods versus excluded ones, from `hullModConflicts`), `EFFECT_BLOCKS` (one entry per effect with `blocks` in the data, using `currentShield(list)`), and the logistics cap.
+   - `placement` picks a choice node's option (any allowed option will do). `findPath(target, option, remembered)` searches around nodes that `staticBlock` refuses, then checks the path node by node. It returns `{path, options}` or `{path: null, block}`, and `pathTo` wraps it.
+   - `rules()` caches the build entries, per-node `staticBlock` results, and `problems` (allocated nodes breaking a rule, found by replaying the build in order). `changed()` clears the cache. Problems are flagged, never pruned.
+   - Problems draw a red ring. With "Mark refused" on (`markRefused`, `localStorage['esp.markRefused']`), `isMarkedRefused` nodes also get `drawRefusedMark` (a red X), or a red dot when zoomed out.
+   - Wording comes from the mod's `node.block.*` and `node.requires.*` strings.
+   - **Subroutines:**
+     - `subState()` is cached per change, like `rules()`. Active means the socket is allocated, in socket-id order. It works out:
+       - Empty Shell's silenced nodes and count
+       - nodes gated by Phoenix/P-Space (the first socket wins)
+       - the doctrine (the first one only; radius and possibilities, never simulated)
+       - the Root Conduit route (`conduitRoute`, computed after the grants)
+       - modspec cache grants with a status (active, byPath, duplicate, volumeOff, ineligible)
+     - The radius is `nodesInRadius`: straight-line distance from the socket, Exotech excluded, sizes from `nodeRadii`.
+     - Granted nodes are `held()`, not `sat()`. They give effects and count in `buildEntries`, but they aren't neighbours, don't take a slot, and can't be path targets.
+     - `totals()` drops silenced nodes, moves gated nodes into `gated` (live-in-combat effects × strength, from the extractor's `live` flag), and adds the Empty Shell and Conduit affinity.
 4. **Templates:** `templateSteps` is a port of the mod's `TemplateCapture`. `buildTemplate` and `mergeTemplate` follow `TemplateCodec` and `SkillTreeTemplateStore`. `importTemplate` replays steps over several passes.
    - Template codes: `templateToCode` and `codeToTemplate` produce `ES1.` + base64url(deflate-raw(JSON of the file entry without `id`, plus `mod` version)). The uncompressed fallback is `ES0.`. Codes keep node ids, not indices, so renames still map on import.
 5. **Serialization:** the share link is `#b=` plus base64url JSON of node ids, and the same JSON is saved to `localStorage['esp.build']`.
@@ -64,7 +82,9 @@ The sections run top to bottom in this order:
    3. A stat plus mode (`desc.<pct|flat|mult>.<up|down>`).
    4. A humanized fallback.
 7. **Canvas rendering:** draws in world space via `ctx.setTransform`, with line widths divided by zoom. A rAF loop runs every frame for the breathing rings and the keyboard camera. A node draws as a dot when it's under 5px on screen. Region labels are drawn last, in screen space.
-8. **DOM wiring:** toolbar, summary panel, tooltip, pickers, shortcuts dialog (`#keys`), Templates dialog (`#export`), and keyboard, pointer and touch input.
+8. **DOM wiring:** toolbar, summary panel, tooltip, pickers, shortcuts dialog (`#keys`), Story rules dialog (`#story`, `renderStory`), Templates dialog (`#export`), and keyboard, pointer and touch input. Opening one dialog closes the others.
+   - Ship rules are the summary panel's Ship tab. It's `#panel-ship`, a persistent form beside `#panel-body`, so re-renders don't lose typing. `renderPanel` shows it when `panelTab === 'ship'` and calls `renderShipPane`.
+   - Every change to ship or story rules goes through `setShip(fn)`, which pushes undo and warns about new problems.
 
 ## Extractor (tools/extract.ps1)
 
@@ -79,7 +99,16 @@ The sections run top to bottom in this order:
   - affinity step bonuses (`AffinitySteps`)
   - retired affinity options (`AffinityOptions`)
   - unqualified weapon families (`WeaponStatFamily`)
-  - hull mod names (`docs/analysis/balance.csv`)
+  - hull mod names: the in-game names in the mod's test resource `exiledsector-core/src/test/resources/i18n/hullmod_names.csv` (vanilla and other mods), then `docs/analysis/balance.csv`, then `data/hullmods/hull_mods.csv`. `app.js` falls back to the name of the skill type that grants a hull mod, then the id. `update.ps1` warns if the test resource moves. The Ship rules dialog lists hull mods by name, adding the id only when two share a name.
+  - hull mod conflicts (`hullmod_conflicts.csv`, as symmetric partner lists), the logistics cap (`LogisticsNodes.DEFAULT_CAP`), and a `blocks` flag on effects that override `blockAllocationReason`
+  - block reasons and gate wording (`node.block.*`, `node.requires.*`, `socketable.anchor.gate.*` strings)
+  - subroutines:
+    - `subroutines.csv` merged with `doctrine_archives.csv`
+    - doctrine modifier ranges (`item_modifiers.csv`, scope doctrine)
+    - `node_radii.json`
+    - per-kind limits (`SubroutineKind`)
+    - item icons
+  - a `live` flag on effects read live in combat (`StatTarget.liveStat/liveBonus` in the enum constant, a helper class that only builds live targets, or a live `WeaponStatFamily`). It decides what survives gating.
   - anchor item ↔ exit node (`wormhole_anchors.csv`)
   - node and type renames (`node_replacements.csv`, `node_id_renames.csv`, `type_id_renames.csv`)
   - mod version (`mod_info.json`, `{major,minor,patch}`)
@@ -93,9 +122,19 @@ The sections run top to bottom in this order:
   - Each template is `{v,id,name,root,hull: FRIGATE|DESTROYER|CRUISER|CAPITAL_SHIP, steps, anchors?}`.
   - Steps are `node` or `node=option`, the root is excluded, and a partner follows its wormhole or socket.
   - Names are at most 32 characters and unique per root, case-insensitive, whatever the hull. `uniqueTemplateName` ports `TemplateNames.unique`.
+  - The mod accepts any non-control character (`SkillTreeTextField`). The planner deliberately limits names to printable ASCII (`NAME_CHAR`, `templateNameProblem`, `guardNameInput`), because the game's LWJGL keyboard input and default Insignia font only reliably handle those. The user chose this.
+  - `state.template` (`{name, sig}`) names the loaded or last saved template in the top bar. `sig` hashes the root and steps for the "(edited)" mark.
   - `hull` filters the in-game template list, which defaults to the current ship's size (`TemplateFilter`). The game's `replaceSteps` keeps an existing template's hull. `mergeTemplate(text, name, 'keep'|'change')` does the same, and the dialog's `startSave` asks before a save would replace a template whose hull differs from the dropdown.
   - The game re-reads the file when the skill tree opens and before every template change. The planner keeps entries it can't parse, and refuses to touch a file that isn't valid JSON.
-- **When the mod changes,** compare against the mod sources named above, which are the reference: `AllocationCheck`, `TemplateCapture`, `TemplateCodec`, `SkillTreeTemplateStore`, `AffinitySteps`. Then rerun the extractor.
+- **Node rules:**
+  - In game, the per-ship `req_*` tags other than the hull ones (`req_shields`, `req_ballistic` and so on) don't block allocation. `NodeEligibility.Context.of` passes no ship profile, so the planner only shows them in tooltips.
+  - Hull requirement tags (`req_civilian_hull`, `req_non_phase_hull`, `req_system_charges`, `req_modules`) do block.
+  - Learned hull mod conflicts, item costs and the docked-only logistics rule aren't modelled.
+- **Socket items:** the 6 core sockets take wormhole anchors or subroutines, one item per socket.
+  - Doctrine rolls (REWRITE and AUGMENT), the Conduit's affinity and the cache's notables all come from a hidden per-item seed. The planner asks for what it can (the affinity and the notables) and only describes doctrines.
+  - The Root Conduit gives +5 per route node, which is hard-coded from `RootConduits.AFFINITY_PER_NODE`.
+  - BYPASS has no items.
+- **When the mod changes,** compare against the mod sources named above, which are the reference: `AllocationCheck`, `NodeEligibility`, `TemplateCapture`, `TemplateCodec`, `SkillTreeTemplateStore`, `AffinitySteps`. Then rerun the extractor.
 
 ## Conventions the user asked for
 

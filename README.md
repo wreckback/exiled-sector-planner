@@ -52,9 +52,13 @@ The last line says either "All checks passed, no rule files changed", in which c
 3. **Choices:**
    - Clicking an affinity node, or one of the three other choice nodes, opens a picker.
    - Ctrl+click (Cmd+click on Mac) reuses the option you last picked for that kind of node, for the node you click and every choice node on its path.
+   - **Affinity nodes** in bulk, from the block under the affinity totals in the summary panel:
+     - **All to Low / Mid / High** sets every allocated affinity node to that option.
+     - **Split:** type how many of each you want, for example 1 / 6 / 3 for 10 nodes, and click Apply (or press Enter). The numbers must add up to the allocated count. Nodes already on an option that keeps its count aren't touched.
+     - Either is one Undo step.
 4. **Wormholes:**
    - The core wormholes link the tech regions in pairs; taking one takes its pair.
-   - Faction volumes open by clicking an allocated subroutine socket and choosing an anchor.
+   - Faction volumes open by clicking an allocated subroutine socket, expanding **Wormhole anchor** and choosing one.
    - **Jumping:** click a wormhole (or a linked exit) and choose **Jump to …** to move the view to the other end, or Ctrl+click it to jump straight there. This works from a linked socket too, and never changes the build.
    - The **Core wormholes** and **Faction volumes** checkboxes turn each kind off. Turning one off removes the nodes that depend on it, and Undo brings them back.
 5. **Read the results:**
@@ -64,15 +68,69 @@ The last line says either "All checks passed, no rule files changed", in which c
      - A **Search** tab in the summary panel lists every match with its location, an "allocated" tag, and the line that matched. Click a result to jump to it, or press Enter to step through them.
      - Clearing the search puts the panel back how it was.
    - When zoomed out, each tree is labelled. Click a label to zoom into that tree.
-6. **Save and share:** the build is kept in your browser between visits. **Copy link** puts the whole build in a URL.
-7. **Templates:** see the section below.
+6. **Node rules:** the planner refuses nodes the game would refuse, with the game's own reason in the tooltip or a toast. See the section below.
+7. **Save and share:**
+   - The build is kept in your browser between visits.
+   - **Copy code** in the toolbar copies the build as a template code. It's named after the last template name you used, or "<root> plan".
+   - **Copy link to this build** in the Templates dialog puts the whole build in a URL, ship and story rules included.
+8. **Templates:** see the section below.
 
 Press **?** or click **Shortcuts** for every control:
 - Arrows pan.
 - Page Up and Page Down zoom.
 - Home re-centres.
+- X turns the refused-node marks on and off.
 - Ctrl+Z undoes.
 - Esc closes dialogs.
+
+## Node rules, Ship rules and Story rules
+
+The planner checks the same things the game checks before it allows a node (the mod's `NodeEligibility`).
+
+**Always checked:**
+- **Hull size:** some nodes only fit certain sizes, going by the Hull dropdown. For example, Dedicated Targeting Core needs a cruiser or capital.
+- **Nodes that can't be taken together:** two nodes clash when the hull mods they add clash. Examples are Phase Anchor and Adaptive Phase Coils, Heavy Armor and Critical Point Refit, or any two of Shield Shunt and the two Shield Conversions.
+- **Logistics limit:** a ship holds 2 logistics notables and keystones (cargo, fuel, sensors and the like).
+
+Two kinds of setting cover what the planner can't see. Both are saved with the build and its share link.
+
+**Ship rules** live on the **Ship** tab of the summary panel, so they stay in view while you build. The **Ship rules** toolbar button opens that tab. Everything starts as "Not set", which isn't checked:
+- **Hull:** shield type (front, omni, none or phase cloak), base armor, civilian-grade hull, ship system charges, station modules, and whether the ship has only built-in fighter wings.
+- **Hull mods on the ship:** a node can't be taken if it adds one of these or clashes with one. Pick them by their in-game name. Only hull mods some node clashes with are offered.
+- **Extra logistics slots** from items.
+
+**Story rules** (toolbar button, a dialog) cover what your campaign has reached. Everything starts ticked:
+- **Story gates reached:** untick a gate you haven't reached yet.
+- **Unlocked skill types:** untick nodes whose blueprint or other unlock you don't have.
+
+Each part has its own Clear button. The toolbar buttons show how many settings are in use, for example "Ship rules (2)".
+
+The shield type follows the build in order, as in game. A ship set to "No shield" can't take Shield Shunt, but once a Makeshift Shield Generator is allocated, nodes that need shields are allowed.
+
+**Mark refused** (top bar checkbox, or press **X**) puts a red X on every node the rules refuse right now: clashes with your build, the wrong hull size, the logistics limit, and ship and story rules. Allocated nodes that break a rule get the X over their red ring. When zoomed out, refused nodes show as red dots. Hover a marked node to see why. The setting is remembered between visits.
+
+**When rules are broken:**
+- **Paths:** the shortest path goes around refused nodes. If every way passes one, the message says which node and why.
+- **Choice nodes:** the picker greys out options that are refused and shows the reason under each.
+- **Existing nodes:** if a hull, ship or story change makes allocated nodes break a rule, they get a red ring and are listed at the top of the summary and of the Ship tab. Nothing is removed for you, and Undo goes back.
+- **Templates:** steps the rules refuse are skipped on import, as in game, and the load message says how many and why.
+
+## Subroutines
+
+Click an allocated subroutine socket. The picker shows two headers, **Subroutine** and **Wormhole anchor**, each saying what the socket holds. Click one to expand its list, and click it again to collapse it. The socketed subroutine stays in the list, highlighted, and clicking it again removes it. A socket holds one item, and a subroutine only works while its socket is allocated. The picker enforces the per-ship limits: one doctrine archive, one Root Conduit, and each unique once.
+
+| Subroutine | What the planner does |
+|---|---|
+| **Root Conduit** | +5 to one affinity for every allocated node on the route from your root to its socket. The route is drawn in that affinity's colour. Its affinity is rolled per item, so pick the one yours shows. |
+| **Empty Shell Axion** | Small nodes in its radius grant nothing. The socket gives +1 to every affinity for each small node in the radius, allocated or not. |
+| **Phoenix Ash Archive / P-Space Lattice** | Allocated nodes in the radius only apply below 50% hull or while phased, at 3×. Only effects read live in combat survive, so affinity and similar effects are lost. The summary lists these separately under their condition. |
+| **Contraband Modspec Cache** | Allocates 1 to 3 notables for free: no path, no node slot. Its notables are rolled per item, so add the ones yours shows in the socket's picker. |
+| **Doctrine archives** | The radius is drawn, and tooltips list what the archive can do to each node: Augment's possible lines with their ranges, Rewrite's possible replacements. The actual result is rolled from a hidden per-item seed, so it isn't in the totals. |
+
+- Radiuses are drawn as dashed circles. Hover a node to see how a subroutine affects it.
+- **Subroutines** in the summary says what each one does right now.
+- Subroutines are saved with the build and in links. Templates and codes don't hold them, as in game.
+- **Not modelled:** a granted notable that touches your allocated tree doesn't count as a neighbour for further allocation, though in game it does. Corruption implicits are also not modelled.
 
 ## Templates: import and export with the game
 
@@ -89,6 +147,10 @@ The Templates button reads and writes the mod's shared template file, `saves\com
 - Steps that don't exist or can't be connected are skipped and reported.
 - Undo goes back to your previous build.
 
+**Names:** up to 32 characters, using English letters, digits, spaces and keyboard symbols. Anything else is removed as you type, with a note saying what was removed.
+- The mod itself accepts any character, but its keyboard input and default font only reliably handle these.
+- A template loaded with other characters in its name is flagged, and has to be renamed before you save it.
+
 **Export:** type a name, then use one of these:
 
 | Button | Where it goes |
@@ -101,7 +163,8 @@ The Templates button reads and writes the mod's shared template file, `saves\com
 **Editing a template made in game:** Load it, edit it, then click Save into linked file without renaming it. The game picks up the change the next time the skill tree opens.
 
 **Template codes (when you can't send the file):** a code holds one template as text, about 200–700 characters, for pasting into Discord, forums or chat.
-- **Get a code:** "Copy code for this build" uses the template name and Hull dropdown. Each template in the file list also has its own **Code** button.
+- **Get a code:** **Copy code** in the toolbar, or "Copy code for this build" in the dialog, uses the template name and Hull dropdown. Each template in the file list also has its own **Code** button.
+- A code holds the root, hull, steps and anchors, like a template. Ship rules, story rules, the node cap and the wormhole checkboxes travel only in a link.
 - **Use a code:** paste it into the Template code box and click **Load code**, or press Ctrl+Enter. It loads exactly like a template from the file. Save it into your file afterwards to use it in game.
 - Codes start with `ES1.`. Spaces and line breaks added by chat apps are ignored.
 - Codes keep node ids, so they survive mod updates the same way template files do.
@@ -128,9 +191,10 @@ The Templates button reads and writes the mod's shared template file, `saves\com
   - Firefox may not keep the saved build between visits.
 - **Missing effect wording:** wording is read from the mod's string files and Java source. 11 effects show their raw name and value (fighter role stats, converted hangar, unhit armor regen).
 - **Not modelled:**
-  - Story gates and ship requirements (`gate_*`, `req_*` tags) show in tooltips but don't block allocation.
-  - Ordnance point costs.
-  - Socket items other than anchors.
+  - Ordnance point costs and node item costs.
+  - The per-ship weapon and shield requirements shown in tooltips ("Needs a ship with: …"). The game doesn't block allocation on these either.
+  - Hull mod clashes the game learns while you play (`exiledSector_learnedHullModConflicts.json`).
+  - What a doctrine archive actually rolls (see Subroutines), and subroutine corruption implicits.
 - **Placeholder magnitudes:** the mod marks its magnitudes as placeholders pending balance.
 - **Simplified art:** stars, wormholes, sockets, roots, keystone belts and notable rings are drawn in code as simple versions of the mod's effects. The mod uses vanilla sprites and custom OpenGL for these.
 - **Slow image loading:** the local server sends images one at a time, so art fills in a few seconds after the page loads.

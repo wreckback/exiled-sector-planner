@@ -90,6 +90,40 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - Ctrl/Cmd+click jumps straight there, as Ctrl+click travels in the mod. A linked socket's picker has a Jump button too.
 - Jumping only moves the camera, and gold rings flash on the destination.
 
+**Template names**
+- Names are kept to printable ASCII (English letters, digits, spaces, keyboard symbols), on top of the mod's 32-character, non-empty and unique-per-root rules. Other characters are removed as you type or paste, and named in the status line.
+- Loaded templates with other characters are flagged for renaming.
+- The top bar shows the loaded or last saved template's name, with "(edited)" once the build differs.
+
+**Subroutines**
+- Sockets take subroutines as well as anchors, one item per socket, with the per-ship limits.
+- Fully modelled:
+  - Root Conduit: route affinity, with the route drawn
+  - Empty Shell Axion: silenced small nodes, and affinity per small node
+  - Phoenix Ash Archive and P-Space Lattice: gated nodes at 3×, live-in-combat effects only, listed per condition
+  - Contraband Modspec Cache: picked notables, allocated for free
+- Doctrine archives show their radius and, per node, the lines or replacements they can roll. The roll itself comes from a hidden per-item seed, so it stays out of the totals.
+- The extractor exports subroutines, doctrine pools and modifier ranges, radius sizes and per-kind limits, plus which effects are read live in combat.
+
+**Affinity nodes in bulk**
+- A block under the affinity totals sets every allocated affinity node to one option, or to a typed Low / Mid / High split that changes as few nodes as possible. Each is one Undo step.
+
+**Node rules and Ship rules**
+- The planner refuses what the game's `NodeEligibility` refuses, with the game's own wording:
+  - hull size (via the Hull dropdown)
+  - 13 pairs of nodes whose hull mods clash
+  - the limit of 2 logistics notables and keystones
+- Settings for what the planner can't see, saved with the build and its share link:
+  - **Ship rules,** on the summary panel's Ship tab (the toolbar button opens it): shield type, base armor, civilian hull, system charges, station modules, built-in wings, hull mods on the ship (picked by in-game name) and extra logistics slots. Anything left unset isn't checked.
+  - **Story rules,** a separate dialog: story gates reached and blueprint unlocks. Everything starts ticked.
+- How refusals show up:
+  - Paths avoid refused nodes, or name the node that blocks the way.
+  - The picker greys out refused options and gives the reason.
+  - Allocated nodes that break a rule after a hull or ship change get a red ring and are listed in the summary.
+  - **Mark refused** (checkbox or X key, remembered) draws a red X on every refused node, and a red dot when zoomed out.
+  - Template import skips refused steps and reports them.
+- `update.ps1` watches the new rule sources and flags any blocking effect the planner doesn't check.
+
 **Controls**
 - Arrow keys pan and Page Up / Page Down zoom; holding a key keeps the view moving.
 - Home re-centres, S toggles the summary, / focuses search, ? opens the shortcuts list, Ctrl+Z undoes, Esc closes things.
@@ -111,3 +145,4 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - Ring belts were redrawn by wrapping the band texture around the circle.
 - Duplicate "Grants …" lines are gone, and wormhole travel text no longer appears in the summary.
 - The share link wasn't written when the clipboard call stalled.
+- The toolbar's **Copy link** became **Copy code** (a template code for the build). The link moved to the Templates dialog as "Copy link to this build".
