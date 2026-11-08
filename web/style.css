@@ -176,8 +176,11 @@ button:disabled { opacity: 0.5; cursor: default; }
 #listview .lv-row.lv-want { border-left: 3px solid var(--good); }
 #listview .lv-row.lv-forbid { border-left: 3px solid var(--bad); }
 #listview .lv-target { margin-left: auto; display: flex; gap: 4px; flex: none; align-self: center; }
-#listview .lv-target button[data-mark="want"][aria-pressed="true"] { border-color: var(--good); color: var(--good); font-weight: 600; }
-#listview .lv-target button[data-mark="forbid"][aria-pressed="true"] { border-color: var(--bad); color: var(--bad); font-weight: 600; }
+#listview .lv-target button { font-weight: 600; min-width: 2em; }
+#listview .lv-target button[data-mark="want"] { color: var(--good); }
+#listview .lv-target button[data-mark="forbid"] { color: var(--bad); }
+#listview .lv-target button[data-mark="want"][aria-pressed="true"] { border-color: var(--good); }
+#listview .lv-target button[data-mark="forbid"][aria-pressed="true"] { border-color: var(--bad); }
 #listview .lv-mark { margin-left: auto; flex: none; align-self: center; font-size: 12px; font-weight: 600; }
 #listview .lv-mark.want { color: var(--good); }
 #listview .lv-mark.forbid { color: var(--bad); }
@@ -398,7 +401,7 @@ body.panel-open #help { max-width: calc(100vw - 420px); }
 #tpl-status.err { color: var(--bad); }
 kbd { font: 12px ui-monospace, Consolas, monospace; border: 1px solid var(--edge); padding: 0 4px; background: var(--raised); }
 
-/* ship rules (summary panel tab), story rules dialog and rule problems */
+/* ship rules (summary panel tab), optional rules dialog and rule problems */
 #panel-ship { flex: 1; overflow-y: auto; padding: 4px 16px 16px; user-select: text; }
 #panel-ship h3 { margin: 12px 0 4px; font-size: 13px; color: var(--muted); font-weight: 600; }
 #panel-ship p { margin: 4px 0 0; font-size: 13px; }
@@ -416,6 +419,8 @@ kbd { font: 12px ui-monospace, Consolas, monospace; border: 1px solid var(--edge
 #ship-mod-status:empty { display: none; }
 .ship-checks { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; font-size: 13px; }
 .ship-checks label { cursor: pointer; }
+.vol-gates { display: flex; flex-direction: column; gap: 2px; margin: 0 0 6px 22px; }
+.vol-gates.off label { color: var(--muted); cursor: default; }
 .rule-problems { border: 1px solid var(--bad); padding: 6px 8px; margin-bottom: 12px; }
 #ship-problems .rule-problems { margin: 8px 0 0; }
 #panel-ship .rule-problems h3 { margin: 0; color: var(--bad); }

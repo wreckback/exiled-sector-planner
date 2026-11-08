@@ -4,6 +4,9 @@
 # Personal skill tree template files copied from the game's saves/common folder.
 *.json.data
 
+# Templates files made by the planner's "Create templates file".
+/savedTemplates/
+
 # Art extracted from the mod. It belongs to the mod and the authors it credits, so it isn't republished here;
 # tools/extract.ps1 copies it from the mod checkout.
 /web/assets/

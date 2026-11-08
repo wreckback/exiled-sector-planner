@@ -479,11 +479,32 @@ if ($stf) {
 if ($themes.Count) { Write-Host "Themes: $($themes.Count)" }
 else { Write-Host '  ! no theme list found (SkillTags.THEME); the theme filter will be empty' -ForegroundColor Yellow }
 
+# Optional volumes (the mod settings' Optional Volumes toggles): each toggle's volumes come from VolumeToggles
+# (<X>_VOLUMES = Set.of(...)), its key and name from SkillTreeSettings (<X>_FIELD_ID -> settings.volumes.<key>.name).
+$optionalVolumes = @()
+$vtf = $javaFiles | Where-Object { $_.BaseName -eq 'VolumeToggles' -and $_.FullName -match '\\src\\main\\' } | Select-Object -First 1
+$stsf = $javaFiles | Where-Object { $_.BaseName -eq 'SkillTreeSettings' -and $_.FullName -match '\\src\\main\\' } | Select-Object -First 1
+if ($vtf -and $stsf) {
+    $vtText = [IO.File]::ReadAllText($vtf.FullName)
+    $groupVolumes = @{}
+    foreach ($m in [regex]::Matches($vtText, 'static\s+final\s+Set<String>\s+(\w+)_VOLUMES\s*=\s*Set\.of\(([^)]*)\)')) {
+        $groupVolumes[$m.Groups[1].Value] = @([regex]::Matches($m.Groups[2].Value, '"([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+    }
+    foreach ($m in [regex]::Matches([IO.File]::ReadAllText($stsf.FullName), 'VolumeToggles\.(\w+)_FIELD_ID\s*,\s*Translation\.text\("settings\.volumes\.(\w+)\.name"\)')) {
+        $const = $m.Groups[1].Value; $key = $m.Groups[2].Value
+        if (-not $groupVolumes.ContainsKey($const)) { continue }
+        $name = if ($strings.ContainsKey("settings.volumes.$key.name")) { $strings["settings.volumes.$key.name"] } else { $key }
+        $optionalVolumes += [pscustomobject]@{ id = $key; name = $name; volumes = @($groupVolumes[$const]) }
+    }
+}
+if ($optionalVolumes.Count) { Write-Host "Optional volume toggles: $($optionalVolumes.Count)" }
+else { Write-Host '  ! no optional volume toggles found (VolumeToggles / SkillTreeSettings); the Optional volumes list will be empty' -ForegroundColor Yellow }
+
 # UI strings the planner reuses.
 foreach ($k in $strings.Keys) {
     if ($k -like 'ui.node.*' -or $k -like 'tier.*' -or $k -like 'node.block.*' -or $k -like 'node.requires.*' -or $k -like 'socketable.anchor.gate.*' -or
         $k -like 'socketable.doctrine.*' -or $k -like 'socketable.radius*' -or $k -like 'socketable.rootConduit.*' -or $k -like 'subroutine.grant.*' -or
-        $k -like 'ui.stats.group.*' -or $k -like 'summary.gated.*' -or $k -in 'summary.forFirst', 'ui.stats.expand', 'ui.stats.collapse', 'ui.stats.nodes', 'ui.stats.breakdown.heading') {
+        $k -like 'ui.stats.group.*' -or $k -like 'summary.gated.*' -or $k -in 'settings.volumes.header', 'settings.volumes.about', 'summary.forFirst', 'ui.stats.expand', 'ui.stats.collapse', 'ui.stats.nodes', 'ui.stats.breakdown.heading') {
         $neededStrings[$k] = $strings[$k]
     }
 }
@@ -529,6 +550,7 @@ $data = [ordered]@{
     typeRenames      = $typeRenames
     retiredOptions   = $retiredOptions
     themes           = @($themes)
+    optionalVolumes  = @($optionalVolumes)
     statGroups       = @($statGroups)
     strings          = $neededStrings
 }

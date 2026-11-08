@@ -117,8 +117,7 @@
     links: new Map(),           // socketId -> exitId
     hull: 'cruiser',
     cap: 60,
-    coreWormholes: true,        // the paired wormholes linking the tech regions
-    volumes: true,              // anchor links from sockets to the faction volume exits
+    hiddenVolumes: new Set(),   // Optional Volumes toggles (OPTIONAL_VOLUMES ids) turned off, as in the mod settings
     subs: new Map(),            // socketId -> { id: subroutine id, aff?: conduit affinity effect, grants?: [node ids] }
     template: null,             // { name, sig } of the template the build was loaded from or saved as (top bar)
   };
@@ -139,14 +138,20 @@
     for (const [s, e] of state.links) if (e === exitId) return s;
     return null;
   }
-  // Nodes switched off by the wormhole options: they can't be allocated or travelled through.
+  // The mod settings' Optional Volumes (VolumeToggles): volumes built around other mods, each toggle covering one or two.
+  // In game a hidden volume is left out of the tree (TreeVolumeFilter) and its anchor is inert.
+  const OPTIONAL_VOLUMES = D.optionalVolumes || [];
+  const volumeToggleOf = new Map(OPTIONAL_VOLUMES.flatMap(g => g.volumes.map(v => [v, g])));
+  const volumeHidden = v => { const g = volumeToggleOf.get(v); return !!g && state.hiddenVolumes.has(g.id); };
+  const hiddenText = n => `The ${volumeName(n.volume)} volume is hidden. Enable the Optional Volumes in Optional rules.`;
+  // Nodes in a hidden volume: they can't be allocated or travelled through.
   function switchedOff(n) {
-    return (n.tier === 'WORMHOLE' && !state.coreWormholes) || (n.tier === 'WORMHOLE_EXIT' && !state.volumes);
+    return volumeHidden(n.volume);
   }
   function partnerOf(n) {
     if (switchedOff(n)) return null;
     if (n.pairedWith) return byId.get(n.pairedWith) || null;
-    if (n.tier === 'SOCKET') { const e = state.volumes && state.links.get(n.id); return e ? byId.get(e) : null; }
+    if (n.tier === 'SOCKET') { const e = state.links.get(n.id), x = e && byId.get(e); return x && !switchedOff(x) ? x : null; }
     if (n.tier === 'WORMHOLE_EXIT') { const s = linkedSocketOf(n.id); return s ? byId.get(s) : null; }
     return null;
   }
@@ -266,7 +271,7 @@
     const at = waypoints.indexOf(target);
     for (const t of [...(at >= 0 ? waypoints.slice(0, at) : waypoints), target]) {
       if (!have.has(t.id)) {
-        if (switchedOff(t)) return { path: null, block: { text: `Waypoint ${name(t)} needs ${t.tier === 'WORMHOLE' ? 'core wormholes' : 'faction volumes'} on.` } };
+        if (switchedOff(t)) return { path: null, block: { text: `Waypoint ${name(t)}: ${hiddenText(t)}` } };
         if (t.tier === 'WORMHOLE_EXIT' && !partnerOf(t)) return { path: null, block: { text: `${name(t)} opens only through an anchor linked in a subroutine socket.` } };
         const seg = segmentPath(from, t, have);
         if (!seg) return { path: null, block: { text: from ? `No legal way from ${name(from)} to ${name(t)}.` : `No legal way to reach ${name(t)}.` } };
@@ -438,7 +443,8 @@
     return moving.length;
   }
   function linkSocket(socket, exit) {
-    if (!state.alloc.has(socket.id) || !state.volumes) return;
+    if (!state.alloc.has(socket.id)) return;
+    if (switchedOff(exit)) { toast(hiddenText(exit)); return; }
     const current = state.links.get(socket.id);
     if (current === exit.id) return;
     if (!current && used() + 1 > state.cap) { toast('Linking an anchor takes one more node; you are at the cap.'); return; }
@@ -461,11 +467,11 @@
     state.alloc.delete(exitId);
   }
   function unlinkSocket(socket) { pushUndo(); unlinkInner(socket); changed(); }
-  // Drop switched-off nodes (and anchor links when volumes are off), then everything no longer joined to the root.
+  // Drop nodes in hidden volumes (and anchor links into them), then everything no longer joined to the root.
   // Returns how many nodes were removed.
   function pruneSwitchedOff() {
     const before = state.alloc.size;
-    if (!state.volumes) { for (const e of state.links.values()) state.alloc.delete(e); state.links.clear(); }
+    for (const [s, e] of [...state.links]) if (switchedOff(byId.get(e))) { state.links.delete(s); state.alloc.delete(e); }
     for (const id of [...state.alloc]) if (switchedOff(byId.get(id))) state.alloc.delete(id);
     if (state.root) {
       const keep = new Set([state.root]);
@@ -486,13 +492,14 @@
     dropOrphanSubs();
     return before - state.alloc.size;
   }
-  function setWormholeOption(key, on) {
-    if (state[key] === on) return;
+  // Show or hide one Optional Volumes toggle. Hiding removes the build's nodes there (Undo brings them back).
+  function setVolumeShown(id, on) {
+    const g = OPTIONAL_VOLUMES.find(x => x.id === id);
+    if (!g || state.hiddenVolumes.has(id) !== on) return;
     pushUndo();
-    state[key] = on;
+    if (on) state.hiddenVolumes.delete(id); else state.hiddenVolumes.add(id);
     const removed = on ? 0 : pruneSwitchedOff();
-    const what = key === 'coreWormholes' ? 'Core wormholes' : 'Faction volumes';
-    toast(on ? `${what} on.` : `${what} off.${removed ? ` Removed ${removed} node${removed > 1 ? 's' : ''}; Undo brings them back.` : ''}`);
+    toast(on ? `${g.name}: shown.` : `${g.name}: hidden.${removed ? ` Removed ${removed} node${removed > 1 ? 's' : ''}; Undo brings them back.` : ''}`);
     changed();
   }
   function resetBuild() {
@@ -513,7 +520,7 @@
       hullMods: new Set(), extraLogistics: 0, lockedGates: new Set(), lockedTypes: new Set() };
   }
   state.ship = blankShip();
-  // Ship rules describe the hull; story rules (locked gates and types) the campaign.
+  // Ship rules describe the hull; optional rules (locked gates and types) the campaign.
   const SHIP_KEYS = ['shield', 'armor', ...TRI_FACTS, 'hullMods', 'extraLogistics'];
   function shipRuleCount(sh = state.ship) {
     return (sh.shield ? 1 : 0) + (sh.armor != null ? 1 : 0) + TRI_FACTS.filter(k => sh[k] != null).length + sh.hullMods.size + (sh.extraLogistics ? 1 : 0);
@@ -613,10 +620,10 @@
     const sh = state.ship;
     const e = entryFor(n, optionId);
     for (const t of [e.declared, e.effective]) {
-      if (sh.lockedTypes.has(t.id)) return { kind: 'locked', text: `Not unlocked yet: needs ${unlockText(t)} (Story rules).` };
+      if (sh.lockedTypes.has(t.id)) return { kind: 'locked', text: `Not unlocked yet: needs ${unlockText(t)} (Optional rules).` };
     }
     const gate = n.gates.find(g => sh.lockedGates.has(g));
-    if (gate) return { kind: 'locked', text: `Locked until ${gateText(gate).replace(/^./, c => c.toLowerCase())} (Story rules).` };
+    if (gate) return { kind: 'locked', text: `Locked until ${gateText(gate).replace(/^./, c => c.toLowerCase())} (Optional rules).` };
     const hull = HULL_ENUM[state.hull];
     for (const t of [e.declared, e.effective]) {
       const sizes = t.requiredHullSizes || [];
@@ -690,7 +697,7 @@
   // come from a hidden per-item seed).
   const SUBS = new Map((D.subroutines || []).map(s => [s.id, s]));
   // Rarity 0 in subroutines.csv: no drop pool picks it (ItemDrops.isDroppable). Still socketable here, for copies already owned.
-  const UNOBTAINABLE_TEXT = 'Unobtainable: it doesn\'t drop in this mod version.';
+  const UNOBTAINABLE_TEXT = 'Unobtainable.';
   const AFFINITY_KEYS = ['LOW_TECH_AFFINITY_FLAT', 'MIDLINE_AFFINITY_FLAT', 'HIGH_TECH_AFFINITY_FLAT'];
   const GATE_LINES = { GATES_RADIUS_WHILE_PHASED: 'While phased', GATES_RADIUS_BELOW_HALF_HULL: 'Below 50% hull', GATES_RADIUS_WHILE_SYSTEM_ACTIVE: 'While the ship system is active' };
   const subRadius = def => (def && def.radius && D.nodeRadii ? D.nodeRadii[def.radius] || 0 : 0);
@@ -744,7 +751,7 @@
           let status = 'active';
           if (sat(id)) status = 'byPath';
           else if (sc.granted.has(id)) status = 'duplicate';
-          else if (!state.volumes && n.volume !== 'core') status = 'volumeOff';
+          else if (switchedOff(n)) status = 'volumeOff';
           sc.granted.set(id, sc.granted.get(id) || { def: a.def, socket: a.socket, status });
         }
       }
@@ -915,9 +922,9 @@
     const s = (text || '').trim();
     if (!s) return [];
     let parsed;
-    try { parsed = JSON.parse(s); } catch { throw new Error('That file is not valid JSON, so it was left unchanged.'); }
+    try { parsed = JSON.parse(s); } catch { throw new Error('That file is not valid JSON. No changes written.'); }
     const list = Array.isArray(parsed) ? parsed : parsed && Array.isArray(parsed.templates) ? parsed.templates : null;
-    if (!list) throw new Error('That file has no "templates" list, so it was left unchanged.');
+    if (!list) throw new Error('That file has no "templates" list. No changes written.');
     return list;
   }
   // Index of the template with this name and root (names are unique per root, case-insensitive, like TemplateNames).
@@ -984,33 +991,33 @@
     if (typeof CompressionStream === 'function') return CODE_PREFIX + bytesToB64url(await streamBytes(bytes, new CompressionStream('deflate-raw')));
     return CODE_PREFIX_PLAIN + bytesToB64url(bytes);
   }
-  // Accepts a code (whitespace and line breaks from chat apps are ignored) or a pasted template JSON object.
+  // Accepts a code only (whitespace and line breaks from chat apps are ignored). Pasted template JSON was accepted
+  // once; it was dropped with the Copy template JSON button (see TODO.md).
   async function codeToTemplate(text) {
     const raw = String(text || '').trim();
-    if (!raw) throw new Error('Paste a template code first.');
+    if (!raw) throw new Error('Please paste a template code.');
     let json;
-    if (raw.startsWith('{')) json = raw;
-    else {
+    {
       const code = raw.replace(/\s+/g, '');
       const compressed = code.startsWith(CODE_PREFIX);
-      if (!compressed && !code.startsWith(CODE_PREFIX_PLAIN)) throw new Error('That isn\'t a planner template code. Codes start with "ES1.".');
-      if (code.length > 200000) throw new Error('That code is too long to be a template.');
+      if (!compressed && !code.startsWith(CODE_PREFIX_PLAIN)) throw new Error('Invalid template code.');
+      if (code.length > 200000) throw new Error('Invalid template code.');
       try {
         let bytes = b64urlToBytes(code.slice(CODE_PREFIX.length));
         if (compressed) {
-          if (typeof DecompressionStream !== 'function') throw new Error('This browser can\'t read compressed codes. Try Chrome, Edge, Firefox or Safari.');
+          if (typeof DecompressionStream !== 'function') throw new Error('This browser can\'t read codes. Try Chrome, Edge or Firefox.');
           bytes = await streamBytes(bytes, new DecompressionStream('deflate-raw'));
         }
         json = new TextDecoder().decode(bytes);
       } catch (err) {
         if (err && /browser/.test(err.message)) throw err;
-        throw new Error('The code is damaged or cut off. Copy it again in full.');
+        throw new Error('Invalid template code.');
       }
     }
     let t;
-    try { t = JSON.parse(json); } catch { throw new Error('The code is damaged or cut off. Copy it again in full.'); }
+    try { t = JSON.parse(json); } catch { throw new Error('Invalid template code.'); }
     if (!t || typeof t !== 'object' || Array.isArray(t) || !t.root || !t.name || !Array.isArray(t.steps)) {
-      throw new Error('That code doesn\'t hold a template (it needs a name, a root and steps).');
+      throw new Error('Invalid template code.');
     }
     return t;
   }
@@ -1018,8 +1025,7 @@
   // ------------------------------------------------------------------ serialization (URL hash + localStorage)
   function serialize() {
     const o = { v: 1, r: state.root, a: [...state.alloc], h: state.hull, cap: state.cap };
-    if (!state.coreWormholes) o.wc = 0;
-    if (!state.volumes) o.wv = 0;
+    if (state.hiddenVolumes.size) o.ov = [...state.hiddenVolumes];
     if (state.choice.size) o.c = Object.fromEntries(state.choice);
     if (state.links.size) o.s = Object.fromEntries(state.links);
     const sh = state.ship, so = {};
@@ -1065,8 +1071,10 @@
     state.links = new Map(Object.entries(o.s || {}).filter(([s, e]) => state.alloc.has(s) && state.alloc.has(e)));
     if (HULL_KEYS.includes(o.h)) state.hull = o.h;
     if (Number.isFinite(o.cap) && o.cap > 0) state.cap = Math.min(999, Math.round(o.cap));
-    state.coreWormholes = o.wc !== 0;
-    state.volumes = o.wv !== 0;
+    // Hidden Optional Volumes. Older builds had one "Faction volumes" switch (wv: 0 hid them all) and a
+    // "Core wormholes" switch (wc), which the game has no setting for and is now ignored.
+    state.hiddenVolumes = new Set(Array.isArray(o.ov) ? o.ov.filter(id => OPTIONAL_VOLUMES.some(g => g.id === id))
+      : o.wv === 0 ? OPTIONAL_VOLUMES.map(g => g.id) : []);
     state.ship = readShip(o.ship);
     state.template = typeof o.tn === 'string' && o.tn.trim() ? { name: o.tn.trim().slice(0, 64), sig: String(o.th || '') } : null;
     state.subs = new Map();
@@ -1083,6 +1091,7 @@
   }
   const b64encode = s => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const b64decode = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)));
+  // Unused while the Copy link button is removed (see TODO.md); #b= links still load in loadInitial.
   function shareUrl() {
     const url = new URL(location.href);
     url.hash = 'b=' + b64encode(serialize());
@@ -1265,7 +1274,8 @@
     ['Mobility', /SPEED|MANEUVER|ACCELERATION|DECELERATION|TURN|BURN|MASS/],
     ['Phase', /PHASE|TIMEFLOW/],
     ['Ship system', /SYSTEM/],
-    ['Readiness & logistics', /CR_|COMBAT_READINESS|CREW|CARGO|FUEL|SUPPLIES|REPAIR|SALVAGE|SENSOR|SURVEY|DMOD|D_MOD|COMMAND|NAV|ELECTRONIC|OBJECTIVE|CORONA/],
+    ['Combat readiness', /CR_|COMBAT_READINESS|REPAIR_RATE/],
+    ['Logistics', /CREW|CARGO|FUEL|SUPPLIES|REPAIR|SALVAGE|SENSOR|SURVEY|DMOD|D_MOD|COMMAND|NAV|ELECTRONIC|OBJECTIVE|CORONA/],
   ];
   const groupOf = name => (GROUPS.find(([, re]) => re.test(name)) || ['Other'])[0];
 
@@ -1521,7 +1531,7 @@
       if (age > FLASH_SECONDS || age < 0) flash = null;
       else drawFlash(byId.get(flash.id), age, z);
     }
-    if (hover) drawHover(hover, z);
+    if (hover) drawHover(hover, z, time);
     drawRegionLabels(z);
   }
 
@@ -1576,8 +1586,8 @@
       if (sx < -200 || sx > W + 200 || sy < -50 || sy > H + 50) continue;
       const name = r.volume === 'core' ? 'Core tree' : volumeName(r.volume);
       const count = r.ids.reduce((c, id) => c + (sat(id) ? 1 : 0), 0);
-      const off = r.volume !== 'core' && !state.volumes;
-      const sub = off ? 'off' : count ? `${count} allocated` : '';
+      const off = volumeHidden(r.volume);
+      const sub = off ? 'hidden' : count ? `${count} allocated` : '';
       ctx.font = `600 14px ${FONT}`;
       const w1 = ctx.measureText(name).width;
       ctx.font = `12px ${FONT}`;
@@ -1830,7 +1840,7 @@
     const ac = accent();
     const px = 1 / z;
 
-    const refused = markRefused && isMarkedRefused(n);
+    const refused = isMarkedRefused(n);
     if (screenSize < 5) { // far away: a dot
       ctx.globalAlpha = alpha;
       ctx.fillStyle = searchHits && searchHits.has(n.id) ? rgba(SEARCH_GOLD, 1) : refused ? rgba(RULE_PROBLEM, 0.9) : allocated ? rgba(ac, 1) : n.tier === 'KEYSTONE' ? rgba(DEFAULT_AURORA, 0.9) : n.tier === 'NOTABLE' ? rgba(NOTABLE_PINK, 0.8) : P.dot;
@@ -1895,9 +1905,7 @@
     if (refused) drawRefusedMark(n, alpha, z);
     ctx.globalAlpha = 1;
   }
-  // "Mark refused": a red X on unallocated nodes the rules refuse and on allocated nodes that break a rule.
-  let markRefused = true;
-  try { markRefused = localStorage.getItem('esp.markRefused') !== '0'; } catch { /* storage unavailable */ }
+  // A red X on unallocated nodes the rules refuse and on allocated nodes that break a rule (always on).
   function isMarkedRefused(n) {
     if (!state.root && n.tier === 'ROOT') return false;
     return sat(n.id) ? rules().problems.has(n.id) : !switchedOff(n) && !!staticBlock(n);
@@ -1916,12 +1924,6 @@
       ctx.stroke();
     }
     ctx.lineCap = 'butt';
-  }
-  function setMarkRefused(on) {
-    markRefused = on;
-    els.optRefused.checked = on;
-    try { localStorage.setItem('esp.markRefused', on ? '1' : '0'); } catch { /* storage unavailable */ }
-    requestDraw();
   }
 
   function drawRingState(n, allocated, alpha, ac, pAdd, pRem, z, wormhole) {
@@ -2192,11 +2194,34 @@
       ctx.beginPath(); ctx.arc(n.x, n.y, n.fp * (0.6 + t * 1.6), 0, Math.PI * 2); ctx.stroke();
     }
   }
-  function drawHover(n, z) {
+  function drawHover(n, z, time) {
     const r = n.tier === 'ROOT' ? n.fp / 2 + 6 / z : n.fp * 0.55 + 3 / z;
     ctx.strokeStyle = P.hover;
     ctx.lineWidth = 1.5 / z;
     ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.stroke();
+    if (n.tier === 'WORMHOLE' && n.volume === 'core' && n.pairedWith) drawWormholeLink(n, byId.get(n.pairedWith), z, time);
+  }
+  // Hovering one of the core's wormholes: a dashed line, moving toward the other end, plus a ring on that end, in the
+  // pair's colour, so it's clear which two are linked (the mod hides these links: hiddenConnectors).
+  function drawWormholeLink(a, b, z, time) {
+    if (!b) return;
+    const col = a.wormholeColor || [120, 110, 255];
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+    if (!len) return;
+    const ux = dx / len, uy = dy / len, ra = a.fp * 0.55 + 3 / z, rb = b.fp * 0.55 + 3 / z;
+    if (len <= ra + rb) return;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.setLineDash([10 / z, 8 / z]);
+    ctx.lineDashOffset = -(time * 40) / z;
+    ctx.beginPath(); ctx.moveTo(a.x + ux * ra, a.y + uy * ra); ctx.lineTo(b.x - ux * rb, b.y - uy * rb);
+    ctx.strokeStyle = P.searchOutline; ctx.lineWidth = 5 / z; ctx.stroke(); // dark edge so it reads over the tree
+    ctx.strokeStyle = rgba(col, 0.95); ctx.lineWidth = 2.5 / z; ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(b.x, b.y, rb, 0, Math.PI * 2);
+    ctx.strokeStyle = P.searchOutline; ctx.lineWidth = 5 / z; ctx.stroke();
+    ctx.strokeStyle = rgba(col, 0.95); ctx.lineWidth = 2.5 / z; ctx.stroke();
+    ctx.restore();
   }
 
   // ------------------------------------------------------------------ hit testing
@@ -2222,9 +2247,6 @@
     used: document.getElementById('used'),
     cap: document.getElementById('cap'),
     hull: document.getElementById('hull'),
-    optCore: document.getElementById('opt-core'),
-    optVolumes: document.getElementById('opt-volumes'),
-    optRefused: document.getElementById('opt-refused'),
     search: document.getElementById('search'),
     searchCount: document.getElementById('search-count'),
     undo: document.getElementById('btn-undo'),
@@ -2273,12 +2295,11 @@
     els.used.classList.toggle('over', used() > state.cap);
     if (document.activeElement !== els.cap) els.cap.value = state.cap;
     els.hull.value = state.hull;
-    els.optCore.checked = state.coreWormholes;
-    els.optVolumes.checked = state.volumes;
     els.undo.disabled = undoStack.length === 0;
-    const shipN = shipRuleCount(), storyN = storyRuleCount();
+    els.undo.title = `Undo, ${undoStack.length} step${undoStack.length === 1 ? '' : 's'} stored (Ctrl+Z)`;
+    const shipN = shipRuleCount(), storyN = storyRuleCount() + state.hiddenVolumes.size;
     els.shipBtn.textContent = shipN ? `Ship rules (${shipN})` : 'Ship rules';
-    els.storyBtn.textContent = storyN ? `Story rules (${storyN})` : 'Story rules';
+    els.storyBtn.textContent = storyN ? `Optional rules (${storyN})` : 'Optional rules';
     els.shipTab.textContent = shipN ? `Ship (${shipN})` : 'Ship';
     const tm = state.root ? state.template : null;
     els.tplGroup.hidden = !tm;
@@ -2286,7 +2307,7 @@
     if (!state.root) waypoints = [];
     els.banner.hidden = targets.mode || (!!state.root && !waypoints.length);
     els.banner.textContent = !state.root ? S['ui.node.startingRootPrompt'] || 'Choose a root'
-      : `${waypoints.length} waypoint${waypoints.length === 1 ? '' : 's'}: click a node to allocate a path through them in order. Shift+click a waypoint to drop it, Esc to clear.`;
+      : `${waypoints.length} waypoint${waypoints.length === 1 ? '' : 's'}: click a node to start pathing. Shift+click an existing waypoint to drop it, Esc to clear.`;
     els.banner.classList.toggle('small', !!state.root);
   }
 
@@ -2318,7 +2339,7 @@
       return;
     }
     if (!state.root) {
-      els.panelBody.innerHTML = '<div class="empty">Pick one of the three roots near the centre to start.</div>';
+      els.panelBody.innerHTML = '<div class="empty">Pick one of the three roots near the center to start.</div>';
       els.panelFoot.textContent = footText();
       return;
     }
@@ -2404,9 +2425,8 @@
       const n = byId.get(id), t2 = effectiveType(n);
       return `<div class="node-row" data-node="${esc(id)}">${nodeIconHtml(n, t2)}<div><div class="nm">${esc(t2.name)}</div><div class="tr bad">${esc(b.text)}</div></div></div>`;
     }).join('');
-    const many = problems.size > 1;
-    return `<div class="rule-problems"><h3>${problems.size} node${many ? 's break' : ' breaks'} a node rule</h3>` +
-      `<p class="muted">The game wouldn't allow ${many ? 'these' : 'this'} with the current hull, ship rules and story rules. Remove ${many ? 'them' : 'it'}, or change those settings.</p>${rows}</div>`;
+    return `<div class="rule-problems"><h3>${problems.size} illegal node${problems.size === 1 ? '' : 's'}</h3>` +
+      `<p class="muted">Illegal build</p>${rows}</div>`;
   }
   // Affinity nodes block under the affinity totals: set them all to one option, or to a split of the three.
   const affMix = {
@@ -2456,7 +2476,7 @@
   // After a hull or ship rules change: say so when allocated nodes newly break a rule.
   function warnNewProblems(before) {
     const now = rules().problems.size;
-    if (now > before) toast(`${now} allocated node${now > 1 ? 's break' : ' breaks'} a node rule now; see the top of the summary. Undo goes back.`);
+    if (now > before) toast(`${now} illegal allocated node${now === 1 ? '' : 's'}.`);
   }
   // The planner's version (version.js): a release tag like v0.2.0-alpha.3+es0.11.1-alpha, `git describe` output when
   // served locally (that tag plus -<commits>-g<hash>, and -dirty for uncommitted changes), or "dev". The footer shows
@@ -2494,12 +2514,12 @@
       const e = state.links.get(n.id);
       const se = state.subs.get(n.id), sd = se && SUBS.get(se.id);
       if (sd) html += `<div class="tt-effects"><div><span class="hl">${esc(sd.name)}</span></div><div>${esc(subSummary(sd, se, n))}</div>${sd.unobtainable ? `<div class="bad">${UNOBTAINABLE_TEXT}</div>` : ''}</div>${sd.description ? `<div class="tt-flavour">${esc(sd.description)}</div>` : ''}`;
-      else html += `<div class="tt-effects"><div>${e ? `Linked to the <span class="hl">${esc(volumeName(byId.get(e).volume))}</span> wormhole exit.` : 'Holds one item: a subroutine, or an anchor that opens a wormhole to a faction volume.'}</div></div>`;
+      else html += `<div class="tt-effects"><div>${e ? `Linked to <span class="hl">${esc(volumeName(byId.get(e).volume))}</span>.` : 'Install a subroutine, or an anchor.'}</div></div>`;
     } else if (n.tier === 'WORMHOLE') {
       const p = partnerOf(n);
       html += `<div class="tt-effects"><div>Leads to ${p ? `<span class="hl">${esc(effectiveType(p).name)}</span>` : 'another wormhole'}. Allocating it also allocates the other end.</div></div>`;
     } else if (n.tier === 'WORMHOLE_EXIT') {
-      html += `<div class="tt-effects"><div>Opens into the <span class="hl">${esc(volumeName(n.volume))}</span> volume. Reached by linking an anchor in a subroutine socket.</div></div>`;
+      html += `<div class="tt-effects"><div><span class="hl">${esc(volumeName(n.volume))}</span> volume's Wormhole exit. Reached by linking an anchor in a subroutine socket.</div></div>`;
     } else {
       const lines = typeLines(t);
       if (lines.length) html += `<div class="tt-effects">${lines.map(l => `<div>${l}</div>`).join('')}</div>`;
@@ -2508,7 +2528,7 @@
     if (nodeTheme && nodeTheme.size) html += `<div class="tt-note">Themes: ${esc([...nodeTheme].map(themeName).join(', '))}</div>`;
     const reqs = (t.tags || []).filter(x => x.startsWith('req_')).map(x => humanize(x.slice(4)));
     if (reqs.length) html += `<div class="tt-note">Needs a ship with: ${esc(reqs.join(', '))}</div>`;
-    if (n.gates.length) html += `<div class="tt-note">In game, unlocked by: ${esc(n.gates.map(g => humanize(g.slice(5))).join(', '))}</div>`;
+    if (n.gates.length) html += `<div class="tt-note">Unlocked by: ${esc(n.gates.map(g => humanize(g.slice(5))).join(', '))}</div>`;
     if (t.flavour) html += `<div class="tt-flavour">${esc(t.flavour)}</div>`;
     const problem = allocated && rules().problems.get(n.id);
     if (problem) html += `<div class="tt-warn">Breaks a node rule: ${esc(problem.text)}</div>`;
@@ -2530,24 +2550,24 @@
     else if (allocated) {
       const gone = removalSet(n) || [];
       if (n.tier === 'SOCKET') html += `<div class="tt-note">Click to ${state.links.get(n.id) || state.subs.get(n.id) ? 'change what it holds' : 'socket a subroutine or link an anchor'}. Right-click to remove.</div>`;
-      else if (isChoice(n)) html += '<div class="tt-note">Click to switch the option. Right-click to remove.</div>';
+      else if (isChoice(n)) html += '<div class="tt-note">Click for options. Right-click to remove.</div>';
       else html += `<div class="tt-warn">Click to remove${gone.length > 1 ? ` (${gone.length} nodes)` : ''}.</div>`;
     } else if (switchedOff(n)) {
-      html += `<div class="tt-warn">${n.tier === 'WORMHOLE' ? 'Core wormholes' : 'Faction volumes'} are off. Turn them on in the top bar.</div>`;
+      html += `<div class="tt-warn">${esc(hiddenText(n))}</div>`;
     } else {
       const found = routeTo(n);
       const path = found.path;
       const via = waypoints.includes(n) ? waypoints.indexOf(n) : waypoints.length;
       const viaText = via ? ` through ${via} waypoint${via > 1 ? 's' : ''}` : '';
       if (!path && found.block) html += `<div class="tt-warn">Can't be allocated${viaText}. ${esc(refusalText(n, found.block))}</div>`;
-      else if (!path) html += `<div class="tt-warn">${n.tier === 'WORMHOLE_EXIT' ? 'Link an anchor in a subroutine socket to reach this.' : 'Not reachable from your allocated nodes.'}</div>`;
-      else if (used() + path.length > state.cap) html += `<div class="tt-warn">Needs ${path.length} node${path.length > 1 ? 's' : ''}${viaText}; ${Math.max(0, state.cap - used())} left under the cap.</div>`;
+      else if (!path) html += `<div class="tt-warn">${n.tier === 'WORMHOLE_EXIT' ? 'Link an anchor in a subroutine socket to reach this node.' : 'Not reachable from your allocated nodes.'}</div>`;
+      else if (used() + path.length > state.cap) html += `<div class="tt-warn">${path.length} node${path.length > 1 ? 's' : ''}${viaText} needed; Only ${Math.max(0, state.cap - used())} left (over cap).</div>`;
       else html += `<div class="tt-note">Click to allocate${path.length > 1 ? ` (${path.length} nodes${viaText})` : viaText}${isChoice(n) ? ' and pick an option' : ''}.</div>`;
     }
     if (state.root && n.id !== state.root) {
       const wi = waypoints.indexOf(n);
-      if (wi >= 0) html += `<div class="tt-note">Waypoint ${wi + 1}. Shift+click to drop it.</div>`;
-      else if (waypoints.length) html += `<div class="tt-note">Shift+click to make it waypoint ${waypoints.length + 1}.</div>`;
+      if (wi >= 0) html += `<div class="tt-note">Waypoint ${wi + 1}. Shift+click delete waypoint.</div>`;
+      else if (waypoints.length) html += `<div class="tt-note">Shift+click waypoint ${waypoints.length + 1}.</div>`;
     }
     if (state.root && isChoice(n) && (sat(n.id) || pathTo(n))) {
       const last = types.get(lastChoice.get(n.type.id));
@@ -2562,9 +2582,9 @@
   function radiusNotesHtml(n) {
     const sc = subState();
     let html = '';
-    if (sc.silent.has(n.id)) html += '<div class="tt-warn">Grants nothing: it\'s a small node in the Empty Shell Axion\'s radius (the socket gives affinity for it instead).</div>';
+    if (sc.silent.has(n.id)) html += '<div class="tt-warn">Grants nothing: inside Empty Shell Axion\'s radius.</div>';
     else if (n.tier === 'SMALL' && sc.active.some(a => subLine(a.def, 'EVERY_AFFINITY_FLAT_PER_EMPTY_SHELL_NODE') && nodesInRadius(a.socket, subRadius(a.def)).includes(n))) {
-      html += '<div class="tt-note">In the Empty Shell Axion\'s radius: it would grant nothing if allocated.</div>';
+      html += '<div class="tt-note">Inside Empty Shell Axion\'s radius: no effects granted if allocated.</div>';
     }
     const g = sc.gated.get(n.id);
     if (g) html += `<div class="tt-note">${esc(g.def.name)}: applies only ${esc(g.when.toLowerCase())}, at ×${g.strength}. Effects not read live in combat are lost.</div>`;
@@ -2637,12 +2657,10 @@
     if (n.tier === 'WORMHOLE_EXIT') { const s = linkedSocketOf(n.id); return s ? byId.get(s) : null; }
     return null;
   }
-  // Where a node is, for "Jump to …": a faction volume, or the side of the core tree nearest a root.
+  // Where a jump lands, for "Jump to …": a faction volume, or in the core the node's own id, "Core (midline_wormhole_1)",
+  // since the core's wormholes and sockets have no other names that tell them apart (the mod tags core nodes just "core").
   function placeName(n) {
-    if (n.volume !== 'core') return `the ${volumeName(n.volume)} volume`;
-    let best = null, bestD = Infinity;
-    for (const r of roots) { const d = Math.hypot(r.x - n.x, r.y - n.y); if (d < bestD) { bestD = d; best = r; } }
-    return best ? `the ${best.type.name} side of the core` : 'the core tree';
+    return n.volume !== 'core' ? `the ${volumeName(n.volume)} volume` : `Core (${n.id})`;
   }
   let flash = null; // { id, start }: rings drawn on a jump's destination so it's easy to spot
   const FLASH_SECONDS = 1.6;
@@ -2663,9 +2681,7 @@
     let html = '';
     if (n.id === state.root) {
       // The game never removes a starting root; here it's a shortcut to Reset, so warn first.
-      const count = state.alloc.size;
       html += '<h4>Reset the build?</h4>';
-      html += `<div class="sub" style="padding:2px 0 6px">This removes the ${esc(n.type.name)} root${count ? ` and all ${count} allocated node${count === 1 ? '' : 's'}` : ''}, so you can choose a root again. Undo brings it back.</div>`;
       html += '<button data-act="reset" class="danger">Reset build</button>';
       html += '<button data-act="cancel">Cancel</button>';
     } else if (isChoice(n)) {
@@ -2683,17 +2699,17 @@
     } else if (n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT') {
       const target = jumpTarget(n);
       html += `<h4>${esc(TIER_LABEL[n.tier])}</h4>`;
-      if (target) html += `<button data-act="jump" class="current"><span><div>Jump to ${esc(placeName(target))}</div><div class="sub">Ctrl+click jumps straight there</div></span></button>`;
+      if (target) html += `<button data-act="jump" class="current"><span><div>Jump to ${esc(placeName(target))}</div></span></button>`;
       if (state.root && n.id !== state.root) {
         if (sat(n.id)) {
           const count = (removalSet(n) || []).length;
           html += `<button data-act="remove" class="danger">${n.tier === 'WORMHOLE_EXIT' ? 'Unlink anchor' : 'Remove'} (${count} node${count === 1 ? '' : 's'})</button>`;
         } else if (switchedOff(n)) {
-          html += `<div class="sub" style="padding:2px 0">${n.tier === 'WORMHOLE' ? 'Core wormholes' : 'Faction volumes'} are off, so this can't be allocated.</div>`;
+          html += `<div class="sub" style="padding:2px 0">${esc(hiddenText(n))}</div>`;
         } else {
           const path = routeTo(n).path;
           html += path ? `<button data-act="alloc">Allocate (${path.length} node${path.length === 1 ? '' : 's'}${waypoints.length ? ', through the waypoints' : ''})</button>`
-            : '<div class="sub" style="padding:2px 0">Not reachable from your build yet.</div>';
+            : '<div class="sub" style="padding:2px 0">Not reachable from current build.</div>';
         }
       }
     } else if (n.tier === 'SOCKET') {
@@ -2730,7 +2746,7 @@
         html += `<div class="sub">Notables it allocates (${grants.length} of up to ${cacheMax(def)}; rolled per item, pick the ones yours shows):</div>`;
         for (const id of grants) {
           const g = byId.get(id), st = sc.granted.get(id);
-          const note = !st ? '' : st.status === 'active' ? '' : st.status === 'byPath' ? ' (idle: already allocated)' : st.status === 'duplicate' ? ' (idle: another cache allocates it)' : st.status === 'volumeOff' ? ' (inert while faction volumes are off)' : ` (inactive: ${st.block ? st.block.text : 'refused'})`;
+          const note = !st ? '' : st.status === 'active' ? '' : st.status === 'byPath' ? ' (idle: already allocated)' : st.status === 'duplicate' ? ' (idle: another cache allocates it)' : st.status === 'volumeOff' ? ' (inert while its volume is hidden)' : ` (inactive: ${st.block ? st.block.text : 'refused'})`;
           html += `<button data-ungrant="${esc(id)}" title="Remove from the cache"><span><div>${esc(g ? g.type.name : id)} ×</div>${note ? `<div class="sub bad">${esc(note.trim())}</div>` : ''}</span></button>`;
         }
         if (grants.length < cacheMax(def)) {
@@ -2788,14 +2804,14 @@
   function anchorPickerHtml(n) {
     const cur = state.links.get(n.id);
     let html = '';
-    if (cur) html += `<button data-act="jump"><span><div>Jump to ${esc(placeName(byId.get(cur)))}</div><div class="sub">Ctrl+click jumps straight there</div></span></button>`;
-    if (!state.volumes) return html + '<div class="sub" style="padding:2px 0 6px">Faction volumes are off. Turn them on in the top bar to link anchors.</div>';
+    if (cur) html += `<button data-act="jump"><span><div>Jump to ${esc(placeName(byId.get(cur)))}</div></span></button>`;
     const taken = new Set([...state.links].filter(([s]) => s !== n.id).map(([, e]) => e));
     const list = rules().list;
     for (const ex of [...exits].sort((a, b) => volumeName(a.volume).localeCompare(volumeName(b.volume)))) {
-      const block = taken.has(ex.id) || cur === ex.id ? null : blockOf(ex, null, list);
-      const dis = taken.has(ex.id) || !!block;
-      const sub = taken.has(ex.id) ? 'Linked to another socket' : block ? block.text : ex.gates.length ? 'In game: ' + ex.gates.map(g => humanize(g.slice(5))).join(', ') : '';
+      const hidden = switchedOff(ex);
+      const block = hidden || taken.has(ex.id) || cur === ex.id ? null : blockOf(ex, null, list);
+      const dis = hidden || taken.has(ex.id) || !!block;
+      const sub = hidden ? 'Hidden under Optional Volumes in Optional rules' : taken.has(ex.id) ? 'Linked to another socket' : block ? block.text :ex.gates.length ? 'In game: ' + ex.gates.map(g => humanize(g.slice(5))).join(', ') : '';
       html += `<button data-exit="${esc(ex.id)}" class="${cur === ex.id ? 'current' : ''}" ${dis ? 'disabled' : ''}><span><div>${esc(volumeName(ex.volume))}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</span></button>`;
     }
     if (cur) html += '<button data-act="unlink">Unlink anchor</button>';
@@ -2868,7 +2884,7 @@
       else deallocate(n);
       return;
     }
-    if (switchedOff(n)) { toast(`${n.tier === 'WORMHOLE' ? 'Core wormholes' : 'Faction volumes'} are off. Turn them on in the top bar.`); return; }
+    if (switchedOff(n)) { toast(hiddenText(n)); return; }
     const found = routeTo(n);
     const path = found.path;
     if (!path) {
@@ -3104,7 +3120,7 @@
   // { ok, text, add (node ids in allocation order), remove, options, total, exact } or { ok: false, text, ... }.
   function computePlan() {
     const fail = (text, extra) => ({ ok: false, text, add: [], remove: [], ...extra });
-    if (!state.root) return fail('Choose a root first.');
+    if (!state.root) return fail('Choose a root.');
     const keep = targets.keep;
     const granted = subState().granted;
     const isGranted = id => granted.get(id)?.status === 'active';
@@ -3119,7 +3135,7 @@
     if (!targets.want.size) return { ok: true, text: 'Click nodes to mark them wanted.', add: [], remove: [], options: new Map(), notes };
     const wanted = [...targets.want].map(id => byId.get(id)).filter(n => n.id !== state.root && !base.has(n.id) && !isGranted(n.id));
     for (const n of wanted) {
-      if (switchedOff(n)) return fail(`${targetLabel(n)} needs ${n.tier === 'WORMHOLE' ? 'core wormholes' : 'faction volumes'} on.`);
+      if (switchedOff(n)) return fail(`${targetLabel(n)}: ${hiddenText(n)}`);
       if (n.tier === 'WORMHOLE_EXIT' && !partnerOf(n)) return fail(`${targetLabel(n)} opens only through an anchor linked in a subroutine socket. Link one first.`);
     }
     // Nodes the rules refuse against the base, whatever else the plan adds.
@@ -3153,11 +3169,11 @@
         const all = new Set([0]), q2 = [0];
         for (let i = 0; i < q2.length; i++) for (const b of open.out[q2[i]]) if (!all.has(b)) { all.add(b); q2.push(b); }
         if (!all.has(open.unitOf.get(lost.id))) {
-          return fail(lost.volume !== 'core' && state.volumes ? `${targetLabel(lost)} is in a faction volume with no anchor linked to it. Link one to its exit in a subroutine socket first.`
+          return fail(lost.volume !== 'core' && !switchedOff(lost) ?`${targetLabel(lost)} is in a faction volume with no anchor linked to it. Link one to its exit in a subroutine socket first.`
             : `${targetLabel(lost)} can't be reached from the root.`);
         }
         const steered = [...avoid].map(([id, a]) => `${targetLabel(byId.get(id))} (${a.text.replace(/\.$/, '')})`);
-        return fail(`No legal way to reach ${targetLabel(lost)}: every way there passes a node you forbade or one the rules refuse` +
+        return fail(`No legal way to reach ${targetLabel(lost)}: every way there passes a forbidden node or one the rules refuse` +
           (steered.length ? `, here ${steered.slice(0, 2).join(' and ')}${steered.length > 2 ? ` and ${steered.length - 2} more` : ''}.` : '.'));
       }
       const chosen = pruneTree(g, found, T);
@@ -3187,7 +3203,7 @@
       const remove = keep ? [] : [...state.alloc].filter(id => !added.has(id));
       const total = (keep ? used() : 1) + add.length;
       const plan = { add, remove, options, total, exact: exact && !avoid.size, notes };
-      if (total > state.cap) return { ...plan, ok: false, text: `It needs ${total} nodes and the cap is ${state.cap}.` };
+      if (total > state.cap) return { ...plan, ok: false, text: `${total} nodes needed, ${total - state.cap} over the cap of ${state.cap}.` };
       return { ...plan, ok: true, text: '' };
     }
     return fail(`No legal plan found after steering around ${TARGET_RETRIES} refused nodes.`);
@@ -3211,7 +3227,7 @@
     targets.mode = false;
     planCache = null;
     changed();
-    toast(`Allocated ${gained} node${gained === 1 ? '' : 's'}${p.remove.length ? ` and removed ${p.remove.length}` : ''}. Undo takes it back.`);
+    toast(`Allocated ${gained} node${gained === 1 ? '' : 's'}${p.remove.length ? ` and removed ${p.remove.length}` : ''}.`);
   }
   function renderTargets() {
     tgt.bar.hidden = !targets.mode;
@@ -3416,16 +3432,12 @@
     changed();
     warnNewProblems(before);
   });
-  els.optCore.addEventListener('change', () => { setWormholeOption('coreWormholes', els.optCore.checked); els.optCore.blur(); });
-  els.optVolumes.addEventListener('change', () => { setWormholeOption('volumes', els.optVolumes.checked); els.optVolumes.blur(); });
-  els.optRefused.checked = markRefused;
-  els.optRefused.addEventListener('change', () => { setMarkRefused(els.optRefused.checked); els.optRefused.blur(); });
   document.getElementById('btn-fit').addEventListener('click', frameCore);
   els.undo.addEventListener('click', undo);
   document.getElementById('btn-reset').addEventListener('click', () => { if (state.root || state.alloc.size) { resetBuild(); toast('Build cleared. Undo brings it back.'); } });
   // Copy code: the build as a template code (the same as Templates → Copy code), named after the template name field.
   document.getElementById('btn-code').addEventListener('click', async () => {
-    if (!state.root) { toast('Choose a root first.'); return; }
+    if (!state.root) { toast('Choose a root.'); return; }
     let name = tpl.name.value.trim();
     if (!name) { try { name = (localStorage.getItem('esp.tplName') || '').trim(); } catch { /* storage unavailable */ } }
     if (!name || templateNameProblem(name)) name = `${byId.get(state.root).type.name} plan`;
@@ -3435,17 +3447,6 @@
       toast(`Code for "${name}" copied. Load it with Templates → Load code.`);
     } catch {
       toast('', `Copy this code:<br><input style="width:min(560px,80vw);margin-top:6px" readonly value="${esc(code)}" onfocus="this.select()">`);
-      setTimeout(() => els.toast.querySelector('input')?.focus(), 0);
-    }
-  });
-  document.getElementById('btn-share').addEventListener('click', async () => {
-    const url = shareUrl();
-    history.replaceState(null, '', url);
-    try {
-      await navigator.clipboard.writeText(url);
-      toast('Link copied. It contains the whole build.');
-    } catch {
-      toast('', `Copy this link:<br><input style="width:min(560px,80vw);margin-top:6px" readonly value="${esc(url)}" onfocus="this.select()">`);
       setTimeout(() => els.toast.querySelector('input')?.focus(), 0);
     }
   });
@@ -3485,8 +3486,8 @@
     }
     return s;
   }
-  // Where a node sits, short form for list rows: "Hegemony volume", "Midline side of the core".
-  const shortPlace = n => placeName(n).replace(/^the /, '');
+  // Where a node sits, short form for list and search rows: "Hegemony volume", or "Core" (one tree).
+  const shortPlace = n => n.volume === 'core' ? 'Core' : `${volumeName(n.volume)} volume`;
   let searchTerms = [];
   // Results are listed core first, then by volume, side and name; Enter cycles in the same order.
   function sortSearchResults(list) {
@@ -3639,7 +3640,6 @@
       `<div class="theme-head"><b>Themes</b><label>Match <select id="theme-match">` +
       `<option value="any"${themeMatchAll ? '' : ' selected'}>any ticked</option><option value="all"${themeMatchAll ? ' selected' : ''}>all ticked</option></select></label></div>` +
       `<div class="theme-list">${used.map(row).join('')}${themeCounts.get(NO_THEME) ? row(NO_THEME) : ''}</div>` +
-      `<p class="muted">Themes are the mod's own tags. Affinity nodes aren't counted in any theme, only under Show affinity nodes. Everything ticked is highlighted and listed in the Search tab, together with any search text. Numbers are nodes in all trees.</p>` +
       `<div class="export-actions"><button id="theme-clear"${filterCount() ? '' : ' disabled'}>Clear</button><button id="theme-close">Close</button></div>`;
   }
   function toggleThemeFilter(show = themeEl.hidden) {
@@ -3774,7 +3774,7 @@
   let sheetTabRows = [];
   function sheetTabHtml() {
     const rows = [];
-    const html = `<div class="gs-tabhead"><span class="muted">The in-game stat sheet's sections. Hover a line for its sources.</span>` +
+    const html = `<div class="gs-tabhead"><span class="muted">The in-game stat sheet. Hover over the effects to see source(s).</span>` +
       `<button id="gs-expand" title="Open the stat sheet in full, laid out like the game's">${esc(gameString('ui.stats.expand', 'Full Sheet'))}</button></div>` +
       `<div class="gs gs-side">${statSheet().map(s => sheetSectionHtml(s, rows)).join('')}</div>`;
     sheetTabRows = rows;
@@ -3791,7 +3791,7 @@
     if (sheetEl.hidden) return;
     const rows = [];
     if (!state.root) {
-      sheetBody.innerHTML = '<div class="gs-col"><p class="gs-empty">Pick one of the three roots near the centre to start.</p></div>';
+      sheetBody.innerHTML = '<div class="gs-col"><p class="gs-empty">Pick one of the three roots near the center to start.</p></div>';
       sheetSub.textContent = '';
       sheetRows = rows;
       return;
@@ -3857,9 +3857,10 @@
   const listCount = document.getElementById('listview-count');
   const listSort = document.getElementById('listview-sort');
   const viewBtn = document.getElementById('btn-view');
-  const listNodes = nodes.filter(n => !STRUCTURAL_TIERS.has(n.tier) && !isAffinityNode(n));
+  // The All nodes list: every node except affinity nodes. The core's wormholes and sockets each share one name, so
+  // their rows add the id.
+  const listNodes = nodes.filter(n => !isAffinityNode(n));
   const TIER_RANK = { ROOT: -1, KEYSTONE: 0, NOTABLE: 1, SMALL: 2 };
-  const CORE_SIDE_ORDER = ['root_low_tech', 'root_midline', 'root_high_tech'].map(id => (types.get(id) || { name: id }).name);
   const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
   let listSortMode = 'name';
   try { const v = localStorage.getItem('esp.listSort'); listSortMode = v === 'tree' || v === 'order' ? v : 'name'; } catch { /* storage unavailable */ }
@@ -3872,7 +3873,7 @@
   let listGroupsShown = [];
   const listGroupBtns = document.getElementById('listview-groups');
   const listOpen = () => !listEl.hidden;
-  const listName = n => (isChoice(n) && !held(n.id) ? n.type : effectiveType(n)).name;
+  const listName = n => (isChoice(n) && !held(n.id) ? n.type : effectiveType(n)).name + (n.tier === 'WORMHOLE' || n.tier === 'SOCKET' ? ` (${n.id})` : '');
   function listRowHtml(n) {
     const t = isChoice(n) && !held(n.id) ? n.type : effectiveType(n);
     const themes = nodeThemes(n);
@@ -3881,19 +3882,22 @@
       const e = state.subs.get(n.id), d = e && SUBS.get(e.id), exit = state.links.get(n.id);
       meta.push(d ? `Holds ${d.name}` : exit && byId.get(exit) ? `Anchor to the ${volumeName(byId.get(exit).volume)} volume` : 'Empty');
     }
+    if (n.tier === 'WORMHOLE' && n.pairedWith) meta.push(`Paired with ${n.pairedWith}`);
+    if (n.tier === 'WORMHOLE_EXIT') { const s = linkedSocketOf(n.id); if (s) meta.push(`Linked to ${s}`); }
     if (themes && themes.size) meta.push(`Themes: ${[...themes].map(themeName).join(', ')}`);
     const lines = isChoice(n) && !held(n.id)
       ? n.type.options.map(id => types.get(id)).filter(Boolean).map(o => `<div><span class="muted">${esc(o.name)}:</span> ${typeLines(o).join(' ')}</div>`)
       : typeLines(t).map(l => `<div>${l}</div>`);
-    // Target marks (All nodes list): Want / Forbid buttons while target mode is on, a small tag otherwise.
+    // Target marks (All nodes list): a green O (wanted) and a red X (forbidden) as buttons while target mode is on,
+    // and as a small tag otherwise.
     const mark = targets.want.has(n.id) ? 'want' : targets.forbid.has(n.id) ? 'forbid' : '';
-    const marks = listMode !== 'all' ? ''
+    const marks = listMode !== 'all' || n.id === state.root ? ''
       : targets.mode ? `<span class="lv-target">` +
-        `<button type="button" data-mark="want" aria-pressed="${mark === 'want'}" title="${mark === 'want' ? 'Clear the mark' : 'Mark wanted: the plan reaches it'}">Want</button>` +
-        `<button type="button" data-mark="forbid" aria-pressed="${mark === 'forbid'}" title="${mark === 'forbid' ? 'Clear the mark' : 'Mark forbidden: the plan avoids it'}">Forbid</button></span>`
-      : mark ? `<span class="lv-mark ${mark}">${mark === 'want' ? 'wanted' : 'forbidden'}</span>` : '';
+        `<button type="button" data-mark="want" aria-pressed="${mark === 'want'}" aria-label="Wanted" title="${mark === 'want' ? 'Clear the mark' : 'Mark wanted: the plan reaches it'}">O</button>` +
+        `<button type="button" data-mark="forbid" aria-pressed="${mark === 'forbid'}" aria-label="Forbidden" title="${mark === 'forbid' ? 'Clear the mark' : 'Mark forbidden: the plan avoids it'}">X</button></span>`
+      : mark ? `<span class="lv-mark ${mark}" title="${mark === 'want' ? 'Wanted' : 'Forbidden'}">${mark === 'want' ? 'O' : 'X'}</span>` : '';
     return `<div class="node-row lv-row ${n.tier.toLowerCase()}${listMode === 'all' && mark ? ` lv-${mark}` : ''}" data-node="${esc(n.id)}">${nodeIconHtml(n, t)}<div class="lv-main">` +
-      `<div class="nm">${esc(t.name)}${sat(n.id) && listMode !== 'build' ? '<span class="have">allocated</span>' : ''}</div>` +
+      `<div class="nm">${esc(listName(n))}${sat(n.id) && listMode !== 'build' ? '<span class="have">allocated</span>' : ''}</div>` +
       `<div class="tr">${esc(meta.join(' · '))}</div>` +
       (lines.length ? `<div class="lv-effects">${lines.join('')}</div>` : '') + `</div>${marks}</div>`;
   }
@@ -3945,10 +3949,10 @@
     const sortMode = listSortMode === 'order' && listMode !== 'build' ? 'name' : listSortMode;
     listSort.value = sortMode;
     listHint.textContent = listMode === 'build'
-      ? 'Your root and every allocated node, with the affinity nodes counted per tech. The search box and Filter above narrow the list. Click a node to see it on the map.'
+      ? 'Click a node to see it on the map.'
       : targets.mode
-        ? 'Target mode: mark nodes Want or Forbid (clicking a node cycles its mark, as on the map), then Allocate. Affinity nodes are left out.'
-        : 'Affinity nodes are left out. The search box and Filter above narrow the list. Click a node to see it on the map.';
+        ? 'Target mode: mark nodes Desired or Forbidden (clicking a node cycles its mark, as on the map), then Allocate.'
+        : 'Click a node to see it on the map.';
     const entries = listEntries(searchHits);
     const total = entries.reduce((a, e) => a + e.count, 0);
     const byName = (a, b) => nameCollator.compare(a.name, b.name) || nameCollator.compare(a.place, b.place);
@@ -3959,11 +3963,10 @@
         if (!groups.has(e.place)) groups.set(e.place, { core: !!e.core, affinity: !!e.affinity, list: [] });
         groups.get(e.place).list.push(e);
       }
-      // Affinity first (build list), then the core sides in the game's Low Tech, Midline, High Tech order, then the volumes.
-      const coreRank = place => { const i = CORE_SIDE_ORDER.findIndex(name => place.startsWith(name)); return i < 0 ? CORE_SIDE_ORDER.length : i; };
+      // Affinity first (build list), then the core as one tree, then the volumes.
       const groupRank = g => (g.affinity ? 0 : g.core ? 1 : 2);
       const ordered = [...groups].sort(([a, ga], [b, gb]) => groupRank(ga) - groupRank(gb)
-        || (ga.core ? coreRank(a) - coreRank(b) : 0) || nameCollator.compare(a, b));
+        || nameCollator.compare(a, b));
       for (const [place, g] of ordered) {
         g.list.sort((a, b) => a.rank - b.rank || byName(a, b));
         const n = g.list.reduce((a, e) => a + e.count, 0);
@@ -3992,7 +3995,7 @@
     } else listCount.textContent = `${total} of ${listNodes.length} nodes${filtered}${collapsedNote}`;
     listGroupBtns.hidden = sortMode !== 'tree';
     const empty = listMode === 'build' && !state.root ? 'Pick a root on the map to start a build.'
-      : listMode === 'build' && !searchHits ? 'Nothing allocated yet besides the root.' : 'No nodes match. Change the search or the Filter.';
+      : listMode === 'build' && !searchHits ? 'Nothing allocated yet besides the root.' : 'No nodes match. Change search term or Filters.';
     listBody.innerHTML = html || `<div class="empty">${empty}</div>`;
     listCursor = -1;
   }
@@ -4008,7 +4011,7 @@
     listEl.hidden = !list;
     viewBtn.textContent = list ? 'Map' : 'List';
     viewBtn.setAttribute('aria-pressed', String(list));
-    viewBtn.title = list ? 'Back to the skill tree map (L)' : 'Show every non-affinity node as a list, with search, sorting and the Filter (L)';
+    viewBtn.title = list ? 'Skill tree map (L)' : 'List view of every non-affinity node (L)';
     closePicker(); hideTooltip(); setHover(null);
     // The Targets bar (Allocate, Keep current build) floats over the map; while the list shows it's docked inside the
     // list, above the rows, so it isn't covered.
@@ -4086,7 +4089,7 @@
     if (!keysEl.hidden && !keysEl.contains(e.target) && e.target !== keysBtn) toggleKeys(false);
   });
 
-  // Ship rules (the summary panel's Ship tab) and Story rules (dialog): facts the planner can't see (see blockOf).
+  // Ship rules (the summary panel's Ship tab) and Optional rules (dialog): facts the planner can't see (see blockOf).
   // Both live in state.ship; ship facts describe the hull, story facts the campaign.
   const shipPane = document.getElementById('panel-ship');
   const shipBtn = els.shipBtn;
@@ -4112,6 +4115,7 @@
     gates: document.getElementById('story-gates'),
     unlocks: document.getElementById('story-unlocks'),
     other: document.getElementById('story-other'),
+    volumes: document.getElementById('story-volumes'),
   };
   // Types that can appear in the tree (node types and their options), and the hull mods any of them can clash with.
   const treeTypes = [...new Map(nodes.flatMap(n => [n.type.id, ...(n.type.options || [])]).filter(id => types.has(id)).map(id => [id, types.get(id)])).values()];
@@ -4122,11 +4126,10 @@
   for (const h of relevantHullMods.keys()) { const k = hullModName(h).toLowerCase(); nameUses.set(k, (nameUses.get(k) || 0) + 1); }
   const hullModLabel = h => (nameUses.get(hullModName(h).toLowerCase()) > 1 ? `${hullModName(h)} (${h})` : hullModName(h));
   let shipListBuilt = false, storyListsBuilt = false;
-  const refusedSummary = () => {
-    const refused = nodes.filter(n => !sat(n.id) && staticBlock(n)).length;
+  // Allocated nodes that break a rule, as a sentence after the Ship tab's and Optional rules dialog's summaries (or nothing).
+  const problemSummary = () => {
     const problems = rules().problems.size;
-    return `With the current build and hull, ${refused} unallocated node${refused === 1 ? ' is' : 's are'} refused` +
-      (problems ? ` and ${problems} allocated node${problems === 1 ? ' breaks' : 's break'} a rule.` : '.');
+    return problems ? ` ${problems} illegal allocated node${problems === 1 ? '' : 's'}.` : '';
   };
   function renderShipPane() {
     if (!shipListBuilt) {
@@ -4138,25 +4141,38 @@
     ship.shield.value = sh.shield || '';
     if (document.activeElement !== ship.armor) ship.armor.value = sh.armor ?? '';
     const cut = D.effects.ARMOR_FLAT_FOR_LOW_BASE_ARMOR?.hullArgs?.[HULL_ENUM[state.hull]];
-    ship.armorNote.textContent = cut ? `Low-armor nodes need ${fmt(evalExpr(cut.cutoff, 1))} or less on a ${hullLabel()}.` : '';
+    ship.armorNote.textContent = cut ? `Low-armor nodes need ${fmt(evalExpr(cut.cutoff, 1))} or less on a ${hullLabel()} (only Critical Point Refit for now).` : '';
     for (const sel of ship.tris) sel.value = sh[sel.dataset.tri] == null ? '' : sh[sel.dataset.tri] ? '1' : '0';
     ship.mods.innerHTML = sh.hullMods.size ? [...sh.hullMods].map(h => {
       const hits = relevantHullMods.get(h) || [];
-      return `<span class="chip" title="${esc(`${hullModName(h)} (${h}). ` + (hits.length ? 'Refuses ' + hits.map(t => t.name).join(', ') : 'No node clashes with this hull mod'))}">${esc(hullModLabel(h))} <button data-rm="${esc(h)}" title="Remove" aria-label="Remove ${esc(hullModName(h))}">×</button></span>`;
+      return `<span class="chip" title="${esc(`${hullModName(h)} (${h}). ` + (hits.length ? 'Refuses ' + hits.map(t => t.name).join(', ') : 'No node clashes with this hullmod'))}">${esc(hullModLabel(h))} <button data-rm="${esc(h)}" title="Remove" aria-label="Remove ${esc(hullModName(h))}">×</button></span>`;
     }).join('') : '<span class="muted">None listed.</span>';
     if (document.activeElement !== ship.logistics) ship.logistics.value = sh.extraLogistics || 0;
     ship.logisticsNote.textContent = `Limit: ${logisticsCap()} logistics notables and keystones. Some items add slots in game.`;
     const n = shipRuleCount();
-    ship.summary.textContent = `${n} ship rule${n === 1 ? '' : 's'} set. ${refusedSummary()}`;
+    ship.summary.textContent = `${n} ship rule${n === 1 ? '' : 's'} set.${problemSummary()}`;
     ship.problems.innerHTML = problemsHtml();
   }
   function renderStory() {
     if (!storyListsBuilt) {
       storyListsBuilt = true;
-      const gateCounts = new Map();
-      for (const n of nodes) for (const g of n.gates) gateCounts.set(g, (gateCounts.get(g) || 0) + 1);
-      story.gates.innerHTML = [...gateCounts.keys()].sort((a, b) => gateText(a).localeCompare(gateText(b))).map(g =>
-        `<label><input type="checkbox" data-gate="${esc(g)}"> ${esc(gateText(g))} <span class="muted">(${gateCounts.get(g)} node${gateCounts.get(g) > 1 ? 's' : ''})</span></label>`).join('');
+      const gateCounts = new Map(), gateVolumes = new Map();
+      for (const n of nodes) for (const g of n.gates) {
+        gateCounts.set(g, (gateCounts.get(g) || 0) + 1);
+        if (!gateVolumes.has(g)) gateVolumes.set(g, new Set());
+        gateVolumes.get(g).add(n.volume);
+      }
+      // A gate whose nodes all sit in one optional volume toggle is listed under that toggle; the rest stay in Story gates.
+      const gateToggle = g => OPTIONAL_VOLUMES.find(t => [...gateVolumes.get(g)].every(v => t.volumes.includes(v))) || null;
+      const gateRow = g => `<label><input type="checkbox" data-gate="${esc(g)}"> ${esc(gateText(g))} <span class="muted">(${gateCounts.get(g)} node${gateCounts.get(g) > 1 ? 's' : ''})</span></label>`;
+      const sortedGates = [...gateCounts.keys()].sort((a, b) => gateText(a).localeCompare(gateText(b)));
+      story.gates.innerHTML = sortedGates.filter(g => !gateToggle(g)).map(gateRow).join('');
+      story.volumes.innerHTML = OPTIONAL_VOLUMES.map(t => {
+        const count = nodes.filter(n => t.volumes.includes(n.volume)).length;
+        const gates = sortedGates.filter(g => gateToggle(g) === t);
+        return `<label><input type="checkbox" data-volgroup="${esc(t.id)}"> ${esc(t.name)} <span class="muted">(${count} node${count === 1 ? '' : 's'})</span></label>` +
+          (gates.length ? `<div class="vol-gates" data-for="${esc(t.id)}"><span class="muted">Game state reached:</span>${gates.map(gateRow).join('')}</div>` : '');
+      }).join('') || '<span class="muted">None in this mod version.</span>';
       // Blueprint unlocks are hull mods (Unlocked hullmods, by name only; the condition is in the hover title). Anything
       // else (today only the Wormhole, unlocked by $playerCanUseGates) goes in the section at the top, with its condition.
       const unlockTypes = treeTypes.filter(t => (t.unlockConditions || []).length).sort((a, b) => a.name.localeCompare(b.name));
@@ -4167,10 +4183,20 @@
         `<label><input type="checkbox" data-type="${esc(t.id)}"> ${esc(t.name)} <span class="muted">(${esc(unlockText(t))})</span></label>`).join('');
     }
     const sh = state.ship;
-    for (const cb of story.gates.querySelectorAll('input')) cb.checked = !sh.lockedGates.has(cb.dataset.gate);
+    for (const cb of story.volumes.querySelectorAll('[data-volgroup]')) cb.checked = !state.hiddenVolumes.has(cb.dataset.volgroup);
+    // A hidden volume's gates can't refuse anything, so they're greyed out until it's shown again.
+    for (const box of story.volumes.querySelectorAll('.vol-gates')) {
+      const off = state.hiddenVolumes.has(box.dataset.for);
+      box.classList.toggle('off', off);
+      for (const cb of box.querySelectorAll('input')) cb.disabled = off;
+    }
+    for (const cb of storyEl.querySelectorAll('[data-gate]')) cb.checked = !sh.lockedGates.has(cb.dataset.gate);
     for (const cb of [...story.unlocks.querySelectorAll('input'), ...story.other.querySelectorAll('input')]) cb.checked = !sh.lockedTypes.has(cb.dataset.type);
-    const n = storyRuleCount();
-    story.summary.textContent = `${n ? `${n} gate${n === 1 ? ' or unlock is' : 's or unlocks are'} unticked.` : 'Everything is ticked.'} ${refusedSummary()}`;
+    const n = storyRuleCount(), hv = state.hiddenVolumes.size;
+    const parts = [];
+    if (n) parts.push(`${n} gate${n === 1 ? ' or unlock' : 's or unlocks'}`);
+    if (hv) parts.push(`${hv} optional volume toggle${hv === 1 ? '' : 's'}`);
+    story.summary.textContent = `${parts.length ? `Unticked: ${parts.join(' and ')}.` : 'Everything is ticked.'}${problemSummary()}`;
   }
   function setShip(fn) {
     const before = rules().problems.size;
@@ -4245,7 +4271,7 @@
   // Tick all / Untick all act on their own section only.
   document.getElementById('story-gate-all').addEventListener('click', () => setShip(s => { s.lockedGates.clear(); }));
   document.getElementById('story-gate-none').addEventListener('click', () => setShip(s => {
-    for (const cb of story.gates.querySelectorAll('input')) s.lockedGates.add(cb.dataset.gate);
+    for (const cb of storyEl.querySelectorAll('[data-gate]')) s.lockedGates.add(cb.dataset.gate);
   }));
   document.getElementById('story-unlock-all').addEventListener('click', () => setShip(s => {
     for (const cb of story.unlocks.querySelectorAll('input')) s.lockedTypes.delete(cb.dataset.type);
@@ -4253,7 +4279,12 @@
   document.getElementById('story-unlock-none').addEventListener('click', () => setShip(s => {
     for (const cb of story.unlocks.querySelectorAll('input')) s.lockedTypes.add(cb.dataset.type);
   }));
-  document.getElementById('story-clear').addEventListener('click', () => setShip(s => { s.lockedGates.clear(); s.lockedTypes.clear(); }));
+  document.getElementById('story-clear').addEventListener('click', () => setShip(s => { s.lockedGates.clear(); s.lockedTypes.clear(); state.hiddenVolumes.clear(); }));
+  story.volumes.addEventListener('change', e => {
+    const id = e.target.dataset.volgroup, g = e.target.dataset.gate;
+    if (id) setVolumeShown(id, e.target.checked);
+    else if (g) setShip(s => { if (e.target.checked) s.lockedGates.delete(g); else s.lockedGates.add(g); });
+  });
 
   // templates dialog: linked file (remembered between visits), import, export
   const exportEl = document.getElementById('export');
@@ -4269,6 +4300,7 @@
   const tf = {
     status: document.getElementById('tf-status'),
     link: document.getElementById('tf-link'),
+    create: document.getElementById('tf-create'),
     reconnect: document.getElementById('tf-reconnect'),
     reload: document.getElementById('tf-reload'),
     forget: document.getElementById('tf-forget'),
@@ -4384,13 +4416,13 @@
     fileNotice.box.hidden = !c;
     if (!c) return;
     const list = (label, names) => (names.length ? ` ${label}: ${names.slice(0, 3).map(n => `"${n}"`).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}.` : '');
-    let text = `The templates file ${linkedHandle ? linkedHandle.name : ''} was changed outside the planner, most likely by Starsector.` +
-      list('Changed', c.changed) + list('Added', c.added) + list('Removed', c.removed) + ' The Templates list is up to date.';
+    let text = `Templates file ${linkedHandle ? linkedHandle.name : ''} change detected (most likely by Starsector).` +
+      list('Changed', c.changed) + list('Added', c.added) + list('Removed', c.removed) + ' The Templates list is now up to date.';
     const cur = c.current;
-    if (cur && cur.removed) text += ` "${cur.name}", which your build came from, was removed there. Your build is kept.`;
+    if (cur && cur.removed) text += ` "${cur.name}" was removed from the template file. Current build still loaded in the planner. Don't forget to save to preserve the build.`;
     else if (cur) {
       const edited = state.template && templateSig() !== state.template.sig;
-      text += ` Your build came from "${cur.name}", which changed there. Load the new version? It replaces your build${edited ? ', including the edits you made since loading or saving it' : ''}. Undo brings it back.`;
+      text += ` Your build from "${cur.name}" was updated (most likely by Starsector). Load the new version? It will replace your current build${edited ? ', including the edits you made since loading or saving it' : ''}. Undo brings it back.`;
     }
     fileNotice.msg.textContent = text;
     fileNotice.load.hidden = !(cur && !cur.removed);
@@ -4456,13 +4488,12 @@
     tf.watchMode.value = watchMode;
     tf.watch.value = watchSecs;
     tf.watchSecsWrap.hidden = watchMode !== 'poll';
-    const manual = ' Use Check file in the top bar to check by hand, or choose checking every few seconds.';
     let now;
-    if (watchMode === 'off') now = 'Off. Use Check file in the top bar to look for changes the game made, or open this dialog.';
+    if (watchMode === 'off') now = 'Manually. Use Check file in the top bar to check for changes.';
     else if (!linkedHandle || linkedAccess !== 'granted') now = 'Starts once the file is linked and the browser allows access (after a browser restart, click Reconnect or Check file).';
-    else if (observer) now = 'Watching instantly: the browser reports each change to the file as it happens.';
-    else if (watchMode === 'observe' && !canObserve) now = 'This browser has no file observer, so the file isn\'t being watched.' + manual;
-    else if (watchMode === 'observe' && observerBroken) now = 'Instant watching isn\'t working for this file (the browser couldn\'t start it, or the system stopped reporting changes), so the file isn\'t being watched. It tries again when you come back to this tab or relink.' + manual;
+    else if (observer) now = 'The browser reports each change to the file as it happens.';
+    else if (watchMode === 'observe' && !canObserve) now = 'No file observer detected (unsupported browser). File is not being watched.';
+    else if (watchMode === 'observe' && observerBroken) now = 'Instant watching failed. File is not being watched. Relink to try again.';
     else if (watchMode === 'observe') now = 'Starting instant watching…';
     else now = `Checking every ${watchSecs} s.`;
     tf.watchNote.textContent = now;
@@ -4499,9 +4530,9 @@
   tf.watch.addEventListener('change', () => setWatch(null, tf.watch.value));
   tf.watch.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); tf.watch.blur(); } });
   tf.watchLimits.textContent = (canObserve
-    ? 'Instant watching uses the browser\'s File System Observer. The system can stop reporting changes (after the computer sleeps, for example); the planner then stops watching until you come back to this tab or relink.'
-    : 'This browser has no File System Observer, the feature instant watching needs (recent Chrome and Edge have it).') +
-    ' Watching only happens while this tab is visible, and needs access the browser asks for again each visit.';
+    ? 'If the system stops reporting changes, reload, or relink.'
+    : 'This browser does not support File System Observer. Unable to use instant watching.') +
+    ' Watching only happens while this tab is visible.';
   renderWatchStatus();
   document.getElementById('tf-watch-row').hidden = !canWriteFiles; // read-only browsers can't watch the file
   document.addEventListener('visibilitychange', () => {
@@ -4517,17 +4548,21 @@
   });
   fileNotice.open.addEventListener('click', () => { closeFileNotice(); toggleExport(true); });
   fileNotice.dismiss.addEventListener('click', closeFileNotice);
+  // Makes h the linked file (remembered for later visits) and reads it.
+  async function adoptLinked(h, remember = true) {
+    linkedHandle = h;
+    linkedText = null; // a new link: its first read isn't a change
+    stopObserver(); clearInterval(watchTimer); watchTimer = 0; observerBroken = false;
+    closeFileNotice();
+    if (remember) await rememberHandle(h);
+    if (await checkAccess(true)) await readLinked();
+  }
   async function linkFile() {
     try {
       const opts = { types: [{ description: 'Exiled Sector templates', accept: { 'application/json': ['.data', '.json'] } }], multiple: false };
       if (linkedHandle) opts.startIn = linkedHandle;
       const [h] = await window.showOpenFilePicker(opts);
-      linkedHandle = h;
-      linkedText = null; // a new link: its first read isn't a change
-      stopObserver(); clearInterval(watchTimer); watchTimer = 0; observerBroken = false;
-      closeFileNotice();
-      await rememberHandle(h);
-      if (await checkAccess(true)) await readLinked();
+      await adoptLinked(h);
       exportStatus('');
     } catch (err) {
       if (err && err.name === 'AbortError') return;
@@ -4536,6 +4571,55 @@
     }
     renderTemplatesFile();
   }
+  // Create templates file: an empty templates file in <planner>/savedTemplates/, linked at once. The browser can't
+  // find the planner's folder by itself, so the user picks it once; the handle is kept in IndexedDB ('plannerDir').
+  const SAVED_TEMPLATES_DIR = 'savedTemplates';
+  const canCreateFiles = canWriteFiles && typeof window.showDirectoryPicker === 'function';
+  async function isPlannerDir(dir) {
+    try { await (await dir.getDirectoryHandle('web')).getFileHandle('app.js'); return true; } catch { return false; }
+  }
+  async function plannerDir() {
+    const saved = await handleStore('readonly', s => s.get('plannerDir')).catch(() => null);
+    if (saved) {
+      let p = await saved.queryPermission({ mode: 'readwrite' });
+      if (p !== 'granted') p = await saved.requestPermission({ mode: 'readwrite' });
+      if (p === 'granted') return saved;
+    }
+    const dir = await window.showDirectoryPicker({ id: 'esp-planner', mode: 'readwrite' });
+    if (!(await isPlannerDir(dir))) {
+      throw new Error(`"${dir.name}" isn't the planner's folder. Pick the folder that holds the planner's web folder and README.`);
+    }
+    await handleStore('readwrite', s => s.put(dir, 'plannerDir')).catch(() => {});
+    return dir;
+  }
+  async function freeFileName(dir) {
+    const dot = TEMPLATE_FILE.indexOf('.');
+    for (let n = 1; ; n++) {
+      const name = n === 1 ? TEMPLATE_FILE : `${TEMPLATE_FILE.slice(0, dot)} (${n})${TEMPLATE_FILE.slice(dot)}`;
+      try { await dir.getFileHandle(name); } catch (err) { if (err && err.name === 'NotFoundError') return name; throw err; }
+    }
+  }
+  // testDir (plannerTemplatesTest.create) stands in for the picked folder, and the link isn't remembered.
+  async function createTemplatesFile(testDir) {
+    if (testDir instanceof Event) testDir = null;
+    try {
+      const root = testDir || await plannerDir();
+      if (testDir && !(await isPlannerDir(root))) throw new Error(`"${root.name}" isn't the planner's folder.`);
+      const sub = await root.getDirectoryHandle(SAVED_TEMPLATES_DIR, { create: true });
+      const name = await freeFileName(sub);
+      const h = await sub.getFileHandle(name, { create: true });
+      const w = await h.createWritable();
+      await w.write(JSON.stringify({ v: 1, templates: [] }, null, 2));
+      await w.close();
+      await adoptLinked(h, !testDir);
+      exportStatus(`Created ${SAVED_TEMPLATES_DIR}\\${name} in the planner's folder and linked it.`, 'ok');
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      exportStatus(err.message || String(err), 'err');
+    }
+    renderTemplatesFile();
+  }
+
   async function reconnect() {
     try { if (await checkAccess(true)) await readLinked(); } catch (err) { fileTemplates = null; exportStatus(err.message || String(err), 'err'); }
     renderTemplatesFile();
@@ -4563,10 +4647,11 @@
     const linked = !!linkedHandle;
     if (canWriteFiles) {
       tf.status.innerHTML = linked
-        ? `Linked: <b>${esc(linkedHandle.name)}</b>${linkedAccess === 'prompt' ? ' <span class="muted">(click Reconnect to allow access this visit)</span>' : ''}`
+        ? `Linked: <b>${esc(linkedHandle.name)}</b>${linkedAccess === 'prompt' ? ' <span class="muted">(click Reconnect to allow access)</span>' : ''}`
         : 'No file linked yet.';
       tf.link.textContent = linked ? 'Link a different file…' : 'Link templates file…';
       tf.link.classList.toggle('primary', !linked);
+      tf.create.hidden = !canCreateFiles;
       tf.reconnect.hidden = !(linked && linkedAccess === 'prompt');
       tf.reload.hidden = !(linked && linkedAccess === 'granted');
       tf.forget.hidden = !linked;
@@ -4574,10 +4659,11 @@
     } else {
       tf.status.innerHTML = openedFile ? `Opened (read-only): <b>${esc(openedFile.name)}</b>` : 'No file opened.';
       tf.link.textContent = openedFile ? 'Open a different file…' : 'Open templates file…';
+      tf.create.hidden = true;
       tf.reconnect.hidden = true;
       tf.reload.hidden = true;
       tf.forget.hidden = !openedFile;
-      tf.note.textContent = 'This browser can read the file but not write it or remember it (Chrome and Edge can). Open it each visit; exports download a merged copy.';
+      tf.note.textContent = 'This browser can read files but not write to them.';
     }
     renderTemplateList();
     refreshExport();
@@ -4605,7 +4691,7 @@
         const steps = Array.isArray(t.steps) ? t.steps.length : 0;
         const hull = HULL_FROM_ENUM[t.hull] ? hullLabelFor(HULL_FROM_ENUM[t.hull]) : '';
         html += `<tr><td>${esc(t.name)}</td><td class="num">${steps} step${steps === 1 ? '' : 's'}${hull ? ' · ' + hull : ''}</td>` +
-          `<td><button data-code="${i}" title="Copy this template as a code to paste into chat">Code</button> ` +
+          `<td><button data-code="${i}" title="Copy this template as a code">Code</button> ` +
           `<button data-load="${i}" title="Replace the current build with this template">Load</button></td></tr>`;
       }
       html += '</table>';
@@ -4613,7 +4699,7 @@
     tf.list.innerHTML = html;
   }
   function refreshExport() {
-    if (!state.root) tpl.summary.textContent = 'Choose a root and allocate some nodes first.';
+    if (!state.root) tpl.summary.textContent = 'Choose a root.';
     else {
       const steps = templateSteps(), anchors = Object.keys(templateAnchors()).length;
       let replaces = '';
@@ -4675,8 +4761,11 @@
     state.root = root; state.alloc.clear(); state.choice.clear(); state.links.clear(); state.subs.clear(); state.template = null;
     if (HULL_FROM_ENUM[t.hull]) state.hull = HULL_FROM_ENUM[t.hull];
     const turnedOn = [];
-    if (!state.coreWormholes && entries.some(e => byId.get(e.id)?.tier === 'WORMHOLE')) { state.coreWormholes = true; turnedOn.push('Core wormholes'); }
-    if (!state.volumes && (anchors.size || entries.some(e => byId.get(e.id)?.tier === 'WORMHOLE_EXIT'))) { state.volumes = true; turnedOn.push('Faction volumes'); }
+    // Show any hidden optional volume the template uses, so its steps can land.
+    const usedVolumes = new Set([...entries.map(e => byId.get(e.id)?.volume), ...[...anchors.values()].map(x => byId.get(x)?.volume)]);
+    for (const g of OPTIONAL_VOLUMES) {
+      if (state.hiddenVolumes.has(g.id) && g.volumes.some(v => usedVolumes.has(v))) { state.hiddenVolumes.delete(g.id); turnedOn.push(g.name); }
+    }
     const unknown = entries.filter(e => !byId.has(e.id)).map(e => e.id);
     let pending = entries.filter(e => byId.has(e.id));
     // Steps the rules refuse are skipped, as the game skips them when it applies a template.
@@ -4728,9 +4817,9 @@
         notes.push(`${r.refused.length} step${r.refused.length > 1 ? 's' : ''} refused by the node rules (${effectiveType(f.node).name}: ${f.block.text.replace(/\.$/, '')}${r.refused.length > 1 ? ', …' : ''})`);
       }
       if (r.unplaced.length) notes.push(`${r.unplaced.length} step${r.unplaced.length > 1 ? 's' : ''} couldn't be connected`);
-      if (r.turnedOn.length) notes.push(`turned on ${r.turnedOn.join(' and ')}`);
+      if (r.turnedOn.length) notes.push(`showed ${r.turnedOn.join(' and ')} (Optional Volumes, Optional rules)`);
       if (used() > state.cap) notes.push(`${used()} nodes is over the ${state.cap} cap`);
-      report(`Loaded "${r.name}" (${r.taken} nodes)${notes.length ? '; ' + notes.join('; ') : ''}. Undo goes back.`, notes.length ? '' : 'ok');
+      report(`Loaded "${r.name}" (${r.taken} nodes)${notes.length ? '; ' + notes.join('; ') : ''}.`, notes.length ? '' : 'ok');
       renderTemplateList();
       refreshExport();
       return true;
@@ -4759,7 +4848,7 @@
     toast(copied ? `${label} copied.` : 'The browser blocked the clipboard; the code is in the box to copy by hand.');
   }
   document.getElementById('code-copy').addEventListener('click', async () => {
-    if (!state.root) { codeStatus('Choose a root and allocate some nodes first.', 'err'); return; }
+    if (!state.root) { codeStatus('Choose a root first.', 'err'); return; }
     const problem = templateNameProblem(tpl.name.value);
     if (problem) { codeStatus(`${problem} (The code uses the template name below.)`, 'err'); tpl.name.focus(); return; }
     showCode(await templateToCode(buildTemplate(tpl.name.value)), `Code for "${tpl.name.value.trim()}"`);
@@ -4767,7 +4856,7 @@
   document.getElementById('code-load').addEventListener('click', async () => {
     try {
       const t = await codeToTemplate(codeBox.value);
-      const made = t.mod && D.modVersion && t.mod !== D.modVersion ? `made with mod ${t.mod}, this planner has ${D.modVersion}` : '';
+      const made = t.mod && D.modVersion && t.mod !== D.modVersion ? `made with mod ${t.mod}, this planner is based on ${D.modVersion}` : '';
       loadTemplate(t, codeStatus, made);
     } catch (err) { codeStatus(err.message || String(err), 'err'); }
   });
@@ -4816,7 +4905,8 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  // --- saving into an existing file, asking first when it would overwrite a template saved for another hull size
+  // --- saving into an existing file, asking first when it would overwrite a template (with the hull question when
+  // the template was saved for another hull size)
   const conflict = {
     box: document.getElementById('tpl-conflict'),
     msg: document.getElementById('tpl-conflict-msg'),
@@ -4826,23 +4916,29 @@
     asNew: document.getElementById('tpl-asnew'),
     cancel: document.getElementById('tpl-cancel'),
   };
-  let pendingSave = null; // { target: 'linked' | 'download', text, fileName, name }
+  let pendingSave = null; // { name } of the save waiting on the question
   function hideConflict() { conflict.box.hidden = true; pendingSave = null; }
 
-  function startSave(target, text, fileName) {
+  // text: the linked file as just read.
+  function startSave(text) {
     hideConflict();
     const name = readyToExport();
     if (!name) return;
     const plan = planMerge(text, name);
-    if (!plan.hullConflict) { commitSave({ target, text, fileName }, name, 'keep'); return; }
-    pendingSave = { target, text, fileName, name };
-    const from = HULL_ENUM_LABEL[plan.existingHull], to = HULL_ENUM_LABEL[HULL_ENUM[state.hull]];
-    conflict.msg.textContent = `"${plan.existing.name}" is already in the file as a ${from} template, but the Hull dropdown is set to ${to}. ` +
-      `In game, the template list shows ${from} templates on ${from.toLowerCase()} ships.`;
-    conflict.keep.textContent = `Keep ${from}`;
-    conflict.keep.title = `Update the steps and keep it a ${from} template, as the game does`;
-    conflict.change.textContent = `Change to ${to}`;
-    conflict.change.title = `Update the steps and make it a ${to} template`;
+    if (!plan.existing) { commitSave(name, 'keep'); return; }
+    pendingSave = { name };
+    if (plan.hullConflict) {
+      const from = HULL_ENUM_LABEL[plan.existingHull], to = HULL_ENUM_LABEL[HULL_ENUM[state.hull]];
+      conflict.msg.textContent = `"${plan.existing.name}" is already in the templates file as a ${from} template, but the Hull size dropdown is set to ${to}.`;
+      conflict.keep.textContent = `Keep ${from}`;
+      conflict.change.textContent = `Change to ${to}`;
+      conflict.change.hidden = false;
+    } else {
+      // Same name and root, same hull: ask before overwriting it.
+      conflict.msg.textContent = `A template named "${plan.existing.name}" already exists for the ${byId.get(state.root).type.name} root. Override it?`;
+      conflict.keep.textContent = 'Override';
+      conflict.change.hidden = true;
+    }
     conflict.newName.value = uniqueTemplateName(name, plan.list);
     conflict.box.hidden = false;
     conflict.box.scrollIntoView({ block: 'nearest' });
@@ -4850,13 +4946,10 @@
     exportStatus('');
   }
   // mode: 'keep' | 'change' (hull of the template being replaced) or 'new' (add under saveName, which must be free).
-  async function commitSave(p, saveName, mode) {
+  async function commitSave(saveName, mode) {
     try {
-      let text = p.text;
-      if (p.target === 'linked') {
-        if (!(await checkAccess(true))) { exportStatus('The browser was not allowed to write to that file.', 'err'); renderTemplatesFile(); return; }
-        text = await readLinked(); // re-read so changes the game made meanwhile aren't lost
-      }
+      if (!(await checkAccess(true))) { exportStatus('The browser was not allowed to write to that file.', 'err'); renderTemplatesFile(); return; }
+      const text = await readLinked(); // re-read so changes the game made meanwhile aren't lost
       if (mode === 'new') {
         const problem = templateNameProblem(saveName);
         if (problem) { exportStatus(problem, 'err'); conflict.newName.focus(); return; }
@@ -4867,22 +4960,17 @@
         }
       }
       const result = mergeTemplate(text, saveName, mode === 'keep' ? 'keep' : 'change');
-      if (p.target === 'linked') {
-        linkedWriting = true; // the planner's own save isn't a change from outside
-        try {
-          const w = await linkedHandle.createWritable();
-          await w.write(result.text);
-          await w.close();
-          const f = await linkedHandle.getFile();
-          linkedText = result.text;
-          linkedStamp = `${f.lastModified}:${f.size}`;
-        } finally { linkedWriting = false; }
-        fileTemplates = JSON.parse(result.text).templates;
-        reportMerge(result, `in ${linkedHandle.name}`);
-      } else {
-        download(result.text);
-        reportMerge(result, `in a downloaded copy of ${p.fileName}`);
-      }
+      linkedWriting = true; // the planner's own save isn't a change from outside
+      try {
+        const w = await linkedHandle.createWritable();
+        await w.write(result.text);
+        await w.close();
+        const f = await linkedHandle.getFile();
+        linkedText = result.text;
+        linkedStamp = `${f.lastModified}:${f.size}`;
+      } finally { linkedWriting = false; }
+      fileTemplates = JSON.parse(result.text).templates;
+      reportMerge(result, `in ${linkedHandle.name}`);
       if (mode === 'new') {
         tpl.name.value = result.template.name; // later saves go to the new template
         try { localStorage.setItem('esp.tplName', result.template.name); } catch { /* ignore */ }
@@ -4894,9 +4982,9 @@
       exportStatus(err && err.message ? err.message : String(err), 'err');
     }
   }
-  conflict.keep.addEventListener('click', () => { if (pendingSave) commitSave(pendingSave, pendingSave.name, 'keep'); });
-  conflict.change.addEventListener('click', () => { if (pendingSave) commitSave(pendingSave, pendingSave.name, 'change'); });
-  conflict.asNew.addEventListener('click', () => { if (pendingSave) commitSave(pendingSave, conflict.newName.value, 'new'); });
+  conflict.keep.addEventListener('click', () => { if (pendingSave) commitSave(pendingSave.name, 'keep'); });
+  conflict.change.addEventListener('click', () => { if (pendingSave) commitSave(pendingSave.name, 'change'); });
+  conflict.asNew.addEventListener('click', () => { if (pendingSave) commitSave(conflict.newName.value, 'new'); });
   conflict.newName.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); conflict.asNew.click(); } });
   conflict.cancel.addEventListener('click', () => { hideConflict(); exportStatus('Nothing was saved.'); tpl.name.focus(); });
 
@@ -4904,7 +4992,7 @@
     if (!readyToExport() || !linkedHandle) return;
     try {
       if (!(await checkAccess(true))) { exportStatus('The browser was not allowed to write to that file.', 'err'); renderTemplatesFile(); return; }
-      startSave('linked', await readLinked());
+      startSave(await readLinked());
     } catch (err) {
       exportStatus(err && err.message ? err.message : String(err), 'err');
     }
@@ -4915,16 +5003,11 @@
     tpl.file.value = '';
     tpl.file.click();
   });
+  tf.create.addEventListener('click', createTemplatesFile);
   tf.reconnect.addEventListener('click', reconnect);
   tf.reload.addEventListener('click', reloadLinked);
   tf.forget.addEventListener('click', forgetLinked);
   tpl.save.addEventListener('click', saveIntoLinked);
-  document.getElementById('tpl-merge').addEventListener('click', () => {
-    if (!readyToExport()) return;
-    pendingFileAction = 'merge';
-    tpl.file.value = '';
-    tpl.file.click();
-  });
   tpl.file.addEventListener('change', async () => {
     const f = tpl.file.files && tpl.file.files[0];
     const action = pendingFileAction;
@@ -4937,8 +5020,6 @@
         openedFile = { name: f.name, text };
         exportStatus('');
         renderTemplatesFile();
-      } else if (action === 'merge') {
-        startSave('download', text, f.name);
       }
     } catch (err) { exportStatus(err.message || String(err), 'err'); }
   });
@@ -4948,19 +5029,6 @@
     const result = mergeTemplate('', name);
     download(result.text);
     exportStatus(`Downloaded a new ${TEMPLATE_FILE} holding only "${name}".`, 'ok');
-  });
-  document.getElementById('tpl-copy').addEventListener('click', async () => {
-    const name = readyToExport();
-    if (!name) return;
-    const text = JSON.stringify(buildTemplate(name), null, 2);
-    try {
-      await navigator.clipboard.writeText(text);
-      exportStatus('Template JSON copied. Paste it into the "templates" list of the file.', 'ok');
-      toast(`Copied "${name}" as template JSON.`);
-    } catch {
-      exportStatus('The browser blocked the clipboard. Use one of the download options instead.', 'err');
-      toast('Couldn\'t copy: the browser blocked the clipboard.');
-    }
   });
   guardNameInput(tpl.name, exportStatus);
   guardNameInput(conflict.newName, exportStatus);
@@ -4986,6 +5054,7 @@
       renderTemplatesFile();
     },
     poll: pollLinked,
+    create: dir => createTemplatesFile(dir),
     watch: () => ({ mode: watchMode, secs: watchSecs, observing: !!observer, timer: !!watchTimer, broken: observerBroken, canObserve }),
     setWatch,
   });
@@ -5060,11 +5129,12 @@
     const mods = await child(dir, 'mods', 'directory');
     return (mods && await inside(mods)) || await inside(dir);
   }
-  const notModFolder = name => new Error(`"${name}" isn't the Exiled Sector folder and doesn't contain it: no Exiled Sector mod_info.json there, in its mods folder, or in a folder inside it.`);
+  // findModDir looks in the folder itself, its mods folder and each folder inside it.
+  const notModFolder = () => new Error('No Exiled Sector mod_info.json detected.');
   // Reads every image the planner draws from a folder handle. Resolves to { urls, info } or throws.
   async function readArtFolder(handle) {
     const found = await findModDir(handle);
-    if (!found) throw notModFolder(handle.name);
+    if (!found) throw notModFolder();
     const dirs = new Map([['', Promise.resolve(found.dir)]]);
     const dirAt = path => {
       if (!dirs.has(path)) {
@@ -5099,7 +5169,7 @@
       info = parseModInfo(await f.text());
       if (info) { const p = rel(f).slice(0, -'mod_info.json'.length); prefix = p.toLowerCase(); folder = p.replace(/\/$/, '').split('/').pop(); break; }
     }
-    if (prefix === null) throw notModFolder((rel(list[0] || { name: 'That folder' }).split('/')[0]));
+    if (prefix === null) throw notModFolder();
     const byPath = new Map();
     for (const f of list) { const r = rel(f).toLowerCase(); if (r.startsWith(prefix)) byPath.set(r.slice(prefix.length), f); }
     const urls = new Map();
@@ -5163,29 +5233,29 @@
   }
 
   function renderArt() {
-    artBtn.textContent = artAccess === 'ready' ? 'Mod art' : artAccess === 'loading' ? 'Loading art…' : artAccess === 'prompt' ? 'Reconnect art' : 'Show mod art';
+    artBtn.textContent = artAccess === 'ready' ? 'Mod assets' : artAccess === 'loading' ? 'Loading assets…' : artAccess === 'prompt' ? 'Reconnect assets' : 'Show mod assets';
     artBtn.title = artAccess === 'prompt'
-      ? `Allow the planner to read the mod folder "${artHandle ? artHandle.name : ''}" again, to show the mod's art`
-      : 'Show the mod\'s art, read from your own Exiled Sector folder';
+      ? `Allow the planner to read the mod folder "${artHandle ? artHandle.name : ''}" again, to show the mod's assets`
+      : 'Show the mod\'s assets, read from your own Exiled Sector folder';
     let status;
-    if (artAccess === 'loading') status = 'Reading the art…';
-    else if (artInfo) status = `Showing the art from <b>${esc(artInfo.folder)}</b>${artInfo.version ? ` (Exiled Sector ${esc(artInfo.version)})` : ''}, ${artInfo.count} images.`;
-    else if (artAccess === 'prompt') status = `The browser needs your permission again to read <b>${esc(artHandle.name)}</b>. Click Reconnect.`;
-    else status = 'No mod folder chosen. The tree shows placeholders: lettered icons, and no nebula or planet art.';
+    if (artAccess === 'loading') status = 'Reading the assets…';
+    else if (artInfo) status = `Showing the assets from <b>${esc(artInfo.folder)}</b>${artInfo.version ? ` (Exiled Sector ${esc(artInfo.version)})` : ''}, ${artInfo.count} images.`;
+    else if (artAccess === 'prompt') status = `Permission to read <b>${esc(artHandle.name)}</b> must be regranted. Click Reconnect.`;
+    else status = 'No mod folder chosen. Showing placeholders.';
     artUi.status.innerHTML = status;
     const notes = [];
     if (artError) notes.push(`<span class="bad">${esc(artError)}</span>`);
     if (artInfo && artInfo.version && D.modVersion && artInfo.version !== D.modVersion) {
-      notes.push(`This folder has Exiled Sector ${esc(artInfo.version)}, and the planner's tree is from ${esc(D.modVersion)}. Icons of node types that changed between them may be missing or different.`);
+      notes.push(`This folder has Exiled Sector ${esc(artInfo.version)}, and the planner's tree is from ${esc(D.modVersion)}. Icons of node types that changed between updates may be missing or different.`);
     }
     artUi.note.innerHTML = notes.join('<br>');
     artUi.choose.textContent = artInfo || artHandle ? 'Choose another folder…' : 'Choose mod folder…';
     artUi.choose.disabled = artAccess === 'loading';
     artUi.reconnect.hidden = artAccess !== 'prompt';
     artUi.forget.hidden = !artHandle && !artInfo;
-    artUi.browser.textContent = canPickFolder
-      ? 'This browser remembers the folder. After a browser restart, it asks once for permission again (Reconnect art in the top bar).'
-      : 'This browser can\'t remember folders, so choose it again on each visit. It may ask to confirm "uploading" the files: nothing leaves your computer, the page only reads them. Chrome or Edge remember the folder.';
+    // Other browsers (folder input) get no note for now: the old one is to be reworded later.
+    artUi.browser.textContent = canPickFolder ? 'After a browser restart, permission must be regranted (Reconnect assets in the top bar).' : '';
+    artUi.browser.hidden = !canPickFolder;
   }
   function toggleArt(show = artEl.hidden) {
     artEl.hidden = !show;
@@ -5212,7 +5282,7 @@
     renderArt();
     let told = false;
     try { told = localStorage.getItem('esp.artHint') === '1'; localStorage.setItem('esp.artHint', '1'); } catch { /* storage unavailable */ }
-    if (!told) toast('', 'The mod\'s art isn\'t included with the planner. Click <b>Show mod art</b> in the top bar to read it from your Exiled Sector folder.');
+    if (!told) toast('', 'The mod assets are not included with the planner. Click <b>Show mod assets</b> in the top bar to read them from your Exiled Sector folder.');
   })();
   // Testing: link(handle) reads a stand-in folder handle (getDirectoryHandle, getFileHandle, values, queryPermission,
   // name) as if it had been picked, without remembering it.
@@ -5243,7 +5313,6 @@
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
     else if (e.key === 'Home') frameCore();
     else if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey) togglePanel();
-    else if (e.key.toLowerCase() === 'x' && !e.ctrlKey && !e.metaKey && !e.altKey) { setMarkRefused(!markRefused); toast(markRefused ? 'Refused nodes marked with an X.' : 'Refused nodes no longer marked.'); }
     else if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey && !e.altKey) setTargetMode(!targets.mode);
     else if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey) setView(listEl.hidden);
     else if (e.key === 'Escape') { if (!els.picker.hidden) closePicker(); else if (waypoints.length) clearWaypoints(); else if (targets.mode) setTargetMode(false); }
@@ -5280,7 +5349,7 @@
     click: (id, quick) => primaryAction(byId.get(id), 400, 300, quick),
     pick: (id, opt) => { rememberChoice(byId.get(id), opt); },
     load: json => { deserialize(json); changed(); },
-    setWormholeOption, templateSteps, buildTemplate, mergeTemplate, planMerge, uniqueTemplateName, importTemplate, currentNodeId,
+    setVolumeShown, templateSteps, buildTemplate, mergeTemplate, planMerge, uniqueTemplateName, importTemplate, currentNodeId,
     templateToCode, codeToTemplate, pathTo, removalSet, allocate: id => allocate(byId.get(id)), chooseRoot: id => chooseRoot(byId.get(id)), totals, describe, serialize,
     findPath: (id, opt) => findPath(byId.get(id), opt), blockOf: (id, opt) => blockOf(byId.get(id), opt || null, rules().list),
     problems: () => [...rules().problems].map(([id, b]) => ({ id, text: b.text })), setShip, setAffinitySplit,

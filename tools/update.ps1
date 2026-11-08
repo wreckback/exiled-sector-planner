@@ -275,7 +275,7 @@ Section "Mod code changed since $baselineName"
 $rulePattern = '/src/main/java/.*/(AllocationCheck|TemplateCapture|TemplateCodec|TemplateNames|TemplateFilter|SkillTreeTemplateStore|' +
                'AffinitySteps|AffinityOptions|AffinityScaling|SkillTier|NodeReplacements|ShipLevelConfig|SkillTreeNodeConnectorRenderer|' +
                'WormholeAnchorLinks|WormholeAnchorDefinitions|ScopedWeaponEffect|WeaponStatFamily|HullSizeTable|StatMode|' +
-               'NodeEligibility|AllocatedNode|SkillType|HullModConflicts|LogisticsNodes|NodeRequirements|LowBaseArmorBonus|' +
+               'NodeEligibility|VolumeToggles|TreeVolumeFilter|SkillTreeSettings|AllocatedNode|SkillType|HullModConflicts|LogisticsNodes|NodeRequirements|LowBaseArmorBonus|' +
                'SkillTypeUnlockStatus|NodeGates|ShieldSkillEffect|SkillTags|StatGroup|ShipStatSheets|SkillTreeBonusSummary|' +
                'Subroutine|SubroutineKind|SubroutineDefinitions|SubroutineRadius|SubroutineSocketLimits|NodeRadii|NodeRadiusCache|ExoshipNodes|' +
                'RootConduits|EmptyShells|GatedSubroutines|SkillTreeEffectSource|ModspecCaches|NodeAllocator|DoctrineOverrides|DoctrineArchive|StatTarget)\.java$'

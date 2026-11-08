@@ -127,8 +127,8 @@ The planner ships no images. Click **Show mod art** in the top bar and choose th
 4. **Wormholes:**
    - The core wormholes link the tech regions in pairs; taking one takes its pair.
    - Faction volumes open by clicking an allocated subroutine socket, expanding **Wormhole anchor** and choosing one.
-   - **Jumping:** click a wormhole (or a linked exit) and choose **Jump to …** to move the view to the other end, or Ctrl+click it to jump straight there. This works from a linked socket too, and never changes the build.
-   - The **Core wormholes** and **Faction volumes** checkboxes turn each kind off. Turning one off removes the nodes that depend on it, and Undo brings them back.
+   - **Jumping:** click a wormhole (or a linked exit) and choose **Jump to …** to move the view to the other end, or Ctrl+click it to jump straight there. This works from a linked socket too, and never changes the build. The button names where you'll land: a volume, or in the core the id of the node at the other end, e.g. **Jump to Core (midline_wormhole_1)**. Hovering one of the core's six wormholes draws a moving dashed line to the wormhole it's paired with, and rings that end.
+   - Volumes built around other mods can be hidden under **Optional Volumes** in Optional rules, as in the mod settings.
 5. **Read the results:**
    - The summary panel (S) totals every effect for the hull size you pick. It also shows affinity totals and the threshold bonuses they unlock.
    - The **Stats** tab shows the same effects the way the game's stat sheet does: its sections in its order (Progression, Durability, Shields, Phase Cloak, Flux, Weapons, Strikecraft, Mobility, Ship System, Fleet and Battle, Combat Readiness, Logistics, Mechanics), each effect in the section the game puts it in, with the game's wording for temporary and gated effects. Hover a line to see its sources (each node or affinity step and how much it adds).
@@ -137,7 +137,7 @@ The planner ships no images. Click **Show mod art** in the top bar and choose th
      - Nodes whose effects only last a while after deployment (Knight's Charge, Temporary Maneuverability) are shown separately, "For the first N seconds after deployment", on both tabs.
    - **Search** with `/`:
      - Matching nodes get a pulsing gold glow and an outlined gold ring, visible at any zoom, in both themes and with or without the mod's art. The result Enter last stepped to gets a second ring. Other nodes and the lanes are dimmed only lightly, so the tree's shape stays readable.
-     - A **Search** tab in the summary panel lists every match with its location, an "allocated" tag, and the line that matched. Click a result to jump to it, or press Enter to step through them.
+     - A **Search** tab in the summary panel lists every match with its location (a volume, or Core), an "allocated" tag, and the line that matched. Click a result to jump to it, or press Enter to step through them.
      - Clearing the search puts the panel back how it was.
    - **Filter** (next to the search box) highlights groups of nodes:
      - **Show affinity nodes** highlights all 155 affinity nodes (the Low / Mid / High choice nodes).
@@ -147,24 +147,23 @@ The planner ships no images. Click **Show mod art** in the top bar and choose th
      - Affinity nodes never match a theme, only Show affinity nodes. The mod tags the affinity options too (Low Tech: Hull, Armor; Midline: Flux, Hull; High Tech: Flux), so they would otherwise drown out Flux, Hull and Armor. Show affinity nodes adds to whatever the themes match.
      - Tooltips list a node's themes.
    - When zoomed out, each tree is labelled. Click a label to zoom into that tree.
-   - **List** in the top bar (or `L`) swaps the map for a list of every node except affinity nodes and the structural ones (roots, wormholes, sockets): icon, name, tier, tree, themes, an "allocated" tag and its effects.
+   - **List** in the top bar (or `L`) swaps the map for a list of every node except affinity nodes: icon, name, tier, tree, themes, an "allocated" tag and its effects. The core's six wormholes and six sockets show their id, e.g. "Wormhole (hightech_wormhole_1)" or "Subroutine Socket (subroutine_socket_16)", wormholes with the one they're paired with and allocated sockets with what they hold; the exits in the other trees say which socket they're linked to when anchored.
      - The search box and **Filter** narrow the list exactly as they highlight the map, and Enter in the search box steps through it.
-     - **Sort** by **Name (A to Z)**, with numbers in natural order, or by **Skill tree**: the Low Tech, Midline and High Tech sides of the core, then each volume, keystones and notables first. The choice is remembered.
+     - **Sort** by **Name (A to Z)**, with numbers in natural order, or by **Skill tree**: the core as one tree, then each volume, keystones and notables first. The choice is remembered.
      - In the Skill tree sort, click a tree's heading to collapse or expand it, or use **Collapse all** / **Expand all**. Collapsed trees are remembered, and the count says how many matches are in collapsed trees.
      - Click a node to go back to the map, centred on it. **Map** (or `L`) goes back without moving.
-     - In **target mode** (`T` or the Targets button), the All nodes list gets **Want** and **Forbid** buttons on every row, and clicking a row cycles its mark as on the map (right-click clears). The Targets bar with **Allocate** sits at the top of the list. Marked rows have a green or red edge, and keep a "wanted" or "forbidden" tag after target mode is turned off.
+     - In **target mode** (`T` or the Targets button), the All nodes list gets a green **O** (want) and a red **X** (forbid) button on every row, and clicking a row cycles its mark as on the map (right-click clears). The Targets bar with **Allocate** sits at the top of the list. Marked rows have a green or red edge, and keep their O or X after target mode is turned off.
      - **All nodes** / **Build (N)** at the top switches lists. **Build** shows what's allocated: your root, every chosen node (including wormholes, exits and sockets, with what each socket holds) and one row per tech for the affinity nodes, such as "High Tech Affinity ×20" with their combined effect. It also sorts by **Order taken**. Nodes granted by a modspec cache aren't allocated, so they aren't listed.
 6. **Node rules:** the planner refuses nodes the game would refuse, with the game's own reason in the tooltip or a toast. See the section below.
 7. **Save and share:**
    - The build is kept in your browser between visits.
    - **Copy code** in the toolbar copies the build as a template code. It's named after the last template name you used, or "<root> plan".
-   - **Copy link to this build** in the Templates dialog puts the whole build in a URL, ship and story rules included.
 8. **Templates:** see the section below.
 9. **Waypoints** (Shift+click): force a route instead of the shortest one.
    - Shift+click nodes to make them waypoints 1, 2, 3 and so on (a gold ring with a numbered badge). Shift+click a waypoint again to drop it, or press Esc to clear them all.
    - The next click allocates a path through the waypoints in order, each leg the shortest legal way from the waypoint before. The hover preview and tooltip show that route. Clicking a waypoint itself goes through the ones before it and keeps the later ones.
    - Use it when a longer route pays off. A Root Conduit counts the nodes on the route from the root to its socket, so a detour adds affinity, as long as you don't also take the shortcut. Other uses: running through or around a subroutine's radius, or picking up particular small nodes on the way.
-10. **Targets** (toolbar button, or T): pick the nodes you want, and the planner finds the fewest nodes that reach them.
+10. **Target Mode** (toolbar button, or T): pick the nodes you want, and the planner finds the fewest nodes that reach them.
    - Click a node to mark it wanted (white ring with ticks), again to forbid it (red ring with a slash), and again to clear it. Right-click clears. The nodes don't have to be connected.
    - The planned path is drawn in green as you go. The bar says how many nodes it adds, or why it isn't possible: a wanted node the rules refuse, two wanted nodes that clash, a node only reachable through forbidden or refused ones, a faction volume with no anchor linked, or the node cap.
    - **Allocate** applies the plan as one Undo step and leaves target mode. **Done** or Esc leaves without changing the build. Marks are kept in your browser for next time, and **Clear marks** drops them.
@@ -174,39 +173,40 @@ The planner ships no images. Click **Show mod art** in the top bar and choose th
 Press **?** or click **Shortcuts** for every control:
 - Arrows pan.
 - Page Up and Page Down zoom.
-- Home re-centres.
+- Home re-centers.
 - X turns the refused-node marks on and off.
 - T turns target mode on and off.
 - Shift+click sets waypoints, and Esc clears them.
 - Ctrl+Z undoes.
 - Esc closes dialogs.
 
-## Node rules, Ship rules and Story rules
+## Node rules, Ship rules and Optional rules
 
 The planner checks the same things the game checks before it allows a node (the mod's `NodeEligibility`).
 
 **Always checked:**
-- **Hull size:** some nodes only fit certain sizes, going by the Hull dropdown. For example, Dedicated Targeting Core needs a cruiser or capital.
+- **Hull size:** some nodes only fit certain sizes, going by the Hull size dropdown. For example, Dedicated Targeting Core needs a cruiser or capital.
 - **Nodes that can't be taken together:** two nodes clash when the hull mods they add clash. Examples are Phase Anchor and Adaptive Phase Coils, Heavy Armor and Critical Point Refit, or any two of Shield Shunt and the two Shield Conversions.
 - **Logistics limit:** a ship holds 2 logistics notables and keystones (cargo, fuel, sensors and the like).
 
-Two kinds of setting cover what the planner can't see. Both are saved with the build and its share link.
+Two kinds of setting cover what the planner can't see.
 
 **Ship rules** live on the **Ship** tab of the summary panel, so they stay in view while you build. The **Ship rules** toolbar button opens that tab. Everything starts as "Not set", which isn't checked:
-- **Hull:** shield type (front, omni, none or phase cloak), base armor, civilian-grade hull, ship system charges, station modules, and whether the ship has only built-in fighter wings.
-- **Hull mods on the ship:** a node can't be taken if it adds one of these or clashes with one. Pick them by their in-game name. Only hull mods some node clashes with are offered.
+- **Ship Options:** shield type (front, omni, none or phase cloak), base armor, civilian-grade hull, ship system charges, station modules, and whether the ship has only built-in fighter wings.
+- **Installed Hullmods:** built-in or installed. A node can't be taken if it adds one of these or clashes with one. Pick them by their in-game name. Only hull mods some node clashes with are offered.
 - **Extra logistics slots** from items.
 
-**Story rules** (toolbar button, a dialog) cover what your campaign has reached. Everything starts ticked:
+**Optional rules** (toolbar button, a dialog) cover what your campaign has reached. Everything starts ticked:
 - **Wormholes** (at the top): untick the Wormhole if your campaign can't use gates yet.
-- **Story gates reached:** untick a gate you haven't reached yet. **Tick all** and **Untick all** set every gate at once.
+- **Optional Volumes:** the mod settings' toggles for volumes built around other mods (Lost Sector, Random Assortment of Things, Nightcross Armory, Navarchy of Tania). In game each shows only when its mod is installed or set On. Untick one to plan without it: its nodes and wormhole anchor can't be used, and hiding it removes the build's nodes there (Undo brings them back). Loading a template that uses a hidden volume shows it again. Each toggle lists its volumes' story gates under it, greyed out while it's hidden.
+- **Game state reached:** untick a gate you haven't reached yet. Only the vanilla volumes' gates are listed here; the optional volumes' gates sit under their toggle. **Tick all** and **Untick all** set every gate at once, both lists included.
 - **Unlocked hullmods:** untick the hull mods whose blueprint you don't have. They're listed by name; hover one to see which blueprint it needs (Shield Arc Multiplier needs the Shield Conversion - Omni blueprint, for example). **Tick all** and **Untick all** only change this list.
 
-Each part has its own Clear button. The toolbar buttons show how many settings are in use, for example "Ship rules (2)".
+Each part has its own Reset button. The toolbar buttons show how many settings are in use, for example "Ship rules (2)".
 
 The shield type follows the build in order, as in game. A ship set to "No shield" can't take Shield Shunt, but once a Makeshift Shield Generator is allocated, nodes that need shields are allowed.
 
-**Mark refused** (top bar checkbox, or press **X**) puts a red X on every node the rules refuse right now: clashes with your build, the wrong hull size, the logistics limit, and ship and story rules. Allocated nodes that break a rule get the X over their red ring. When zoomed out, refused nodes show as red dots. Hover a marked node to see why. The setting is remembered between visits.
+A red X marks every node the rules refuse right now: clashes with your build, the wrong hull size, the logistics limit, and ship and optional rules. Allocated nodes that break a rule get the X over their red ring. When zoomed out, refused nodes show as red dots. Hover a marked node to see why.
 
 **When rules are broken:**
 - **Paths:** the shortest path goes around refused nodes. If every way passes one, the message says which node and why.
@@ -229,7 +229,7 @@ Click an allocated subroutine socket. The picker shows two headers, **Subroutine
 - Radiuses are drawn as dashed circles. Hover a node to see how a subroutine affects it.
 - **Subroutines** in the summary says what each one does right now.
 - Subroutines the mod no longer drops (rarity 0 in its data, currently Phoenix Ash Archive and P-Space Lattice) are marked unobtainable in the picker, the socket tooltip and the summary. You can still socket them, for copies you already own.
-- Subroutines are saved with the build and in links. Templates and codes don't hold them, as in game.
+- Templates and codes don't hold subroutines, as in game.
 - **Not modelled:** a granted notable that touches your allocated tree doesn't count as a neighbour for further allocation, though in game it does. Corruption implicits are also not modelled.
 
 ## Templates: import and export with the game
@@ -238,6 +238,7 @@ The Templates button reads and writes the mod's shared template file, `saves\com
 
 **Link the file** (Chrome or Edge):
 - Click "Link templates file…" and pick the file. The planner remembers it between visits; when the browser asks again, click Reconnect.
+- No file yet, or want a separate one? Click "Create templates file…". The first time, pick the planner's own folder (the one with `web` and this README); the planner makes an empty `exiledSector_skillTreeTemplates.json.data` in its `savedTemplates` folder (numbered if taken) and links it. The game only reads `saves\common`, so copy the file there, under that exact name, to use it in game.
 - Browsers can't open a typed path, so you pick the file instead.
 - Other browsers can only open the file read-only, each visit.
 
@@ -280,23 +281,20 @@ The settings are kept in your browser, and the dialog says which method is runni
 | Button | Where it goes |
 |---|---|
 | Save into linked file | Straight into the linked file. A template with the same name and root is replaced and keeps its id, so ships using it stay assigned. Other templates are kept. |
-| Add to a file and download it | A merged copy in your Downloads folder. Move it into `saves\common`. |
 | Download as a new file | A file holding only this template. Placing it over an existing file drops the templates already there. |
-| Copy template JSON | The clipboard only. |
 
 **Editing a template made in game:** Load it, edit it, then click Save into linked file without renaming it. The game picks up the change the next time the skill tree opens.
 
 **Template codes (when you can't send the file):** a code holds one template as text, about 200–700 characters, for pasting into Discord, forums or chat.
-- **Get a code:** **Copy code** in the toolbar, or "Copy code for this build" in the dialog, uses the template name and Hull dropdown. Each template in the file list also has its own **Code** button.
-- A code holds the root, hull, steps and anchors, like a template. Ship rules, story rules, the node cap and the wormhole checkboxes travel only in a link.
+- **Get a code:** **Copy code** in the toolbar, or "Copy code for current build" in the dialog, uses the template name and Hull size dropdown. Each template in the file list also has its own **Code** button.
+- A code holds the root, hull, steps and anchors, like a template. Ship rules, optional rules and the node cap aren't in it.
 - **Use a code:** paste it into the Template code box and click **Load code**, or press Ctrl+Enter. It loads exactly like a template from the file. Save it into your file afterwards to use it in game.
 - Codes start with `ES1.`. Spaces and line breaks added by chat apps are ignored.
 - Codes keep node ids, so they survive mod updates the same way template files do.
-- The box also accepts a single template's JSON, as produced by "Copy template JSON".
 - If a code was made with a different mod version, the load message says so.
 
 **Hull size:** a template's hull decides where it's listed in game. The template list opens filtered to the current ship's hull size.
-- A new template gets the Hull dropdown's size.
+- A new template gets the Hull size dropdown's size.
 - Saving over an existing template whose hull matches the dropdown, or that has no hull, keeps its hull, as the game does.
 - If the existing template's hull differs from the dropdown, saving stops and asks you to choose:
   - **Keep** its hull and update the steps.
@@ -311,7 +309,6 @@ The settings are kept in your browser, and the dialog says which method is runni
 - **Ships keep the nodes they already have** when you edit their template. How the game handles nodes since removed from a template hasn't been checked.
 - **Downloads may be renamed.** If the file name is already taken in Downloads, Chrome adds "(1)". The game won't read the file until it's renamed back.
 - **Opened from disk** (no server):
-  - Share links only work on your own computer.
   - Firefox may not keep the saved build between visits.
 - **Missing effect wording:** wording is read from the mod's string files and Java source. 11 effects show their raw name and value (fighter role stats, converted hangar, unhit armor regen).
 - **Not modelled:**

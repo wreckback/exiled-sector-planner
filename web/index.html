@@ -20,7 +20,7 @@
     <span id="root-name" class="value muted">Choose a root</span>
   </div>
 
-  <div class="bar-group" id="tpl-group" hidden title="The template this build was loaded from or last saved as. Click to open Templates.">
+  <div class="bar-group" id="tpl-group" hidden title="Click to open Templates.">
     <span class="label">Template</span>
     <span id="tpl-current" class="value"></span>
     <span id="tpl-edited" class="muted" hidden>(edited)</span>
@@ -32,7 +32,7 @@
   </div>
 
   <div class="bar-group">
-    <label class="label" for="hull">Hull</label>
+    <label class="label" for="hull">Hull Size</label>
     <select id="hull">
       <option value="frigate">Frigate</option>
       <option value="destroyer">Destroyer</option>
@@ -41,33 +41,27 @@
     </select>
   </div>
 
-  <div class="bar-group">
-    <label title="The paired wormholes that link the tech regions"><input id="opt-core" type="checkbox" checked> Core wormholes</label>
-    <label title="Anchors in subroutine sockets that open wormholes to the faction volumes"><input id="opt-volumes" type="checkbox" checked> Faction volumes</label>
-    <label title="Put a red X on nodes the node rules refuse: conflicts with your build, hull size, the logistics limit, ship and story rules (X)"><input id="opt-refused" type="checkbox" checked> Mark refused</label>
-  </div>
-
   <div class="bar-group search">
     <input id="search" type="search" placeholder="Search nodes…" autocomplete="off">
     <span id="search-count" class="muted"></span>
-    <button id="btn-themes" title="Filter nodes by the mod's theme tags (Flux, Speed, Weapons and so on), or show the affinity nodes" aria-haspopup="true" aria-expanded="false" aria-pressed="false" aria-controls="theme-filter">Filter</button>
+    <button id="btn-themes" title="Filter nodes by the theme tags" aria-haspopup="true" aria-expanded="false" aria-pressed="false" aria-controls="theme-filter">Filter</button>
   </div>
 
   <div class="bar-group actions">
-    <button id="btn-view" title="Show every non-affinity node as a list, with search, sorting and the Filter (L)" aria-pressed="false" aria-controls="listview">List</button>
-    <button id="btn-fit" title="Frame the core tree (Home)">Center</button>
-    <button id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
-    <button id="btn-reset" title="Clear the build and choose a new root">Reset</button>
-    <button id="btn-targets" title="Mark nodes wanted or forbidden, then allocate the fewest nodes that reach them (T)" aria-pressed="false" aria-controls="targets">Targets</button>
-    <button id="btn-code" class="primary" title="Copy a template code for this build, to paste in chat or load with Templates → Load code">Copy code</button>
-    <button id="btn-ship" title="The ship's shield, armor and hull mods, in the summary panel" aria-controls="panel-ship">Ship rules</button>
-    <button id="btn-story" title="Story gates and unlocks your campaign has reached" aria-haspopup="dialog" aria-controls="story">Story rules</button>
-    <button id="btn-export" title="Import and export in-game skill tree templates" aria-haspopup="dialog" aria-controls="export">Templates</button>
+    <button id="btn-view" title="List view of every non-affinity node (L)" aria-pressed="false" aria-controls="listview">List</button>
+    <button id="btn-fit">Center</button>
+    <button id="btn-undo" title="Undo, 0 steps stored (Ctrl+Z)">Undo</button>
+    <button id="btn-reset" title="Reset build">Reset</button>
+    <button id="btn-targets" title="Mark nodes wanted or forbidden, then calculate the most efficient path (T)" aria-pressed="false" aria-controls="targets">Target Mode</button>
+    <button id="btn-code" class="primary" title="Copy the current template into clipboard. Load with Templates → Load code">Copy code</button>
+    <button id="btn-ship" aria-controls="panel-ship">Ship rules</button>
+    <button id="btn-story" aria-haspopup="dialog" aria-controls="story">Optional rules</button>
+    <button id="btn-export" title="Import and export templates" aria-haspopup="dialog" aria-controls="export">Templates</button>
     <button id="btn-checkfile" title="Check the linked templates file for changes the game made (also reconnects it after a browser restart)" hidden>Check file</button>
-    <button id="btn-art" aria-haspopup="dialog" aria-controls="art">Show mod art</button>
-    <button id="btn-panel" title="Show or hide the summary (S)">Summary</button>
-    <button id="btn-theme" title="Switch between the dark and light themes, or follow the system (Auto)">Theme: Dark</button>
-    <button id="btn-keys" title="Show all shortcuts (?)" aria-haspopup="dialog" aria-controls="keys">Shortcuts</button>
+    <button id="btn-art" aria-haspopup="dialog" aria-controls="art">Show mod assets</button>
+    <button id="btn-panel" title="Show or hide summary (S)">Summary</button>
+    <button id="btn-theme">Theme: Dark</button>
+    <button id="btn-keys" aria-haspopup="dialog" aria-controls="keys">Shortcuts</button>
   </div>
 </header>
 
@@ -100,11 +94,11 @@
   </div>
   <div id="panel-body"></div>
   <div id="panel-ship" hidden>
-    <p class="muted">Facts about the ship the planner can't see. Anything left as "Not set" isn't checked. Hull size is the Hull dropdown. Saved with the build and its share link.</p>
+    <p class="muted">Set ship-specific limitations here. Anything left as "Not set" isn't checked. Set hull size in the Hull size dropdown in the main header.</p>
     <p id="ship-summary"></p>
     <div id="ship-problems"></div>
 
-    <h3>Hull</h3>
+    <h3>Ship Options</h3>
     <table class="ship-form">
       <tr><td><label for="ship-shield">Shield</label></td><td>
         <select id="ship-shield">
@@ -114,7 +108,7 @@
           <option value="NONE">No shield</option>
           <option value="PHASE">Phase cloak</option>
         </select></td></tr>
-      <tr><td><label for="ship-armor">Base armor</label> <span class="muted">(before hull mods and skills)</span></td><td>
+      <tr><td><label for="ship-armor">Base armor</label> <span class="muted">(before hullmods and skills)</span></td><td>
         <input id="ship-armor" type="number" min="0" max="99999" step="1" placeholder="Not set"></td></tr>
       <tr><td colspan="2" id="ship-armor-note" class="muted"></td></tr>
       <tr><td><label for="ship-civilian">Civilian-grade hull</label></td><td>
@@ -127,11 +121,10 @@
         <select id="ship-wings" data-tri="builtInWings"><option value="">Not set</option><option value="1">Yes</option><option value="0">No</option></select></td></tr>
     </table>
 
-    <h3>Hull mods on the ship</h3>
-    <p class="muted">Built-in or installed. A node can't be taken if it adds one of these or clashes with one. Only hull mods some node clashes with are offered.</p>
+    <h3>Installed Hullmods</h3>
     <div id="ship-mods"></div>
-    <p><label for="ship-mod-input">Add a hull mod</label><br>
-      <input id="ship-mod-input" list="ship-mod-list" type="text" autocomplete="off" placeholder="Type the hull mod's name" style="width:100%">
+    <p><label for="ship-mod-input">Add a hullmod</label><br>
+      <input id="ship-mod-input" list="ship-mod-list" type="text" autocomplete="off" placeholder="Type the hullmod's name" style="width:100%">
       <datalist id="ship-mod-list"></datalist></p>
     <p id="ship-mod-status" class="bad" role="status"></p>
 
@@ -139,20 +132,17 @@
     <p><label for="ship-logistics">Extra logistics slots</label> <input id="ship-logistics" type="number" min="0" max="20" step="1" value="0"></p>
     <p id="ship-logistics-note" class="muted"></p>
 
-    <h3>Not checked</h3>
-    <p class="muted">Item costs, ordnance points, hull mod clashes the game learns while you play, and the weapon and shield requirements shown in tooltips. The game doesn't block allocation on those either.</p>
-
-    <div class="export-actions"><button id="ship-clear">Clear ship rules</button></div>
+    <div class="export-actions"><button id="ship-clear">Reset ship rules</button></div>
   </div>
   <footer id="panel-foot"></footer>
 </aside>
 
 <div id="banner" hidden></div>
-<div id="targets" role="region" aria-label="Targets" hidden>
-  <div><b>Targets</b> <span class="muted">Click a node to mark it wanted, again to forbid it, again to clear it. Right-click clears.</span></div>
+<div id="targets" role="region" aria-label="Target Mode" hidden>
+  <div><b>Targets</b> <span class="muted">Clicking cycles a node between three modes: wanted - forbidden - normal. Right-click sets it to normal.</span></div>
   <div><span id="targets-counts"></span> <span id="targets-status" role="status"></span></div>
   <div class="export-actions">
-    <label title="On: add to the nodes you have. Off: plan from the root alone, removing allocated nodes the plan doesn't need."><input id="targets-keep" type="checkbox" checked> Keep current build</label>
+    <label title="On: add to the nodes you have. Off: reallocate from root."><input id="targets-keep" type="checkbox" checked> Keep current build</label>
     <button id="targets-apply" class="primary">Allocate</button>
     <button id="targets-clear">Clear marks</button>
     <button id="targets-done" title="Leave target mode (Esc or T). The marks are kept.">Done</button>
@@ -170,7 +160,7 @@
   <div class="lv-bar">
     <span class="lv-modes" role="group" aria-label="Which list">
       <button type="button" data-mode="all" aria-pressed="true" title="Every node except affinity nodes">All nodes</button>
-      <button type="button" data-mode="build" aria-pressed="false" title="The nodes allocated in this build, with affinity nodes counted per tech">Build</button>
+      <button type="button" data-mode="build" aria-pressed="false" title="The nodes allocated in the current build, with affinity nodes counted per tech">Build</button>
     </span>
     <span id="listview-count" class="muted"></span>
     <span id="listview-hint" class="muted lv-hint"></span>
@@ -180,8 +170,8 @@
       <option value="order">Order taken</option>
     </select></label>
     <span id="listview-groups" class="lv-groups" hidden>
-      <button id="lv-collapse-all" title="Collapse every tree to its heading">Collapse all</button>
-      <button id="lv-expand-all" title="Expand every tree">Expand all</button>
+      <button id="lv-collapse-all">Collapse all</button>
+      <button id="lv-expand-all">Expand all</button>
     </span>
   </div>
   <div id="listview-body"></div>
@@ -207,23 +197,24 @@
     <button id="export-close" title="Close (Esc)">Close</button>
   </div>
   <div class="keys-body">
-    <p>The game keeps skill tree templates for every save in one file, <code>exiledSector_skillTreeTemplates.json.data</code>, in the <code>saves/common</code> folder of your Starsector install (for example <code>C:\Program Files (x86)\Fractal Softworks\Starsector\saves\common</code>). It re-reads that file whenever the skill tree opens, so changes show up while the game is running.</p>
+    <p>The game keeps skill tree templates for every save in one file, <code>exiledSector_skillTreeTemplates.json.data</code>, in the <code>saves/common</code> folder of your Starsector directory. It re-reads that file whenever the skill tree opens, so changes show up while the game is running.</p>
 
     <h3>Templates file</h3>
     <p id="tf-status"></p>
     <div class="export-actions">
       <button id="tf-link" class="primary">Link templates file…</button>
+      <button id="tf-create" hidden title="Make an empty templates file in the planner's savedTemplates folder and link it">Create templates file…</button>
       <button id="tf-reconnect" hidden>Reconnect</button>
       <button id="tf-reload" hidden>Reload</button>
       <button id="tf-forget" hidden>Forget</button>
     </div>
     <p id="tf-note" class="muted"></p>
     <div id="tf-watch-row">
-      <p><label for="tf-watch-mode">Watch the linked file for changes from the game:</label>
+      <p><label for="tf-watch-mode">Detect changes from the game:</label>
         <select id="tf-watch-mode">
           <option value="observe">Instantly (file observer)</option>
-          <option value="poll">By checking every few seconds</option>
-          <option value="off">Off</option>
+          <option value="poll">Every few seconds</option>
+          <option value="off">Manually</option>
         </select></p>
       <p id="tf-watch-secs"><label for="tf-watch">Check every</label> <input id="tf-watch" type="number" min="1" max="600" step="1" value="2"> seconds</p>
       <p id="tf-watch-note"></p>
@@ -237,7 +228,6 @@
     <p><label for="tpl-name">Template name</label><br>
       <input id="tpl-name" type="text" maxlength="32" autocomplete="off" style="width:100%"></p>
     <p id="tpl-summary" class="muted"></p>
-    <p class="muted">If the file already has a template with this name and root, it's replaced and keeps its id, so ships using it stay assigned. Otherwise it's added. Other templates are kept as they are.</p>
 
     <div class="export-actions">
       <button id="tpl-save" class="primary">Save into linked file</button>
@@ -259,12 +249,12 @@
     </div>
 
     <h3>Share as code</h3>
-    <p class="muted">A code holds one template as text, for pasting into chat when sending the file isn't practical. Loading a code works like loading a template from the file; save it into the file afterwards to use it in game.</p>
+    <p class="muted">A code holds one template as text. Loading a code works like loading a template from a file; save it into the templates file afterwards to use it in game.</p>
     <div class="export-actions">
-      <button id="code-copy">Copy code for this build</button>
+      <button id="code-copy">Copy code for current build</button>
     </div>
     <p><label for="code-box">Template code</label><br>
-      <textarea id="code-box" rows="3" spellcheck="false" autocomplete="off" placeholder="Paste a code here (starts with ES1.)"></textarea></p>
+      <textarea id="code-box" rows="3" spellcheck="false" autocomplete="off" placeholder="Paste code here (starts with ES1.)"></textarea></p>
     <div class="export-actions">
       <button id="code-load">Load code</button>
     </div>
@@ -272,12 +262,8 @@
 
     <h3>Other ways to export</h3>
     <div class="export-actions">
-      <button id="tpl-merge">Add to a file and download it…</button>
       <button id="tpl-new">Download as a new file</button>
-      <button id="tpl-copy">Copy template JSON</button>
-      <button id="btn-share" title="Copy a link that opens this build in the planner">Copy link to this build</button>
     </div>
-    <p class="muted">Downloads land in your Downloads folder; move the file into <code>saves/common</code>. "Download as a new file" holds only this template, so placing it over an existing file drops the templates already there.</p>
     <input id="tpl-file" type="file" accept=".data,.json,application/json" hidden>
     <p id="tpl-status" role="status"></p>
   </div>
@@ -285,12 +271,11 @@
 
 <div id="art" role="dialog" aria-modal="true" aria-labelledby="art-title" hidden>
   <div class="keys-head">
-    <h2 id="art-title">Mod art</h2>
+    <h2 id="art-title">Mod assets</h2>
     <button id="art-close" title="Close (Esc)">Close</button>
   </div>
   <div class="keys-body">
-    <p>The planner doesn't include Exiled Sector's art: it belongs to the mod and the authors it credits. To see the icons, nebulae and planets, choose the mod's folder on your computer. It's usually <code>mods\ExiledSector</code> in your Starsector install (for example <code>C:\Program Files (x86)\Fractal Softworks\Starsector\mods\ExiledSector</code>). Choosing the Starsector folder or its <code>mods</code> folder works too.</p>
-    <p>The planner only reads the images it draws. Nothing is uploaded or changed.</p>
+    <p>None of Exiled Sector's assets are included in this planner. To view the assets in the planner, set the mod folder's path.</p>
 
     <h3>Mod folder</h3>
     <p id="art-status"></p>
@@ -307,18 +292,20 @@
 
 <div id="story" role="dialog" aria-modal="true" aria-labelledby="story-title" hidden>
   <div class="keys-head">
-    <h2 id="story-title">Story rules</h2>
+    <h2 id="story-title">Optional rules</h2>
     <button id="story-close" title="Close (Esc)">Close</button>
   </div>
   <div class="keys-body">
-    <p>What your campaign has reached. Nodes behind a gate or unlock you untick are refused. Everything starts ticked, so nothing is refused until you change it. Saved with the build and its share link.</p>
     <p id="story-summary"></p>
 
     <h3>Wormholes</h3>
     <div id="story-other" class="ship-checks"></div>
 
-    <h3>Story gates reached</h3>
-    <p class="muted">Untick a gate you haven't reached yet.</p>
+    <h3>Optional Volumes</h3>
+    <p class="muted">Volumes built around other mods. Install the corresponding mod or turn on its LunaLib option.</p>
+    <div id="story-volumes" class="ship-checks"></div>
+
+    <h3>Game state reached</h3>
     <div class="export-actions">
       <button id="story-gate-all">Tick all</button>
       <button id="story-gate-none">Untick all</button>
@@ -333,7 +320,7 @@
     <div id="story-unlocks" class="ship-checks"></div>
 
     <div class="export-actions" style="margin-top:12px">
-      <button id="story-clear">Clear story rules</button>
+      <button id="story-clear">Reset optional rules</button>
     </div>
   </div>
 </div>
@@ -350,11 +337,10 @@
       <tr><td><kbd>Page Up</kbd></td><td>Zoom in (hold to keep zooming)</td></tr>
       <tr><td><kbd>Page Down</kbd></td><td>Zoom out (hold to keep zooming)</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> <span class="muted">(<kbd>Cmd</kbd>+<kbd>Z</kbd> on Mac)</span></td><td>Undo the last change</td></tr>
-      <tr><td><kbd>Home</kbd></td><td>Re-centre on the core tree</td></tr>
+      <tr><td><kbd>Home</kbd></td><td>Re-center on the core tree</td></tr>
       <tr><td><kbd>S</kbd></td><td>Show or hide the summary panel</td></tr>
-      <tr><td><kbd>X</kbd></td><td>Turn the red X on refused nodes on or off (Mark refused)</td></tr>
-      <tr><td><kbd>T</kbd></td><td>Turn target mode on or off</td></tr>
-      <tr><td><kbd>L</kbd></td><td>Switch between the map and the list of all nodes</td></tr>
+      <tr><td><kbd>T</kbd></td><td>Toggle target mode on/off</td></tr>
+      <tr><td><kbd>L</kbd></td><td>Switch between the map and the list view</td></tr>
       <tr><td><kbd>/</kbd></td><td>Jump to the search box</td></tr>
       <tr><td><kbd>?</kbd></td><td>Show or hide this list</td></tr>
       <tr><td><kbd>Esc</kbd></td><td>Close this list, the Filter list, the full stat sheet or the option/anchor picker, clear waypoints, or leave target mode</td></tr>
@@ -363,23 +349,21 @@
 
     <h3>In the search box</h3>
     <table>
-      <tr><td><kbd>Enter</kbd></td><td>Go to the next match (press again to cycle); the Search tab in the summary panel lists them all, click one to jump</td></tr>
-      <tr><td><kbd>Esc</kbd></td><td>Clear the search and leave the box</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Clear the search and exit</td></tr>
     </table>
 
     <h3>Mouse</h3>
     <table>
-      <tr><td>Left-click a node</td><td>Allocate it, taking the shortest path there</td></tr>
-      <tr><td>Left-click an allocated node</td><td>Remove it and anything cut off from the root</td></tr>
+      <tr><td>Left-click a node</td><td>Allocate it, mapping the shortest path</td></tr>
       <tr><td>Left-click an allocated affinity node or socket</td><td>Open its picker (switch option, change anchor)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+click an affinity or other choice node <span class="muted">(<kbd>Cmd</kbd>+click on Mac)</span></td><td>Allocate it with the option you last picked for that kind of node (choice nodes along the path get it too), or switch an allocated one to it</td></tr>
-      <tr><td><kbd>Shift</kbd>+click a node</td><td>Add it as the next waypoint, or drop it if it already is one. The next allocation then goes through the waypoints in order, each leg the shortest legal way from the one before, so you can force a longer route. <kbd>Esc</kbd> clears them</td></tr>
-      <tr><td>Right-click an allocated node</td><td>Remove it (any node type)</td></tr>
-      <tr><td>Right-click your starting root</td><td>Asks first, then resets the build so you can choose a root again (like Reset)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+click an affinity or other choice node <span class="muted">(<kbd>Cmd</kbd>+click on Mac)</span></td><td>Allocate all nodes up to that path with the previously chosen option</td></tr>
+      <tr><td><kbd>Shift</kbd>+click a node</td><td>Add it as the next waypoint, or drop it if it already is one. The next node allocation then goes through the waypoints in order (the shortest legal path from each waypoint to the next). Can force a longer, specific route. <kbd>Esc</kbd> clears waypoints</td></tr>
+      <tr><td>Right-click an allocated node</td><td>Remove node</td></tr>
+      <tr><td>Right-click your starting root</td><td>Reset build</td></tr>
       <tr><td>Click a wormhole or linked wormhole exit</td><td>Menu: jump to the other end, or allocate/remove</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+click a wormhole, linked socket or linked exit <span class="muted">(<kbd>Cmd</kbd>+click on Mac)</span></td><td>Jump straight to the other end (the view moves; the build doesn't change)</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+click a wormhole, linked socket or linked exit <span class="muted">(<kbd>Cmd</kbd>+click on Mac)</span></td><td>Jump to the linked wormhole</td></tr>
       <tr><td>Click a tree's name (when zoomed out)</td><td>Zoom into that tree</td></tr>
-      <tr><td>In target mode: left-click a node</td><td>Mark it wanted, then forbidden, then clear it (the root can't be marked)</td></tr>
+      <tr><td>In target mode: left-click a node</td><td>Cycle between Desired-Forbidden-Clear (the root cannot be targeted)</td></tr>
       <tr><td>In target mode: right-click a node</td><td>Clear its mark</td></tr>
       <tr><td>Drag</td><td>Pan</td></tr>
       <tr><td>Scroll wheel</td><td>Zoom toward the cursor</td></tr>
@@ -388,8 +372,8 @@
     <h3>Touch</h3>
     <table>
       <tr><td>Tap a node</td><td>Show its tooltip</td></tr>
-      <tr><td>Tap the same node again</td><td>Act on it, like a left-click</td></tr>
-      <tr><td>Tap your starting root twice</td><td>Asks first, then resets the build</td></tr>
+      <tr><td>Tap the same node again</td><td>Act on it (left-click)</td></tr>
+      <tr><td>Tap your starting root twice</td><td>Reset build</td></tr>
       <tr><td>Drag</td><td>Pan</td></tr>
       <tr><td>Pinch</td><td>Zoom</td></tr>
     </table>
@@ -397,8 +381,7 @@
 </div>
 
 <div id="help">
-  <b>Click</b> allocate (finds the shortest path) · <b>Shift+click</b> waypoints to force a route · <b>Click</b> an allocated node to remove it and anything cut off ·
-  <b>Right-click</b> your root to reset · <b>X</b> marks refused nodes · <b>T</b> target mode · <b>L</b> list view ·
+  <b>Click</b> allocate · <b>Shift+click</b> set waypoint · <b>Right-click</b> remove · <b>T</b> target mode · <b>L</b> list view ·
   <b>Drag</b>/<b>arrows</b> pan · <b>Wheel</b>/<b>PgUp</b>/<b>PgDn</b> zoom · <b>?</b> all shortcuts
 </div>
 
