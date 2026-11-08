@@ -1441,7 +1441,7 @@
       phLit: '#34404a', phDim: '#182027', phTextLit: '#ffffff', phTextDim: '#b4bec6',
       label: { KEYSTONE: '#d6caff', NOTABLE: '#ffc4f2', SMALL: '#c9d1d8' }, labelHalo: 'rgba(0,0,0,0.85)',
       socketFill: 'rgba(10,16,24,0.85)', rootFill: 'rgba(4,6,10,0.92)', hover: 'rgba(255,255,255,0.85)',
-      regionBg: '#0b1118', regionEdge: '#3a5566', regionText: '#e6e6e6', regionMuted: '#9aa4ad', regionOff: '#fc6300',
+      regionBg: '#0b1118', regionEdge: '#3a5566', regionText: '#e6e6e6', regionMuted: '#9aa4ad',
       badgeText: '#000', searchOutline: 'rgba(0,0,0,0.85)',
     },
     light: {
@@ -1451,7 +1451,7 @@
       phLit: '#b9c6d2', phDim: '#fbfcfd', phTextLit: '#0d1418', phTextDim: '#3c4852',
       label: { KEYSTONE: '#4a35b5', NOTABLE: '#a0157f', SMALL: '#27313a' }, labelHalo: 'rgba(255,255,255,0.9)',
       socketFill: 'rgba(250,251,252,0.92)', rootFill: 'rgba(252,253,254,0.95)', hover: 'rgba(10,20,30,0.85)',
-      regionBg: '#ffffff', regionEdge: '#9aabb8', regionText: '#14191e', regionMuted: '#56626c', regionOff: '#c04400',
+      regionBg: '#ffffff', regionEdge: '#9aabb8', regionText: '#14191e', regionMuted: '#56626c',
       badgeText: '#fff', searchOutline: 'rgba(255,255,255,0.95)',
     },
   };
@@ -1581,20 +1581,19 @@
     for (const r of regions) {
       const screenR = r.radius * z;
       const a = clamp((LABEL_GONE_PX - screenR) / (LABEL_GONE_PX - LABEL_FULL_PX), 0, 1);
-      if (a <= 0) continue;
+      if (a <= 0 || volumeHidden(r.volume)) continue; // a hidden optional volume isn't drawn at all
       const sx = toScreenX(r.x), sy = toScreenY(r.y);
       if (sx < -200 || sx > W + 200 || sy < -50 || sy > H + 50) continue;
       const name = r.volume === 'core' ? 'Core tree' : volumeName(r.volume);
       const count = r.ids.reduce((c, id) => c + (sat(id) ? 1 : 0), 0);
-      const off = volumeHidden(r.volume);
-      const sub = off ? 'hidden' : count ? `${count} allocated` : '';
+      const sub = count ? `${count} allocated` : '';
       ctx.font = `600 14px ${FONT}`;
       const w1 = ctx.measureText(name).width;
       ctx.font = `12px ${FONT}`;
       const w2 = sub ? ctx.measureText(sub).width : 0;
       const w = Math.max(w1, w2) + 14, h = sub ? 36 : 22;
       const x0 = sx - w / 2, y0 = sy - h / 2;
-      ctx.globalAlpha = a * (off ? 0.6 : 1);
+      ctx.globalAlpha = a;
       ctx.fillStyle = P.regionBg;
       ctx.fillRect(x0, y0, w, h);
       ctx.strokeStyle = count ? rgba(accent(), 0.9) : P.regionEdge;
@@ -1604,7 +1603,7 @@
       ctx.font = `600 14px ${FONT}`;
       ctx.fillText(name, sx, sub ? sy - 8 : sy);
       if (sub) {
-        ctx.fillStyle = off ? P.regionOff : P.regionMuted;
+        ctx.fillStyle = P.regionMuted;
         ctx.font = `12px ${FONT}`;
         ctx.fillText(sub, sx, sy + 9);
       }
@@ -1630,6 +1629,7 @@
 
   function drawDecorations(view, z) {
     for (const d of D.decorations || []) {
+      if (volumeHidden((d.tags || []).find(t => !t.startsWith('gate_')) || 'core')) continue; // stars and nebulae of a hidden volume
       if (d.kind === 'ringBelt') {
         const r = (d.innerRadius + d.outerRadius) / 2, w = d.outerRadius - d.innerRadius;
         if (!inView(view, d.x, d.y, d.outerRadius)) continue;
@@ -1711,6 +1711,7 @@
     const batches = { dull: [], lit: [], add: [], remove: [] };
     for (const c of connectors) {
       if (c.maxX < view.minX || c.minX > view.maxX || c.maxY < view.minY || c.minY > view.maxY) continue;
+      if (switchedOff(c.a) || switchedOff(c.b)) continue; // lanes into a hidden optional volume
       batches[connectorState(c)].push(c);
     }
     ctx.lineCap = 'round';
@@ -1818,9 +1819,8 @@
     ctx.globalAlpha = 1;
   }
   function nodeAlpha(n, treeAlpha) {
-    const off = switchedOff(n) ? 0.25 : 1;
-    if (searchHits && !searchHits.has(n.id)) return treeAlpha * SEARCH_DIM_NODE * off;
-    return treeAlpha * off;
+    if (searchHits && !searchHits.has(n.id)) return treeAlpha * SEARCH_DIM_NODE;
+    return treeAlpha;
   }
   function canAllocateNow(n) {
     if (!state.root || sat(n.id) || n.tier === 'WORMHOLE_EXIT' || switchedOff(n)) return false;
@@ -1831,7 +1831,7 @@
   function drawNode(n, view, z, treeAlpha) {
     const fp = n.fp;
     const reach = n.tier === 'NOTABLE' ? fp * 1.7 : n.tier === 'KEYSTONE' ? fp * 1.4 : fp;
-    if (!inView(view, n.x, n.y, reach)) return;
+    if (switchedOff(n) || !inView(view, n.x, n.y, reach)) return; // nodes in a hidden optional volume aren't drawn
     const allocated = held(n.id);
     const alpha = nodeAlpha(n, treeAlpha);
     const screenSize = fp * z;
@@ -2044,7 +2044,7 @@
     ctx.lineJoin = 'round';
     for (const n of nodes) {
       const style = LABEL_STYLE[n.tier];
-      if (!style || n.fp * z < style.min || !inView(view, n.x, n.y, n.fp)) continue;
+      if (!style || switchedOff(n) || n.fp * z < style.min || !inView(view, n.x, n.y, n.fp)) continue;
       const t = isChoice(n) && !held(n.id) ? n.type : effectiveType(n);
       if (isChoice(n) && n.type.options.every(id => OPTION_TINT[id])) continue;
       const maxW = Math.round(Math.max(90, Math.min(170, n.fp * z * 2.6)) / 10) * 10;
@@ -2230,6 +2230,7 @@
     const minHalf = 7 / cam.zoom; // keep tiny nodes clickable when zoomed out
     let best = null, bestD = Infinity;
     for (const n of nodes) {
+      if (switchedOff(n)) continue; // a hidden optional volume can't be hovered or clicked
       const half = Math.max(n.fp / 2, minHalf);
       const dx = Math.abs(wx - n.x), dy = Math.abs(wy - n.y);
       if (dx <= half && dy <= half) {
@@ -2270,7 +2271,12 @@
   let panelTab = 'stats';
   let cachedTotals = null;
 
+  // When the hidden optional volumes change, the search (and the list, which follows it) is run again so their nodes
+  // drop out of or come back into the matches. var, not let: changed() can run before this line during start-up.
+  var hiddenVolSig = '', filterReady = false;
   function changed() {
+    const hvSig = [...state.hiddenVolumes].sort().join();
+    if (hvSig !== hiddenVolSig) { hiddenVolSig = hvSig; if (filterReady) runFilter(); }
     subCache = null;
     ruleCache = null;
     planCache = null;
@@ -3254,7 +3260,7 @@
     for (const set of [targets.want, targets.forbid]) {
       for (const id of set) {
         const n = byId.get(id), want = set === targets.want;
-        if (!inView(view, n.x, n.y, n.fp * 2)) continue;
+        if (switchedOff(n) || !inView(view, n.x, n.y, n.fp * 2)) continue;
         const dot = n.fp * z < 5;
         const inner = n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT' ? n.fp * 0.42 : n.tier === 'SOCKET' ? n.fp * 0.52 : n.tier === 'ROOT' ? n.fp * 0.3 : n.fp * ICON_INSET / 2;
         const r = dot ? Math.max(6 * px, n.fp * 0.6) : inner * 1.3;
@@ -3278,7 +3284,7 @@
   function drawWaypoints(view, z) {
     const px = 1 / z;
     waypoints.forEach((n, i) => {
-      if (!inView(view, n.x, n.y, n.fp * 2)) return;
+      if (switchedOff(n) || !inView(view, n.x, n.y, n.fp * 2)) return;
       const dot = n.fp * z < 5;
       const r = dot ? Math.max(6 * px, n.fp * 0.6) : n.fp * 0.66;
       const lw = dot ? 2 * px : Math.max(2 * px, n.fp * 0.06);
@@ -3590,6 +3596,7 @@
     }
     searchTerms = textOn ? q.split(/\s+/) : [];
     searchOrder = sortSearchResults(nodes.filter(n => {
+      if (switchedOff(n)) return false; // nodes in a hidden optional volume never match
       if (filterOn && !filterMatch(n)) return false;
       if (!textOn) return true;
       const s = nodeSearchText(n);
@@ -3610,6 +3617,7 @@
     if (el && !el.hidden) renderList();
   }
   els.search.addEventListener('input', runFilter);
+  filterReady = true; // changed() may now rerun the search (see hiddenVolSig)
 
   const themeEl = document.getElementById('theme-filter');
   const themeBtnEl = document.getElementById('btn-themes');
@@ -3920,7 +3928,7 @@
       (lines.length ? `<div class="lv-effects">${lines.join('')}</div>` : '') + '</div></div>';
   }
   function listEntries(hits) {
-    if (listMode !== 'build') return listNodes.filter(n => !hits || hits.has(n.id)).map(n => nodeEntry(n, 0));
+    if (listMode !== 'build') return listNodes.filter(n => !switchedOff(n) && (!hits || hits.has(n.id))).map(n => nodeEntry(n, 0));
     const ids = state.root ? [state.root, ...state.alloc] : [];
     const out = [];
     const aff = new Map();
@@ -3992,7 +4000,7 @@
       const affCount = entries.filter(e => e.affinity).reduce((a, e) => a + e.count, 0);
       listCount.textContent = !state.root ? 'No build yet.'
         : `${total} of ${buildSize} allocated nodes${filtered} (${affCount} affinity)${collapsedNote}`;
-    } else listCount.textContent = `${total} of ${listNodes.length} nodes${filtered}${collapsedNote}`;
+    } else listCount.textContent = `${total} of ${listNodes.filter(n => !switchedOff(n)).length} nodes${filtered}${collapsedNote}`;
     listGroupBtns.hidden = sortMode !== 'tree';
     const empty = listMode === 'build' && !state.root ? 'Pick a root on the map to start a build.'
       : listMode === 'build' && !searchHits ? 'Nothing allocated yet besides the root.' : 'No nodes match. Change search term or Filters.';

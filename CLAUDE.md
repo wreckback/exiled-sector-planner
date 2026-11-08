@@ -61,7 +61,7 @@ The sections run top to bottom in this order:
 3. **Rules,** mirroring the mod's `AllocationCheck`:
    - `sat(id)`: allocated, or the chosen root.
    - `partnerOf(n)`: a static `pairedWith` wormhole, or a socket↔exit link.
-   - `switchedOff(n)`: the node is in a hidden optional volume (`volumeHidden`). `hiddenText(n)` is the message for it.
+   - `switchedOff(n)`: the node is in a hidden optional volume (`volumeHidden`). `hiddenText(n)` is the message for it. A hidden volume disappears: its nodes, lanes, decorations (by their volume tag), region label, target marks and waypoints aren't drawn, `nodeAt` skips it, and `runFilter` and the All nodes list leave its nodes out. `changed()` reruns `runFilter` when `hiddenVolumes` changes (`hiddenVolSig`, once `filterReady`).
    - `pathTo(target)`: BFS from all satisfied nodes. A wormhole exit can only be entered through its partner, and taking a wormhole also takes its partner.
    - `removalSet(n)`: what removing a node takes away, i.e. everything cut off from the root.
    - `pruneSwitchedOff()`: cleanup after hiding a volume or a load (drops anchor links into hidden volumes too).
