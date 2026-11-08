@@ -124,9 +124,18 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - If the template the build came from changed, the notice offers to load the new version, warning about unsaved edits (Undo brings the build back). A removed template keeps the build.
 - The planner's own saves, and rewrites with the same templates, are ignored. Checking pauses while the tab is hidden and runs at once when it's shown again.
 
+**Light and dark themes**
+- A **Theme** button cycles Dark (the default), Light and Auto, which follows the system and updates when it changes. Saved in `localStorage['esp.theme']`.
+- The page's colours are CSS variables with a light set under `[data-theme="light"]`. The canvas uses a matching palette for the background, connectors, placeholders, labels, sockets, roots and region labels.
+- In light mode, bright line and text colours are deepened automatically. With the mod's art, unallocated icons wash toward white, and nebulae draw at low opacity instead of additively. Each tree's star is toned down to a deeper colour with a soft centre and a weaker glow, so it doesn't glare.
+
 **Mod art from the user's folder**
 - To avoid redistributing the mod's art, the planner no longer ships any. The **Mod art** dialog (top bar: **Show mod art**) reads it from the Exiled Sector folder the user chooses, finding the mod by its `mod_info.json` in that folder, its `mods` folder or a folder inside. Chrome and Edge remember the folder (**Reconnect art** after a browser restart). Other browsers use a folder input each visit.
 - Without a folder, the tree draws placeholders: lettered icons on the canvas and in lists, tooltips and pickers, and a drawn notable halo. Nebula, planet and ring belt images are skipped. A one-time hint on the first visit points to the button.
+- The art-free tree was then made easier to read:
+  - Discs are tinted by tier (notables pink, keystones violet) with an outline.
+  - Affinity nodes are a three-colour Low / Mid / High pie, filled with the chosen tech once allocated.
+  - Names are drawn under nodes when zoomed in (notables and keystones from about 14 px on screen, small nodes from 22 px).
 - `extract.ps1` no longer copies art into `web/assets`. It only reports images the mod doesn't ship. `update.ps1` checks those against the mod folder.
 
 **Waypoints**

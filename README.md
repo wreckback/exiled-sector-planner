@@ -82,13 +82,26 @@ powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Tag "v0.2.0-rc.1+es0
 
 It writes `dist\exiled-sector-planner-<tag>.zip`. The site files come from the tag itself, so any tag can be packaged. The zip has no art: its README.txt tells users to choose their mod folder under **Show mod art**. Attach the zip to the GitHub release for that tag, marked as a pre-release for an alpha, beta or rc. The zip's README.txt says which stage it is.
 
+## Theme
+
+The **Theme** button in the top bar cycles **Dark**, **Light** and **Auto** (follows the system's light or dark setting). Dark is the default. The choice is saved in the browser.
+
+- Both themes work with and without the mod's art.
+- Light mode deepens bright colours (allocated paths, previews, affinity colours) so they stay readable on the light background.
+- With the art in light mode, unallocated icons fade toward white instead of darkening, and nebulae and planets are drawn as soft colour instead of glowing.
+- In light mode, the star at the centre of each tree is a deeper colour with a softer glow, so it doesn't glare.
+
 ## Mod art
 
 The planner ships no images. Click **Show mod art** in the top bar and choose the Exiled Sector folder, usually `mods\ExiledSector` in the Starsector install. The Starsector folder or its `mods` folder work too: the planner looks for the mod's `mod_info.json` there, then in `mods\`, then in each folder inside. It only reads the images it draws (317 for mod 0.11.1). Nothing is uploaded or changed.
 
 - **Chrome and Edge** remember the folder. After a browser restart they need permission once more: the button then reads **Reconnect art**, and one click asks for it.
 - **Other browsers** can't remember folders, so they use a folder input that you pick again each visit.
-- **Without a folder,** node icons are lettered placeholders ("FC" for Flux Capacity), the notable halo is drawn in code, and nebulae, planets and ring belts aren't drawn.
+- **Without a folder,** the tree is drawn plainly so it still reads well:
+  - Nodes are discs tinted by kind: notables pink, keystones violet, small nodes grey. Bigger ones show the type's initials ("FC" for Flux Capacity).
+  - Affinity nodes show a Low / Mid / High split in the three tech colours, and once allocated they're filled with the chosen tech's colour.
+  - Names appear under the nodes as you zoom in: notables and keystones first, small nodes closer in. Affinity nodes stay unlabelled.
+  - The notable halo is drawn in code, and nebulae, planets and ring belts aren't drawn.
 - If the folder holds a different mod version than the planner's data, the dialog says so. Icons of node types that changed may be missing.
 - Picking a folder that isn't the mod keeps the art already showing and explains why.
 

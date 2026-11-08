@@ -1308,15 +1308,15 @@
   }
   function dimmed(rec) {
     // Unallocated icons draw at about 35% brightness, like the mod's (90,90,90) tint.
-    if (!rec.dim) {
+    if (!rec.dim || rec.dimTheme !== theme) {
       const c = document.createElement('canvas');
       c.width = rec.el.naturalWidth; c.height = rec.el.naturalHeight;
       const g = c.getContext('2d');
       g.drawImage(rec.el, 0, 0);
       g.globalCompositeOperation = 'source-atop';
-      g.fillStyle = 'rgba(0,0,0,0.62)';
+      g.fillStyle = P.dimWith;
       g.fillRect(0, 0, c.width, c.height);
-      rec.dim = c;
+      rec.dim = c; rec.dimTheme = theme;
     }
     return rec.dim;
   }
@@ -1406,19 +1406,85 @@
     requestDraw(); // keep breathing rings alive; rAF pauses in background tabs
   }
 
-  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  // ------------------------------------------------------------------ theme
+  // 'dark' or 'light', chosen with the Theme button ('auto' follows the system). The CSS keys off data-theme on <html>;
+  // the canvas uses the palette P. In light mode rgba() also deepens bright colours (lime, cyan, yellow, pale grey) so
+  // lines, rings and text stay readable on the light background; rgbaRaw() skips that (the star, image tints).
+  const THEMES = {
+    dark: {
+      bg: '#000', star: [220, 230, 255], starA: 1,
+      laneCore: 'rgba(0,0,0,0.92)', litCore: 'rgba(255,255,255,0.75)', dot: 'rgba(170,170,170,0.7)',
+      dimWith: 'rgba(0,0,0,0.62)', nebulaA: 0.9, nebulaOp: 'lighter',
+      phLit: '#34404a', phDim: '#182027', phTextLit: '#ffffff', phTextDim: '#b4bec6',
+      label: { KEYSTONE: '#d6caff', NOTABLE: '#ffc4f2', SMALL: '#c9d1d8' }, labelHalo: 'rgba(0,0,0,0.85)',
+      socketFill: 'rgba(10,16,24,0.85)', rootFill: 'rgba(4,6,10,0.92)', hover: 'rgba(255,255,255,0.85)',
+      regionBg: '#0b1118', regionEdge: '#3a5566', regionText: '#e6e6e6', regionMuted: '#9aa4ad', regionOff: '#fc6300',
+      badgeText: '#000',
+    },
+    light: {
+      bg: '#e8ecf0', star: [40, 55, 80], starA: 0.35,
+      laneCore: 'rgba(232,236,240,0.95)', litCore: 'rgba(255,255,255,0.85)', dot: 'rgba(70,80,92,0.8)',
+      dimWith: 'rgba(255,255,255,0.55)', nebulaA: 0.35, nebulaOp: 'source-over',
+      phLit: '#b9c6d2', phDim: '#fbfcfd', phTextLit: '#0d1418', phTextDim: '#3c4852',
+      label: { KEYSTONE: '#4a35b5', NOTABLE: '#a0157f', SMALL: '#27313a' }, labelHalo: 'rgba(255,255,255,0.9)',
+      socketFill: 'rgba(250,251,252,0.92)', rootFill: 'rgba(252,253,254,0.95)', hover: 'rgba(10,20,30,0.85)',
+      regionBg: '#ffffff', regionEdge: '#9aabb8', regionText: '#14191e', regionMuted: '#56626c', regionOff: '#c04400',
+      badgeText: '#fff',
+    },
+  };
+  let themeSetting = 'dark';
+  let theme = 'dark';
+  let P = THEMES.dark;
+  const rgbaRaw = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  const deepCache = new Map();
+  // Lowers a colour's lightness to about L (keeping hue, a little more saturation). Darker colours pass unchanged.
+  function deepen(c, L = 0.4) {
+    const key = `${c[0]},${c[1]},${c[2]},${L}`;
+    let d = deepCache.get(key);
+    if (d) return d;
+    const r = c[0] / 255, g = c[1] / 255, b = c[2] / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+    if (l <= L + 0.02) d = c;
+    else {
+      let h = 0, s = 0;
+      if (max !== min) {
+        const dd = max - min;
+        s = l > 0.5 ? dd / (2 - max - min) : dd / (max + min);
+        h = max === r ? (g - b) / dd + (g < b ? 6 : 0) : max === g ? (b - r) / dd + 2 : (r - g) / dd + 4;
+        h /= 6;
+      }
+      const S = Math.min(1, s * 1.1);
+      const q = L < 0.5 ? L * (1 + S) : L + S - L * S, p = 2 * L - q;
+      const hue = t => {
+        t = (t + 1) % 1;
+        return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p;
+      };
+      d = [hue(h + 1 / 3), hue(h), hue(h - 1 / 3)].map(v => Math.round(v * 255));
+    }
+    deepCache.set(key, d);
+    return d;
+  }
+  const rgba = (c, a) => rgbaRaw(theme === 'light' ? deepen(c) : c, a);
+  const systemTheme = () => (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  function applyTheme(setting) {
+    themeSetting = (THEMES[setting] || setting === 'auto') ? setting : 'dark';
+    theme = themeSetting === 'auto' ? systemTheme() : themeSetting;
+    P = THEMES[theme];
+    document.documentElement.dataset.theme = theme;
+  }
+  try { applyTheme(localStorage.getItem('esp.theme') || 'dark'); } catch { applyTheme('dark'); }
 
   function draw() {
     const z = cam.zoom;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = P.bg;
     ctx.fillRect(0, 0, W, H);
 
     // stars
     for (const s of bgStars) {
       const x = ((s.x - cam.x * z * s.p) % W + W) % W;
       const y = ((s.y - cam.y * z * s.p) % H + H) % H;
-      ctx.fillStyle = `rgba(220,230,255,${s.a})`;
+      ctx.fillStyle = rgbaRaw(P.star, s.a * P.starA);
       ctx.fillRect(x, y, s.s, s.s);
     }
 
@@ -1432,6 +1498,7 @@
     drawSubroutines(z);
     for (const n of nodes) if (n.tier !== 'ROOT') drawNode(n, view, z, treeAlpha);
     for (const n of roots) drawRoot(n, view, z, choosing);
+    drawNodeLabels(view, z, treeAlpha);
     if (targets.mode) drawTargetMarks(view, z);
     if (waypoints.length) drawWaypoints(view, z);
     if (flash) {
@@ -1503,16 +1570,16 @@
       const w = Math.max(w1, w2) + 14, h = sub ? 36 : 22;
       const x0 = sx - w / 2, y0 = sy - h / 2;
       ctx.globalAlpha = a * (off ? 0.6 : 1);
-      ctx.fillStyle = '#0b1118';
+      ctx.fillStyle = P.regionBg;
       ctx.fillRect(x0, y0, w, h);
-      ctx.strokeStyle = count ? rgba(accent(), 0.9) : '#3a5566';
+      ctx.strokeStyle = count ? rgba(accent(), 0.9) : P.regionEdge;
       ctx.lineWidth = 1;
       ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
-      ctx.fillStyle = '#e6e6e6';
+      ctx.fillStyle = P.regionText;
       ctx.font = `600 14px ${FONT}`;
       ctx.fillText(name, sx, sub ? sy - 8 : sy);
       if (sub) {
-        ctx.fillStyle = off ? '#fc6300' : '#9aa4ad';
+        ctx.fillStyle = off ? P.regionOff : P.regionMuted;
         ctx.font = `12px ${FONT}`;
         ctx.fillText(sub, sx, sy + 9);
       }
@@ -1571,21 +1638,26 @@
         ctx.save();
         ctx.translate(d.x, d.y);
         ctx.rotate(((d.rotation || 0) * Math.PI) / 180);
-        ctx.globalAlpha = 0.9;
-        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = P.nebulaA;
+        ctx.globalCompositeOperation = P.nebulaOp;
         ctx.drawImage(rec.el, -d.width / 2, -d.height / 2, d.width, d.height);
         ctx.restore();
       } else if (d.kind === 'star') {
         const r = d.radius || 200;
         if (!inView(view, d.x, d.y, r * 4)) continue;
-        const col = STAR_COLOURS[d.starType] || '#fff2b8';
+        // In light mode the star is toned down to a deeper colour with a soft centre and a weaker glow, so it
+        // doesn't glare against the light background.
+        const light = theme === 'light';
+        const base = hexRgb(STAR_COLOURS[d.starType] || '#fff2b8') || [255, 242, 184];
+        const col = light ? deepen(base, 0.56) : base;
+        const centre = light ? deepen(base, 0.7) : [255, 255, 255];
         const g = ctx.createRadialGradient(d.x, d.y, r * 0.6, d.x, d.y, r * 3.2);
-        g.addColorStop(0, hexA(col, 0.55)); g.addColorStop(0.35, hexA(col, 0.12)); g.addColorStop(1, hexA(col, 0));
+        g.addColorStop(0, rgbaRaw(col, light ? 0.3 : 0.55)); g.addColorStop(0.35, rgbaRaw(col, light ? 0.07 : 0.12)); g.addColorStop(1, rgbaRaw(col, 0));
         ctx.fillStyle = g;
         ctx.beginPath(); ctx.arc(d.x, d.y, r * 3.2, 0, Math.PI * 2); ctx.fill();
         if (d.starType !== 'black_hole') {
           const core = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, r);
-          core.addColorStop(0, '#ffffff'); core.addColorStop(0.7, col); core.addColorStop(1, hexA(col, 0.85));
+          core.addColorStop(0, rgbaRaw(centre, 1)); core.addColorStop(0.7, rgbaRaw(col, 1)); core.addColorStop(1, rgbaRaw(col, 0.85));
           ctx.fillStyle = core;
         } else ctx.fillStyle = '#000';
         ctx.beginPath(); ctx.arc(d.x, d.y, r, 0, Math.PI * 2); ctx.fill();
@@ -1624,7 +1696,7 @@
     ctx.lineWidth = laneW;
     strokeBatch(batches.dull);
     if (!simple) {
-      ctx.strokeStyle = 'rgba(0,0,0,0.92)';
+      ctx.strokeStyle = P.laneCore;
       ctx.lineWidth = Math.max(0, laneW - 2.4 * px);
       strokeBatch(batches.dull);
     }
@@ -1638,7 +1710,7 @@
       ctx.strokeStyle = rgba(col, 0.95);
       ctx.lineWidth = laneW * 0.85;
       strokeBatch(list);
-      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.strokeStyle = P.litCore;
       ctx.lineWidth = Math.max(0.8 * px, laneW * 0.25);
       strokeBatch(list);
     }
@@ -1699,7 +1771,7 @@
     const refused = markRefused && isMarkedRefused(n);
     if (screenSize < 5) { // far away: a dot
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = refused ? rgba(RULE_PROBLEM, 0.9) : allocated ? rgba(ac, 1) : n.tier === 'KEYSTONE' ? rgba(DEFAULT_AURORA, 0.9) : n.tier === 'NOTABLE' ? rgba(NOTABLE_PINK, 0.8) : 'rgba(170,170,170,0.7)';
+      ctx.fillStyle = refused ? rgba(RULE_PROBLEM, 0.9) : allocated ? rgba(ac, 1) : n.tier === 'KEYSTONE' ? rgba(DEFAULT_AURORA, 0.9) : n.tier === 'NOTABLE' ? rgba(NOTABLE_PINK, 0.8) : P.dot;
       const r = Math.max(1.5 * px, fp * 0.35);
       ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1;
@@ -1818,24 +1890,124 @@
     ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.stroke();
   }
 
-  // Without the mod's art: a disc with the type's initials (once they're big enough to read).
+  // ---- placeholders, when the mod's art isn't loaded
+  // Each node is a disc tinted by what it is (affinity nodes in their tech's colour, notables pink, keystones violet),
+  // with its initials once big enough, and its name underneath when zoomed in (drawNodeLabels).
+  const OPTION_TINT = {
+    low_tech_affinity: AFFINITY_COLOURS.LOW_TECH_AFFINITY_FLAT,
+    midline_affinity: AFFINITY_COLOURS.MIDLINE_AFFINITY_FLAT,
+    high_tech_affinity: AFFINITY_COLOURS.HIGH_TECH_AFFINITY_FLAT,
+  };
+  const TIER_TINT = { NOTABLE: [255, 120, 230], KEYSTONE: [165, 145, 255] };
+  const PLAIN_TINT = [150, 165, 178];
+  const placeholderMode = () => artUrls.size === 0;
   const initialsCache = new Map();
-  function drawPlaceholderIcon(n, t, size, lit, z) {
-    ctx.fillStyle = lit ? '#4a5560' : '#1c2329';
-    ctx.beginPath(); ctx.arc(n.x, n.y, size / 2, 0, Math.PI * 2); ctx.fill();
+  function placeholderDisc(n, size, tint, lit, z) {
+    const r = size / 2;
+    ctx.fillStyle = lit ? P.phLit : P.phDim;
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = rgba(tint, lit ? 0.5 : 0.2);
+    ctx.fill();
+    ctx.strokeStyle = rgba(tint, lit ? 0.95 : 0.55);
+    ctx.lineWidth = Math.max(1 / z, size * 0.05);
+    ctx.stroke();
+  }
+  function placeholderText(n, text, size, lit, z) {
     if (size * z < 18) return;
-    let text = initialsCache.get(t.id);
-    if (!text) initialsCache.set(t.id, text = initials(t.name));
-    ctx.fillStyle = lit ? '#f0f0f0' : '#7d8890';
+    ctx.fillStyle = lit ? P.phTextLit : P.phTextDim;
     ctx.font = `600 ${size * 0.36}px ${FONT}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(text, n.x, n.y + size * 0.02);
+  }
+  function drawPlaceholderIcon(n, t, size, lit, z) {
+    const tint = OPTION_TINT[t.id] || TIER_TINT[n.tier] || PLAIN_TINT;
+    placeholderDisc(n, size, tint, lit, z);
+    if (OPTION_TINT[t.id]) return; // the colour says which affinity
+    let text = initialsCache.get(t.id);
+    if (!text) initialsCache.set(t.id, text = initials(t.name));
+    placeholderText(n, text, size, lit, z);
+  }
+  // An unallocated choice node: a pie of its options (affinity in the three tech colours).
+  function drawPlaceholderSplit(n, opts, size, z) {
+    const r = size / 2, k = opts.length;
+    const affinity = opts.every(o => OPTION_TINT[o.id]);
+    for (let i = 0; i < k; i++) {
+      const a0 = -Math.PI / 2 + (i * 2 * Math.PI) / k, a1 = a0 + (2 * Math.PI) / k;
+      const tint = OPTION_TINT[opts[i].id] || (i % 2 ? [120, 135, 150] : PLAIN_TINT);
+      ctx.beginPath(); ctx.moveTo(n.x, n.y); ctx.arc(n.x, n.y, r, a0, a1); ctx.closePath();
+      ctx.fillStyle = P.phDim; ctx.fill();
+      ctx.fillStyle = rgba(tint, affinity ? 0.62 : 0.2); ctx.fill();
+    }
+    ctx.strokeStyle = rgba(PLAIN_TINT, 0.55);
+    ctx.lineWidth = Math.max(1 / z, size * 0.05);
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.stroke();
+    if (!affinity) {
+      let text = initialsCache.get(n.type.id);
+      if (!text) initialsCache.set(n.type.id, text = initials(n.type.name));
+      placeholderText(n, text, size, false, z);
+    }
+  }
+  // Names under the nodes, in screen space so they stay readable: notables and keystones from a moderate zoom,
+  // small nodes once closer. Affinity nodes go unlabelled (their colours say it, and there are 155 of them).
+  const LABEL_STYLE = {
+    KEYSTONE: { min: 14, font: `600 12px ${FONT}` },
+    NOTABLE: { min: 14, font: `600 12px ${FONT}` },
+    SMALL: { min: 22, font: `11px ${FONT}` },
+  };
+  const labelLines = new Map();
+  function wrapLabel(text, font, maxW) {
+    const key = `${font}|${maxW}|${text}`;
+    let lines = labelLines.get(key);
+    if (lines) return lines;
+    ctx.font = font;
+    lines = [];
+    let line = '';
+    for (const word of text.split(' ')) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && ctx.measureText(next).width > maxW) { lines.push(line); line = word; } else line = next;
+    }
+    if (line) lines.push(line);
+    if (lines.length > 2) lines = [lines[0], lines.slice(1).join(' ')];
+    if (lines.length === 2 && ctx.measureText(lines[1]).width > maxW) {
+      let s = lines[1];
+      while (s.length > 1 && ctx.measureText(s + '…').width > maxW) s = s.slice(0, -1);
+      lines[1] = s.trimEnd() + '…';
+    }
+    labelLines.set(key, lines);
+    return lines;
+  }
+  function drawNodeLabels(view, z, treeAlpha) {
+    if (!placeholderMode()) return;
+    ctx.save();
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.lineJoin = 'round';
+    for (const n of nodes) {
+      const style = LABEL_STYLE[n.tier];
+      if (!style || n.fp * z < style.min || !inView(view, n.x, n.y, n.fp)) continue;
+      const t = isChoice(n) && !held(n.id) ? n.type : effectiveType(n);
+      if (isChoice(n) && n.type.options.every(id => OPTION_TINT[id])) continue;
+      const maxW = Math.round(Math.max(90, Math.min(170, n.fp * z * 2.6)) / 10) * 10;
+      const lines = wrapLabel(t.name, style.font, maxW);
+      const x = toScreenX(n.x);
+      let y = toScreenY(n.y) + (n.fp * z) * (n.tier === 'SMALL' ? 0.5 : 0.62) + 4;
+      ctx.font = style.font;
+      ctx.globalAlpha = nodeAlpha(n, treeAlpha) * (held(n.id) ? 1 : 0.8);
+      for (const line of lines) {
+        ctx.strokeStyle = P.labelHalo; ctx.lineWidth = 3;
+        ctx.strokeText(line, x, y);
+        ctx.fillStyle = P.label[n.tier];
+        ctx.fillText(line, x, y);
+        y += 13;
+      }
+    }
+    ctx.restore();
   }
   function drawSplitIcon(n, size, alpha) {
     const opts = n.type.options.map(id => types.get(id)).filter(Boolean);
     const k = opts.length;
     if (!opts.some(o => { const r = img(o.icon); return r && r.ok; })) {
-      ctx.save(); ctx.globalAlpha = alpha; drawPlaceholderIcon(n, n.type, size, false, cam.zoom); ctx.restore();
+      ctx.save(); ctx.globalAlpha = alpha; drawPlaceholderSplit(n, opts, size, cam.zoom); ctx.restore();
       return;
     }
     ctx.save();
@@ -1882,7 +2054,7 @@
     ctx.beginPath();
     ctx.moveTo(n.x - h + d, n.y - h); ctx.lineTo(n.x + h - d, n.y - h); ctx.lineTo(n.x + h, n.y - h + d); ctx.lineTo(n.x + h, n.y + h - d);
     ctx.lineTo(n.x + h - d, n.y + h); ctx.lineTo(n.x - h + d, n.y + h); ctx.lineTo(n.x - h, n.y + h - d); ctx.lineTo(n.x - h, n.y - h + d); ctx.closePath();
-    ctx.fillStyle = 'rgba(10,16,24,0.85)';
+    ctx.fillStyle = P.socketFill;
     ctx.fill();
     ctx.strokeStyle = allocated ? rgba(ac, 0.95) : 'rgba(150,150,150,0.6)';
     ctx.lineWidth = n.fp * 0.04;
@@ -1917,7 +2089,7 @@
     g.addColorStop(0, rgba(col, 0)); g.addColorStop(0.35, rgba(col, (allocated ? 0.35 : 0.12) * pulse)); g.addColorStop(1, rgba(col, 0));
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(n.x, n.y, r * 1.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(4,6,10,0.92)';
+    ctx.fillStyle = P.rootFill;
     ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
     const rec = img(n.type.icon);
     if (rec && rec.ok) {
@@ -1964,7 +2136,7 @@
   }
   function drawHover(n, z) {
     const r = n.tier === 'ROOT' ? n.fp / 2 + 6 / z : n.fp * 0.55 + 3 / z;
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.strokeStyle = P.hover;
     ctx.lineWidth = 1.5 / z;
     ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.stroke();
   }
@@ -3012,7 +3184,7 @@
       const br = Math.max(8 * px, n.fp * 0.22), bx = n.x + r * 0.75, by = n.y - r * 0.75;
       ctx.fillStyle = rgba(SEARCH_GOLD, 1);
       ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = P.badgeText;
       ctx.font = `600 ${br * 1.3}px ${FONT}`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(String(i + 1), bx, by + br * 0.05);
@@ -3323,6 +3495,27 @@
   }
   window.addEventListener('keyup', e => camKeys.delete(e.key));
   window.addEventListener('blur', () => camKeys.clear());
+
+  // Theme button: Dark -> Light -> Auto (follows the system) -> Dark.
+  const themeBtn = document.getElementById('btn-theme');
+  function renderThemeButton() {
+    const name = { dark: 'Dark', light: 'Light' };
+    themeBtn.textContent = themeSetting === 'auto' ? `Theme: Auto (${name[theme]})` : `Theme: ${name[theme]}`;
+  }
+  function setTheme(setting) {
+    applyTheme(setting);
+    try { localStorage.setItem('esp.theme', themeSetting); } catch { /* storage unavailable */ }
+    renderThemeButton();
+    hideTooltip();
+    renderChrome();
+    renderPanel();
+    requestDraw();
+  }
+  themeBtn.addEventListener('click', () => setTheme({ dark: 'light', light: 'auto', auto: 'dark' }[themeSetting]));
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (themeSetting === 'auto') setTheme('auto'); });
+  }
+  renderThemeButton();
 
   // shortcuts list
   const keysEl = document.getElementById('keys');
@@ -4494,7 +4687,6 @@
     const v = parseInt(m[1], 16);
     return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
   }
-  function hexA(h, a) { const c = hexRgb(h) || [255, 255, 255]; return rgba(c, a); }
 
   // ------------------------------------------------------------------ start
   try { if (localStorage.getItem('esp.panel') === '0' || window.innerWidth < 720) els.panel.classList.add('closed'); } catch { if (window.innerWidth < 720) els.panel.classList.add('closed'); }
