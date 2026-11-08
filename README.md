@@ -51,6 +51,23 @@ The last line says either "All checks passed, no rule files changed", in which c
 - To go back to the mod's branch, run `git switch main` inside `ExiledSector\`.
 - `tools\extract.ps1` alone still just rebuilds the data from whatever is checked out.
 
+## Tag a release
+
+Planner tags carry the planner's own version, with the mod release its data was synced from as build metadata: `v0.4.0-rc.1+es0.11.1-alpha` for a candidate, `v0.4.0+es0.11.1-alpha` for the release.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Version 0.4.0 -RC   # first candidate: v0.4.0-rc.1+es...
+powershell -ExecutionPolicy Bypass -File tools\release.ps1 -RC                  # next candidate:  v0.4.0-rc.2+es...
+powershell -ExecutionPolicy Bypass -File tools\release.ps1                      # promote it:      v0.4.0+es...
+powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Bump minor -RC      # from the last release: v0.5.0-rc.1+es...
+```
+
+- Which number to raise: **patch** for a mod sync or fixes, **minor** for new features, **major** when old share links or saved builds stop loading.
+- `-Push` pushes the tag, `-DryRun` only shows the tag and its message, and `-Plain` leaves out the `+es…` part.
+- The tag message names the mod release and commit and lists the commits since the previous tag.
+- It refuses when the working tree has changes, when the version isn't newer than the last release, or when `ExiledSector\` or `planner-data.js` doesn't match `tools\mod-sync.json`. Run `update.ps1` first after a mod release.
+- Tags that don't look like `vX.Y.Z`, such as the earlier `0.11.1-alpha`, are ignored.
+
 ## Use it
 
 1. **Pick a root:** Low Tech, Midline or High Tech, near the centre. To change it later, right-click your root (or use Reset). It asks first, because changing the root clears the build. Undo brings the build back. The game itself never lets a ship drop its root; this is only a planning shortcut.

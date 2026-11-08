@@ -18,6 +18,7 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - One command to follow a mod release: fetch tags, check out the newest release (or `-Tag`), run the extractor, check the data, compare the tree, list changed mod rule files, and record the sync in `tools/mod-sync.json`.
 - The checks run without a browser: unfilled wording placeholders, effects newly without wording, newly missing art, unknown node types and tiers, missing, one-way or non-mutual links, the template format versions, and the default node cap.
 - The project folder is now a git repo, so each sync can be one commit (`-Commit`).
+- `tools/release.ps1` tags releases and candidates as `vX.Y.Z[-rc.N]+es<mod release>`. It numbers candidates, promotes them, bumps from the last release, and refuses on a dirty tree or stale data. The tag message lists the changes.
 
 ## Local server (`tools/serve.ps1`)
 

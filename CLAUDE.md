@@ -20,7 +20,10 @@ A static web planner for the ship skill tree of the Exiled Sector Starsector mod
 powershell -ExecutionPolicy Bypass -File tools\update.ps1    # mod -> newest release tag, extract, check, diff, record (-Tag, -NoCheckout, -NoFetch, -Commit)
 powershell -ExecutionPolicy Bypass -File tools\extract.ps1   # rebuild data + assets from ExiledSector/ as checked out
 powershell -ExecutionPolicy Bypass -File tools\serve.ps1     # http://localhost:8765/  (-Port to change)
+powershell -ExecutionPolicy Bypass -File tools\release.ps1   # tag vX.Y.Z[-rc.N]+es<mod release> (-Version, -Bump, -RC, -Plain, -Push, -DryRun)
 ```
+
+- `release.ps1` takes the mod release from `tools/mod-sync.json` and refuses on a dirty tree or stale data. With neither `-Version` nor `-Bump`, it continues (`-RC`) or promotes the newest open candidate. Only create or push real tags when the user asks.
 
 - `extract.ps1` prints how many effects have no wording, plus any image the mod doesn't ship. A jump in either usually means the mod's Java or CSV layout changed and a regex in the extractor needs updating.
 - `update.ps1` compares against `tools/mod-sync.json` (last synced release and commit, plus the lists of effects without wording and absent images, so only new ones are flagged). Its `$rulePattern` lists the mod files whose logic the planner reimplements. Add a class there when you port new mod logic into `app.js` or `extract.ps1`. If app.js's template versions change, update `$PlannerTemplateVersion` and `$PlannerFileVersion` at its top.
