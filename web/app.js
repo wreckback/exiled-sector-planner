@@ -31,6 +31,7 @@
   const NOTABLE_GLOW = [255, 170, 255];
   const DEFAULT_AURORA = [140, 120, 255];
   const SEARCH_GOLD = [255, 211, 77];
+  const RULE_PROBLEM = [255, 40, 40];
   const UNALLOCATED_ALPHA = 0.45;
   const VOLUME_NAMES = {
     core: 'Core', luddic: 'Luddic', pirate: 'Pirate', hegemony: 'Hegemony', persean_league: 'Persean League',
@@ -118,6 +119,8 @@
     cap: 60,
     coreWormholes: true,        // the paired wormholes linking the tech regions
     volumes: true,              // anchor links from sockets to the faction volume exits
+    subs: new Map(),            // socketId -> { id: subroutine id, aff?: conduit affinity effect, grants?: [node ids] }
+    template: null,             // { name, sig } of the template the build was loaded from or saved as (top bar)
   };
   const undoStack = [];
 
@@ -160,9 +163,9 @@
   }
 
   // Shortest path (fewest nodes) from the allocated set to `target`. Returns the ids to add, or null.
-  function pathTo(target) {
-    if (!state.root || sat(target.id) || switchedOff(target)) return null;
-    if (target.tier === 'WORMHOLE_EXIT' && !partnerOf(target)) return null;
+  const pathTo = target => findPath(target).path;
+  // Breadth-first search; with `useRules`, nodes the rules refuse can't be passed through (the target itself can).
+  function searchPath(target, useRules) {
     const prev = new Map();
     const queue = [];
     for (const n of nodes) if (sat(n.id)) { prev.set(n.id, null); queue.push(n); }
@@ -175,6 +178,7 @@
       else if (cur.tier === 'WORMHOLE' || cur.tier === 'SOCKET') { const p = partnerOf(cur); if (p) steps.push(p); }
       for (const m of steps) {
         if (prev.has(m.id) || switchedOff(m)) continue;
+        if (useRules && m.id !== target.id && staticBlock(m)) continue;
         prev.set(m.id, cur.id);
         if (m.id === target.id) { found = true; break; }
         queue.push(m);
@@ -187,6 +191,34 @@
     const add = new Set(path);
     for (const id of path) { const p = partnerOf(byId.get(id)); if (p && !sat(p.id)) add.add(p.id); }
     return [...add];
+  }
+  // The path to `target` checked against the rules node by node, in the order allocate() adds them.
+  // Returns { path, options } (the option each choice node on it gets), or { path: null, block } saying what refused it.
+  // option: the option asked for on the target; remembered: choice nodes on the way use the last picked option.
+  function findPath(target, option = null, remembered = false) {
+    if (!state.root || sat(target.id) || switchedOff(target)) return { path: null, block: null };
+    const g = subState().granted.get(target.id);
+    if (g && g.status === 'active') return { path: null, block: { kind: 'granted', node: target, text: `Already allocated by the ${g.def.name}. Change its notables in the socket to free it.` } };
+    if (target.tier === 'WORMHOLE_EXIT' && !partnerOf(target)) return { path: null, block: null };
+    let path = searchPath(target, true);
+    if (!path) {
+      // Unreachable either way, or only through refused nodes: name the first refused one on the way.
+      const raw = searchPath(target, false);
+      if (!raw) return { path: null, block: null };
+      path = raw;
+    }
+    const list = rules().list.slice();
+    const options = new Map();
+    for (const id of [...path].reverse()) {
+      const n = byId.get(id);
+      let p;
+      if (id === target.id && option) p = { option, block: blockOf(n, option, list) };
+      else p = placement(n, list, isChoice(n) ? (remembered && lastChoice.get(n.type.id)) || defaultOption(n) : null);
+      if (p.block) return { path: null, block: { ...p.block, node: n } };
+      options.set(id, p.option);
+      list.push(entryFor(n, p.option));
+    }
+    return { path, options };
   }
 
   // Ids that removing `n` takes away: itself, its wormhole partner, and everything no longer joined to the root.
@@ -232,26 +264,29 @@
   function chooseRoot(n) {
     pushUndo();
     state.root = n.id;
-    state.alloc.clear(); state.choice.clear(); state.links.clear();
+    state.alloc.clear(); state.choice.clear(); state.links.clear(); state.subs.clear(); state.template = null;
     changed();
   }
   // remembered: true picks each choice node on the path from lastChoice (falling back to the root default).
   function allocate(target, option, remembered = false) {
-    const path = pathTo(target);
-    if (!path) return false;
+    const found = findPath(target, option || null, remembered);
+    const path = found.path;
+    if (!path) { if (found.block) toast(refusalText(target, found.block)); return false; }
     if (used() + path.length > state.cap) { toast(`That needs ${path.length} nodes; only ${Math.max(0, state.cap - used())} left under the cap.`); return false; }
     pushUndo();
     // Add in build order (nearest the build first) so allocation order, and exported template steps, read naturally.
     for (const id of [...path].reverse()) {
       state.alloc.add(id);
       const n = byId.get(id);
-      if (isChoice(n) && !state.choice.has(id)) {
-        const pick = id === target.id && option ? option : remembered && lastChoice.get(n.type.id);
-        state.choice.set(id, pick || defaultOption(n));
-      }
+      if (isChoice(n) && !state.choice.has(id)) state.choice.set(id, found.options.get(id) || defaultOption(n));
     }
     changed();
     return true;
+  }
+  // "Can't allocate X: reason", or, when the refusal is on the way there, which node and why.
+  function refusalText(target, block) {
+    const where = block.node && block.node !== target ? `The way to ${effectiveType(target).name} passes ${effectiveType(block.node).name}: ` : '';
+    return where + block.text;
   }
   function deallocate(n) {
     if (n.tier === 'WORMHOLE_EXIT') { const s = linkedSocketOf(n.id); if (s) { unlinkSocket(byId.get(s)); return; } }
@@ -260,21 +295,77 @@
     pushUndo();
     for (const id of gone) { state.alloc.delete(id); state.choice.delete(id); }
     for (const [s, e] of [...state.links]) if (!state.alloc.has(s) || !state.alloc.has(e)) { state.links.delete(s); state.alloc.delete(e); }
+    dropOrphanSubs();
+    changed();
+  }
+  // Unallocating a socket unsockets its subroutine (ShipSkillData.release).
+  function dropOrphanSubs() { for (const s of [...state.subs.keys()]) if (!state.alloc.has(s)) state.subs.delete(s); }
+  function socketSub(socket, id, extra = {}) {
+    const def = SUBS.get(id);
+    if (!def || !state.alloc.has(socket.id)) return;
+    const problem = subLimitProblem(def, socket.id);
+    if (problem) { toast(problem); return; }
+    pushUndo();
+    if (state.links.has(socket.id)) unlinkInner(socket);
+    const prev = state.subs.get(socket.id);
+    const entry = { id, ...extra };
+    if (def.kind === 'MODSPEC_CACHE') entry.grants = prev && prev.id === id ? prev.grants || [] : [];
+    if (def.kind === 'ROOT_CONDUIT' && !entry.aff) entry.aff = AFFINITY_KEYS[0];
+    state.subs.set(socket.id, entry);
+    changed();
+  }
+  function removeSub(socket) { if (!state.subs.has(socket.id)) return; pushUndo(); state.subs.delete(socket.id); changed(); }
+  // A modspec cache holds 1 to 3 notables (ModspecCaches: node_count_chances).
+  const cacheMax = def => (def.nodeCountChances || [1, 1, 1]).length;
+  function setGrants(socket, grants) {
+    const e = state.subs.get(socket.id);
+    if (!e) return;
+    pushUndo();
+    e.grants = [...new Set(grants)].slice(0, cacheMax(SUBS.get(e.id)));
     changed();
   }
   function setChoice(n, option) {
     if (state.choice.get(n.id) === option) return;
+    // AllocationCheck.computeOptionSwitch: checked against the build without this node.
+    const b = blockOf(n, option, buildEntries(n.id));
+    if (b) { toast(b.text); return; }
     pushUndo();
     state.choice.set(n.id, option);
     changed();
+  }
+  // Sets the allocated affinity nodes to a split ({optionId: count}, adding up to how many are allocated), changing as
+  // few as possible: in allocation order a node keeps its option while that option still has room, and the rest take
+  // whatever is left. Returns how many nodes changed (one undo step).
+  const affinityNodes = () => [...state.alloc].map(id => byId.get(id)).filter(n => n.type.id === 'affinity');
+  function setAffinitySplit(targets) {
+    const list = affinityNodes();
+    const left = new Map(Object.entries(targets).filter(([opt]) => types.has(opt)));
+    if ([...left.values()].reduce((a, b) => a + b, 0) !== list.length) return 0;
+    const moving = [];
+    for (const n of list) {
+      const cur = state.choice.get(n.id);
+      if ((left.get(cur) || 0) > 0) left.set(cur, left.get(cur) - 1); else moving.push(n);
+    }
+    if (!moving.length) return 0;
+    pushUndo();
+    for (const n of moving) {
+      const opt = [...left].find(([, c]) => c > 0)[0];
+      left.set(opt, left.get(opt) - 1);
+      state.choice.set(n.id, opt);
+    }
+    changed();
+    return moving.length;
   }
   function linkSocket(socket, exit) {
     if (!state.alloc.has(socket.id) || !state.volumes) return;
     const current = state.links.get(socket.id);
     if (current === exit.id) return;
     if (!current && used() + 1 > state.cap) { toast('Linking an anchor takes one more node; you are at the cap.'); return; }
+    const b = blockOf(exit, null, buildEntries());
+    if (b) { toast(b.text); return; }
     pushUndo();
     if (current) unlinkInner(socket);
+    state.subs.delete(socket.id); // one item per socket
     state.links.set(socket.id, exit.id);
     state.alloc.add(exit.id);
     changed();
@@ -311,6 +402,7 @@
     }
     for (const id of [...state.choice.keys()]) if (!state.alloc.has(id)) state.choice.delete(id);
     for (const [s, e] of [...state.links]) if (!state.alloc.has(s) || !state.alloc.has(e)) { state.links.delete(s); state.alloc.delete(e); }
+    dropOrphanSubs();
     return before - state.alloc.size;
   }
   function setWormholeOption(key, on) {
@@ -324,8 +416,312 @@
   }
   function resetBuild() {
     pushUndo();
-    state.root = null; state.alloc.clear(); state.choice.clear(); state.links.clear();
+    state.root = null; state.alloc.clear(); state.choice.clear(); state.links.clear(); state.subs.clear(); state.template = null;
     changed();
+  }
+
+  // ------------------------------------------------------------------ node rules (the mod's NodeEligibility.check)
+  // Always checked: hull size (the Hull dropdown), node conflicts (SkillType.isExclusiveWith: a node's hull mods against
+  // another's, via hullmod_conflicts.csv) and the logistics limit (LogisticsNodes). Facts about the actual ship and the
+  // campaign come from the Ship rules dialog; anything left unset there isn't checked.
+  const SHIELDS = { FRONT: 'Front shield', OMNI: 'Omni shield', NONE: 'No shield', PHASE: 'Phase cloak' };
+  const TRI_FACTS = ['civilian', 'charges', 'modules', 'builtInWings'];
+  function blankShip() {
+    return { shield: null, armor: null, civilian: null, charges: null, modules: null, builtInWings: null,
+      hullMods: new Set(), extraLogistics: 0, lockedGates: new Set(), lockedTypes: new Set() };
+  }
+  state.ship = blankShip();
+  // Ship rules describe the hull; story rules (locked gates and types) the campaign.
+  const SHIP_KEYS = ['shield', 'armor', ...TRI_FACTS, 'hullMods', 'extraLogistics'];
+  function shipRuleCount(sh = state.ship) {
+    return (sh.shield ? 1 : 0) + (sh.armor != null ? 1 : 0) + TRI_FACTS.filter(k => sh[k] != null).length + sh.hullMods.size + (sh.extraLogistics ? 1 : 0);
+  }
+  const storyRuleCount = (sh = state.ship) => sh.lockedGates.size + sh.lockedTypes.size;
+  const hasShields = s => s === 'FRONT' || s === 'OMNI';
+  const shipHasHullMod = id => state.ship.hullMods.has(id) || (id === 'civgrade' && state.ship.civilian === true);
+
+  // A type's own hull mods (vanilla + phantoms) and the ones it excludes (SkillType's constructor).
+  const typeRuleCache = new Map();
+  function typeRules(t) {
+    let r = typeRuleCache.get(t.id);
+    if (!r) {
+      const own = [...new Set([t.vanillaHullMod, ...(t.phantomHullMods || [])].filter(Boolean))];
+      const excl = t.exclusiveHullMods || [];
+      const basis = own.length ? own : excl;
+      const partners = basis.flatMap(h => (D.hullModConflicts && D.hullModConflicts[h]) || []).filter(h => !basis.includes(h));
+      const excluded = [...new Set([...excl, ...partners])];
+      r = { own, excluded, exclusiveAndOwn: [...new Set([...excluded, ...own])], exclusiveTypes: t.exclusiveSkillTypes || [] };
+      typeRuleCache.set(t.id, r);
+    }
+    return r;
+  }
+  function typesExclusive(a, b) {
+    const ra = typeRules(a), rb = typeRules(b);
+    if (ra.exclusiveTypes.includes(b.id) || rb.exclusiveTypes.includes(a.id)) return true;
+    if (a.id === b.id) return false;
+    return ra.excluded.some(h => rb.own.includes(h)) || rb.excluded.some(h => ra.own.includes(h));
+  }
+  // AllocatedNode.isExclusiveWith: declared and effective types of both sides.
+  const entriesExclusive = (p, q) => [p.declared, p.effective].some(a => [q.declared, q.effective].some(b => typesExclusive(a, b)));
+  const isLogistics = t => (t.tier === 'NOTABLE' || t.tier === 'KEYSTONE') && (t.tags || []).includes('logistics_cap');
+  const logisticsCap = () => (D.logisticsCap ?? 2) + (state.ship.extraLogistics || 0);
+  const typeEffectNames = t => [...(t.effects || []), ...(t.hullSizeEffects || [])].map(e => e.effect);
+
+  function entryFor(n, optionId) {
+    return { node: n, declared: n.type, effective: optionId && types.get(optionId) ? types.get(optionId) : n.type };
+  }
+  // The build in allocation order (root first, then nodes a modspec cache grants), as the game's AllocatedNode list.
+  function buildEntries(skip, withGranted = true) {
+    const list = state.root ? [entryFor(byId.get(state.root), null)] : [];
+    if (withGranted) for (const [id, g] of subState().granted) if (g.status === 'active' && id !== skip) list.push(entryFor(byId.get(id), null));
+    for (const id of state.alloc) if (id !== skip) { const n = byId.get(id); list.push(entryFor(n, isChoice(n) ? state.choice.get(id) : null)); }
+    return list;
+  }
+  // ShieldSkillEffect.resolveDisplayShieldType over the build's effects. null while the ship's shield isn't set,
+  // unless a node settles it (removing the shield, say).
+  function currentShield(list) {
+    let s = state.ship.shield;
+    for (const e of list) {
+      for (const name of typeEffectNames(e.effective)) {
+        if (name === 'REMOVE_SHIELD') s = 'NONE';
+        else if (name === 'CREATE_FRONT_SHIELD_IF_NONE' && s === 'NONE') s = 'FRONT';
+        else if (name === 'CONVERT_SHIELD_TO_FRONT' && hasShields(s)) s = 'FRONT';
+        else if (name === 'CONVERT_SHIELD_TO_OMNI' && hasShields(s)) s = 'OMNI';
+      }
+    }
+    return s;
+  }
+  const blockText = (key, fallback, args) => fill(S[key] || fallback, args || {});
+  const nonPhaseText = () => blockText('node.requires.req_non_phase_hull', "Can't be allocated on phase ships.");
+  // Effects that refuse some ships (each SkillEffect's blockAllocationReason). The extractor marks them with `blocks`;
+  // tools/update.ps1 flags any it marks that this table doesn't know.
+  const EFFECT_BLOCKS = {
+    REMOVE_SHIELD: s => s.shield != null && !hasShields(s.shield) ? blockText('node.block.noShields', 'Ship has no shields.') : null,
+    SHIELD_UPKEEP_AT_LOW_SPEED_PERCENT: s => EFFECT_BLOCKS.REMOVE_SHIELD(s),
+    DYNAMIC_GRID_ENERGY_WEAPON_BONUS_PERCENT: s => EFFECT_BLOCKS.REMOVE_SHIELD(s),
+    CREATE_FRONT_SHIELD_IF_NONE: s => s.shield === 'PHASE' ? nonPhaseText() : null,
+    CONVERT_SHIELD_TO_FRONT: s => s.shield === 'FRONT' ? blockText('node.block.hasFrontShield', 'Ship already has front shields.') : s.shield === 'PHASE' ? nonPhaseText() : null,
+    CONVERT_SHIELD_TO_OMNI: s => s.shield === 'OMNI' ? blockText('node.block.hasOmniShield', 'Ship already has omni-directional shields.') : s.shield === 'PHASE' ? nonPhaseText() : null,
+    PHASE_ANCHOR_EMERGENCY_DIVE: s => s.phaseHull === false ? blockText('node.block.phaseHull', 'Requires a phase hull.') : null,
+    ARMOR_FLAT_FOR_LOW_BASE_ARMOR: s => {
+      // LowBaseArmorBonus.fits: a non-phase hull with base armor at or under its hull size's cutoff.
+      const args = D.effects.ARMOR_FLAT_FOR_LOW_BASE_ARMOR?.hullArgs?.[HULL_ENUM[state.hull]];
+      const cutoff = args ? evalExpr(args.cutoff, 1) : NaN;
+      const why = blockText('node.block.lowBaseArmor', 'Requires a non-phase hull with low base armor.');
+      if (s.phaseHull === true) return why;
+      if (state.ship.armor != null && !(state.ship.armor <= cutoff)) return `${why} (${fmt(cutoff)} or less on a ${hullLabel()}; this ship has ${fmt(state.ship.armor)})`;
+      return null;
+    },
+    REMOVE_ALL_FIGHTER_BAYS: () => state.ship.builtInWings === false ? blockText('node.block.builtInWingsOnly', 'Requires built-in strikecraft wings only.') : null,
+  };
+  function hullRequirementUnmet(tag) {
+    const sh = state.ship;
+    const unmet = tag === 'req_civilian_hull' ? (sh.civilian === false && !sh.hullMods.has('civgrade'))
+      : tag === 'req_non_phase_hull' ? sh.shield === 'PHASE'
+      : tag === 'req_system_charges' ? sh.charges === false
+      : tag === 'req_modules' ? sh.modules === false : false;
+    return unmet ? blockText('node.requires.' + tag, humanize(tag.slice(4)) + ' required.') : null;
+  }
+  const HULL_SIZE_NAMES = { FRIGATE: 'frigates', DESTROYER: 'destroyers', CRUISER: 'cruisers', CAPITAL_SHIP: 'capitals' };
+  const listWords = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+
+  // Why `n` (as `optionId`, for choice nodes) can't be allocated after the entries in `list`, or null.
+  // Same order as NodeEligibility.check: locked, hull size, hull requirements, hull mods, other nodes, effects, logistics.
+  function blockOf(n, optionId, list) {
+    const sh = state.ship;
+    const e = entryFor(n, optionId);
+    for (const t of [e.declared, e.effective]) {
+      if (sh.lockedTypes.has(t.id)) return { kind: 'locked', text: `Not unlocked yet: needs ${unlockText(t)} (Story rules).` };
+    }
+    const gate = n.gates.find(g => sh.lockedGates.has(g));
+    if (gate) return { kind: 'locked', text: `Locked until ${gateText(gate).replace(/^./, c => c.toLowerCase())} (Story rules).` };
+    const hull = HULL_ENUM[state.hull];
+    for (const t of [e.declared, e.effective]) {
+      const sizes = t.requiredHullSizes || [];
+      if (sizes.length && !sizes.includes(hull)) return { kind: 'hull', text: `Not on ${HULL_SIZE_NAMES[hull]}: only on ${listWords(sizes.map(x => HULL_SIZE_NAMES[x] || x))}.` };
+    }
+    const tags = new Set([...n.tags, ...(e.declared.tags || []), ...(optionId ? e.effective.tags || [] : [])]);
+    for (const tag of tags) { const why = hullRequirementUnmet(tag); if (why) return { kind: 'ship', text: why }; }
+    for (const t of [e.declared, e.effective]) {
+      for (const h of typeRules(t).exclusiveAndOwn) {
+        if (shipHasHullMod(h)) return { kind: 'ship', text: blockText('node.block.hullModInstalled', 'Ship already has {hullmod} installed.', { hullmod: hullModName(h) }) };
+      }
+    }
+    for (const other of list) {
+      if (other.node !== n && entriesExclusive(e, other)) {
+        return { kind: 'conflict', with: other.node, text: blockText('node.block.typeAllocated', 'Already have {node} allocated.', { node: other.effective.name }) };
+      }
+    }
+    const shield = currentShield(list);
+    const facts = { shield, phaseHull: sh.shield == null ? null : sh.shield === 'PHASE' };
+    for (const name of typeEffectNames(e.effective)) {
+      const why = EFFECT_BLOCKS[name] && EFFECT_BLOCKS[name](facts);
+      if (why) return { kind: 'ship', text: why };
+    }
+    if (isLogistics(e.effective) && list.filter(x => isLogistics(x.effective)).length >= logisticsCap()) {
+      return { kind: 'logistics', text: `${blockText('node.block.logisticsCap', 'This ship is at its logistics node limit.')} (${logisticsCap()} per ship)` };
+    }
+    return null;
+  }
+  // AllocationCheck.computeAllocation: a choice node can go in if any option can. Prefers `preferred`, then the others.
+  function placement(n, list, preferred) {
+    if (!isChoice(n)) { const b = blockOf(n, null, list); return { option: null, block: b }; }
+    const order = [...new Set([preferred, ...n.type.options])].filter(o => o && n.type.options.includes(o));
+    let first = null;
+    for (const o of order) { const b = blockOf(n, o, list); if (!b) return { option: o, block: null }; first = first || b; }
+    return { option: null, block: first };
+  }
+
+  // Per-change caches: the build as entries, each unallocated node's block against it, and allocated nodes that
+  // break a rule (replaying the build in order, so of two conflicting nodes the later one is flagged).
+  let ruleCache = null;
+  function rules() {
+    if (ruleCache) return ruleCache;
+    const list = buildEntries();
+    const problems = new Map();
+    const replay = list.filter(e => !state.alloc.has(e.node.id));
+    for (const e of list.filter(x => state.alloc.has(x.node.id))) {
+      const b = blockOf(e.node, isChoice(e.node) ? state.choice.get(e.node.id) : null, replay);
+      if (b) problems.set(e.node.id, b);
+      replay.push(e);
+    }
+    ruleCache = { list, problems, blocks: new Map() };
+    return ruleCache;
+  }
+  function staticBlock(n) {
+    const rc = rules();
+    if (!rc.blocks.has(n.id)) rc.blocks.set(n.id, held(n.id) ? null : placement(n, rc.list, defaultOptionOrNull(n)).block);
+    return rc.blocks.get(n.id);
+  }
+  const defaultOptionOrNull = n => (isChoice(n) && state.root ? defaultOption(n) : null);
+
+  // Wording for the Ship rules lists.
+  function gateText(g) {
+    const s = S['socketable.anchor.gate.' + g];
+    if (s) return plain(s).replace(/^Inert until\s+/i, '').replace(/\.$/, '').replace(/^./, c => c.toUpperCase());
+    return humanize(g.replace(/^gate_/, ''));
+  }
+  // ------------------------------------------------------------------ subroutines (socket items besides anchors)
+  // One item per socket: an anchor (state.links) or a subroutine (state.subs). A subroutine only works while its socket is
+  // allocated. Mirrors the mod: SubroutineRadius/NodeRadiusCache (radius), RootConduits, EmptyShells, GatedSubroutines,
+  // ModspecCaches/NodeAllocator.grantSocketedNodes (granted notables), DoctrineOverrides (shown, not simulated: its rolls
+  // come from a hidden per-item seed).
+  const SUBS = new Map((D.subroutines || []).map(s => [s.id, s]));
+  const AFFINITY_KEYS = ['LOW_TECH_AFFINITY_FLAT', 'MIDLINE_AFFINITY_FLAT', 'HIGH_TECH_AFFINITY_FLAT'];
+  const GATE_LINES = { GATES_RADIUS_WHILE_PHASED: 'While phased', GATES_RADIUS_BELOW_HALF_HULL: 'Below 50% hull', GATES_RADIUS_WHILE_SYSTEM_ACTIVE: 'While the ship system is active' };
+  const subRadius = def => (def && def.radius && D.nodeRadii ? D.nodeRadii[def.radius] || 0 : 0);
+  const radiusExcluded = n => n.volume === 'exotech' || n.type.id === 'exoship';
+  const radiusMembers = new Map();
+  // Nodes within `r` of the socket (straight-line, inclusive), any tree but Exotech; the socket itself excluded.
+  function nodesInRadius(socket, r) {
+    const key = socket.id + '|' + r;
+    let list = radiusMembers.get(key);
+    if (!list) {
+      list = radiusExcluded(socket) ? [] : nodes.filter(n => n !== socket && !radiusExcluded(n) && (n.x - socket.x) ** 2 + (n.y - socket.y) ** 2 <= r * r);
+      radiusMembers.set(key, list);
+    }
+    return list;
+  }
+  const RADIUS_TIERS = new Set(['SMALL', 'NOTABLE', 'KEYSTONE']);
+  const subLine = (def, effect) => (def.lines || []).find(l => l.effect === effect);
+  // Notables a modspec cache can hold: NOTABLE, not a choice node, anywhere in the tree (ModspecCaches.rollableNodeIds).
+  const grantableNodes = nodes.filter(n => n.tier === 'NOTABLE' && !isChoice(n));
+
+  // What the socketed subroutines do with the current build. Cached per change (cleared in changed()).
+  let subCache = null;
+  function subState() {
+    if (subCache) return subCache;
+    const active = [...state.subs].filter(([s, e]) => state.alloc.has(s) && SUBS.has(e.id)).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([s, e]) => ({ socket: byId.get(s), def: SUBS.get(e.id), entry: e }));
+    const sc = { active, silent: new Set(), shellCount: new Map(), gated: new Map(), granted: new Map(), conduit: null, doctrine: null };
+    for (const a of active) {
+      const r = subRadius(a.def);
+      if (subLine(a.def, 'EVERY_AFFINITY_FLAT_PER_EMPTY_SHELL_NODE') && r) {
+        // EmptyShells: small nodes in its radius grant nothing; the socket counts all of them, allocated or not.
+        const smalls = nodesInRadius(a.socket, r).filter(n => n.tier === 'SMALL');
+        sc.shellCount.set(a.socket.id, smalls.length);
+        for (const n of smalls) if (state.alloc.has(n.id)) sc.silent.add(n.id);
+      }
+      const gate = (a.def.lines || []).find(l => GATE_LINES[l.effect]);
+      if (gate && r) {
+        // GatedSubroutines: the first socket (by id) claims a node.
+        for (const n of nodesInRadius(a.socket, r)) {
+          if (RADIUS_TIERS.has(n.tier) && !sc.gated.has(n.id)) sc.gated.set(n.id, { when: GATE_LINES[gate.effect], strength: gate.max, def: a.def, socket: a.socket });
+        }
+      }
+      if (a.def.kind === 'DOCTRINE' && !sc.doctrine && r) {
+        sc.doctrine = { def: a.def, socket: a.socket, nodes: new Set(nodesInRadius(a.socket, r).filter(n => RADIUS_TIERS.has(n.tier)).map(n => n.id)) };
+      }
+      if (a.def.kind === 'ROOT_CONDUIT' && !sc.conduit) sc.conduit = { def: a.def, socket: a.socket, aff: a.entry.aff || AFFINITY_KEYS[0], route: null, count: 0 };
+      if (a.def.kind === 'MODSPEC_CACHE') {
+        for (const id of a.entry.grants || []) {
+          const n = byId.get(id);
+          if (!n) continue;
+          let status = 'active';
+          if (sat(id)) status = 'byPath';
+          else if (sc.granted.has(id)) status = 'duplicate';
+          else if (!state.volumes && n.volume !== 'core') status = 'volumeOff';
+          sc.granted.set(id, sc.granted.get(id) || { def: a.def, socket: a.socket, status });
+        }
+      }
+    }
+    // A granted node the rules refuse stays inactive (AllocationCheck.grant: eligibility only, item cost waived).
+    const placed = buildEntries(null, false);
+    for (const [id, g] of sc.granted) {
+      if (g.status !== 'active') continue;
+      const b = blockOf(byId.get(id), null, placed);
+      if (b) { g.status = 'ineligible'; g.block = b; } else placed.push(entryFor(byId.get(id), null));
+    }
+    if (sc.conduit) {
+      const route = conduitRoute(sc.conduit.socket, id => sat(id) || sc.granted.get(id)?.status === 'active');
+      sc.conduit.route = route;
+      sc.conduit.count = route ? Math.max(0, route.length - 2) : 0;
+    }
+    subCache = sc;
+    return sc;
+  }
+  const grantedActive = id => { const g = subState().granted.get(id); return !!g && g.status === 'active'; };
+  const held = id => sat(id) || grantedActive(id);
+  // RootConduits.allocatedRoute: shortest route over allocated nodes from the root to the socket; exits only through partners.
+  function conduitRoute(socket, isHeld) {
+    if (!state.root) return null;
+    const prev = new Map([[state.root, null]]);
+    const queue = [byId.get(state.root)];
+    for (let qi = 0; qi < queue.length; qi++) {
+      const cur = queue[qi];
+      if (cur === socket) break;
+      const steps = cur.adj.filter(m => m.tier !== 'WORMHOLE_EXIT');
+      const p = partnerOf(cur);
+      if (p) steps.push(p);
+      for (const m of steps) {
+        if (prev.has(m.id) || !isHeld(m.id)) continue;
+        prev.set(m.id, cur.id);
+        queue.push(m);
+      }
+    }
+    if (!prev.has(socket.id)) return null;
+    const route = [];
+    for (let id = socket.id; id; id = prev.get(id)) route.push(id);
+    return route.reverse();
+  }
+  // Per-ship limits: SubroutineKind (doctrine, conduit: 1) and the item's own socket_limit (uniques: 1).
+  function subLimitProblem(def, socketId) {
+    const others = [...state.subs].filter(([s]) => s !== socketId).map(([, e]) => SUBS.get(e.id)).filter(Boolean);
+    const kindCap = D.subroutineKinds && D.subroutineKinds[def.kind] ? D.subroutineKinds[def.kind].perShip : null;
+    if (kindCap != null && others.filter(o => o.kind === def.kind).length >= kindCap) return `Only ${kindCap} ${humanize(def.kind).toLowerCase()} per ship.`;
+    if (def.socketLimit && others.filter(o => o.id === def.id).length >= def.socketLimit) return `Only ${def.socketLimit} per ship.`;
+    return null;
+  }
+  const affinityName = k => AFFINITY_NAMES[k] || humanize(k);
+  function unlockText(t) {
+    const parts = (t.unlockConditions || []).map(c => {
+      if (c.type === 'blueprint') return `the ${hullModName(c.id || c.key)} blueprint`;
+      if (c.type === 'characterStat') return humanize(String(c.statId || c.key || 'a character stat').replace(/^has_/, ''));
+      if (c.type === 'memoryFlag') return humanize(String(c.key || 'a campaign flag').replace(/^\$/, '').replace(/([a-z])([A-Z])/g, '$1 $2'));
+      if (c.type === 'minShipLevel') return `ship level ${c.minLevel}`;
+      return humanize(String(c.type));
+    });
+    return parts.length ? parts.join(' or ') : 'an unlock';
   }
 
   // ------------------------------------------------------------------ template export
@@ -373,17 +769,52 @@
     const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
     return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
   }
+  // The template the build came from (loaded or saved) is shown in the top bar. `sig` is a hash of the root and steps
+  // at that moment, so the bar can say "(edited)" once the build no longer matches.
+  const hashText = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+  const templateSig = () => (state.root ? hashText(state.root + '|' + templateSteps().join(',')) : '');
+  function setCurrentTemplate(name) {
+    state.template = name ? { name: String(name).trim(), sig: templateSig() } : null;
+    renderChrome();
+    persist();
+  }
   function buildTemplate(name, id) {
     const t = { v: 1, id: id || newTemplateId(), name: name.trim(), root: state.root, hull: HULL_ENUM[state.hull], steps: templateSteps() };
     const anchors = templateAnchors();
     if (Object.keys(anchors).length) t.anchors = anchors;
     return t;
   }
+  // Template names: the mod's rules (TemplateNames: trimmed, 1 to 32 characters, unique per root) plus a safe character
+  // set, printable ASCII. The mod itself accepts any non-control character, but its keyboard input and default font only
+  // reliably handle English letters, digits and keyboard symbols, so other characters may not type or show in game.
+  const NAME_CHAR = /[\x20-\x7E]/;
+  const badNameChars = s => [...new Set([...String(s)].filter(c => !NAME_CHAR.test(c)))];
+  const charLabel = c => (/\s|[​-‏﻿]/.test(c) || c.codePointAt(0) < 32 ? '' : `"${c}" `) + `U+${c.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`;
   function templateNameProblem(name) {
     const n = name.trim();
     if (!n) return 'Give the template a name.';
+    const bad = badNameChars(n);
+    if (bad.length) return `Names can only use English letters, digits, spaces and keyboard symbols, so the game can type and show them. Remove ${bad.slice(0, 5).map(charLabel).join(', ')}${bad.length > 5 ? ', …' : ''}.`;
     if ([...n].length > TEMPLATE_NAME_MAX) return `Names can be at most ${TEMPLATE_NAME_MAX} characters.`;
     return null;
+  }
+  // Keeps a name box to the safe set as you type or paste: anything else is taken out and the status says what.
+  // (Skipped while an input method is composing, then applied when it finishes.)
+  function guardNameInput(input, report) {
+    const clean = () => {
+      const bad = badNameChars(input.value);
+      if (!bad.length) return false;
+      const pos = input.selectionStart;
+      const before = input.value.slice(0, pos ?? input.value.length);
+      input.value = [...input.value].filter(c => NAME_CHAR.test(c)).join('');
+      const caret = [...before].filter(c => NAME_CHAR.test(c)).join('').length;
+      try { input.setSelectionRange(caret, caret); } catch { /* not focused */ }
+      report(`Removed ${bad.slice(0, 5).map(charLabel).join(', ')}${bad.length > 5 ? ', …' : ''}: names can only use English letters, digits, spaces and keyboard symbols.`, 'err');
+      input.dataset.cleaned = '1'; // tells the box's own input handler to keep this message once
+      return true;
+    };
+    input.addEventListener('input', e => { if (!e.isComposing) clean(); }, true);
+    input.addEventListener('compositionend', () => { if (clean()) input.dispatchEvent(new Event('input')); });
   }
   // Reads the file's templates the way the mod does: an object with "templates", or a bare array. Empty means none.
   function parseTemplateFile(text) {
@@ -497,7 +928,38 @@
     if (!state.volumes) o.wv = 0;
     if (state.choice.size) o.c = Object.fromEntries(state.choice);
     if (state.links.size) o.s = Object.fromEntries(state.links);
+    const sh = state.ship, so = {};
+    if (sh.shield) so.sh = sh.shield;
+    if (sh.armor != null) so.ar = sh.armor;
+    for (const k of TRI_FACTS) if (sh[k] != null) so[k] = sh[k] ? 1 : 0;
+    if (sh.hullMods.size) so.hm = [...sh.hullMods];
+    if (sh.extraLogistics) so.lg = sh.extraLogistics;
+    if (sh.lockedGates.size) so.gt = [...sh.lockedGates];
+    if (sh.lockedTypes.size) so.ty = [...sh.lockedTypes];
+    if (Object.keys(so).length) o.ship = so;
+    if (state.template) { o.tn = state.template.name; o.th = state.template.sig; }
+    if (state.subs.size) {
+      o.sb = {};
+      for (const [s, e] of state.subs) {
+        const x = { i: e.id };
+        if (e.aff) x.a = e.aff;
+        if (e.grants && e.grants.length) x.g = e.grants;
+        o.sb[s] = x;
+      }
+    }
     return JSON.stringify(o);
+  }
+  function readShip(so) {
+    const sh = blankShip();
+    if (!so || typeof so !== 'object') return sh;
+    if (SHIELDS[so.sh]) sh.shield = so.sh;
+    if (Number.isFinite(so.ar) && so.ar >= 0) sh.armor = so.ar;
+    for (const k of TRI_FACTS) if (so[k] === 0 || so[k] === 1) sh[k] = so[k] === 1;
+    if (Array.isArray(so.hm)) sh.hullMods = new Set(so.hm.filter(h => typeof h === 'string'));
+    if (Number.isFinite(so.lg) && so.lg > 0) sh.extraLogistics = Math.min(20, Math.round(so.lg));
+    if (Array.isArray(so.gt)) sh.lockedGates = new Set(so.gt.filter(g => typeof g === 'string'));
+    if (Array.isArray(so.ty)) sh.lockedTypes = new Set(so.ty.filter(t => types.has(t)));
+    return sh;
   }
   function deserialize(json) {
     let o;
@@ -511,6 +973,16 @@
     if (Number.isFinite(o.cap) && o.cap > 0) state.cap = Math.min(999, Math.round(o.cap));
     state.coreWormholes = o.wc !== 0;
     state.volumes = o.wv !== 0;
+    state.ship = readShip(o.ship);
+    state.template = typeof o.tn === 'string' && o.tn.trim() ? { name: o.tn.trim().slice(0, 64), sig: String(o.th || '') } : null;
+    state.subs = new Map();
+    for (const [s, x] of Object.entries(o.sb || {})) {
+      if (!x || !SUBS.has(x.i) || !state.alloc.has(s) || state.links.has(s) || byId.get(s)?.tier !== 'SOCKET') continue;
+      const e = { id: x.i };
+      if (AFFINITY_KEYS.includes(x.a)) e.aff = x.a;
+      if (Array.isArray(x.g)) e.grants = x.g.map(currentNodeId).filter(id => byId.has(id)).slice(0, 3);
+      state.subs.set(s, e);
+    }
     if (!state.root) state.alloc.clear();
     else pruneSwitchedOff(); // a hand-edited or old link could hold nodes the options rule out
     return true;
@@ -619,25 +1091,52 @@
     return lines;
   }
   const grantedHullMods = t => [...new Set([t.vanillaHullMod, ...(t.phantomHullMods || [])].filter(Boolean))];
-  const hullModName = id => (D.hullModNames && D.hullModNames[id]) || humanize(id);
+  // Names for hull mods: the extracted table, then the skill type that grants the hull mod, then the id itself.
+  let grantedNames = null;
+  const hullModName = id => {
+    if (D.hullModNames && D.hullModNames[id]) return D.hullModNames[id];
+    if (!grantedNames) { grantedNames = new Map(); for (const t of D.types) for (const h of grantedHullMods(t)) if (!grantedNames.has(h)) grantedNames.set(h, t.name); }
+    return grantedNames.get(id) || id;
+  };
   const hullLabel = () => ({ frigate: 'frigate', destroyer: 'destroyer', cruiser: 'cruiser', capitalShip: 'capital' }[state.hull]);
   const volumeName = v => VOLUME_NAMES[v] || humanize(v);
 
   // ------------------------------------------------------------------ summary math
+  // Nodes that give their effects: allocated ones and nodes a modspec cache grants. Empty Shell nodes give nothing, and
+  // gated nodes only give theirs under the gate's condition (marked with `gate`).
   function contributions() {
+    const sc = subState();
     const list = [];
-    for (const n of nodes) if (sat(n.id)) list.push({ node: n, type: effectiveType(n) });
+    for (const n of nodes) {
+      if (!held(n.id) || sc.silent.has(n.id)) continue;
+      list.push({ node: n, type: effectiveType(n), gate: sat(n.id) || grantedActive(n.id) ? sc.gated.get(n.id) || null : null });
+    }
     return list;
   }
   function totals() {
     const sums = new Map();
-    const add = (effect, mag, src) => {
-      const cur = sums.get(effect) || { effect, magnitude: 0, sources: 0, affinity: 0 };
+    const add = (effect, mag, src, into = sums) => {
+      const cur = into.get(effect) || { effect, magnitude: 0, sources: 0, affinity: 0 };
       cur.magnitude += mag;
       if (src === 'aff') cur.affinity += mag; else cur.sources++;
-      sums.set(effect, cur);
+      into.set(effect, cur);
     };
-    for (const c of contributions()) for (const e of typeEffects(c.type)) add(e.effect, e.magnitude, 'node');
+    // Gated nodes: only effects read live in combat survive, at the gate's strength (SkillTreeEffectSource.gatedEffects).
+    const gated = new Map(); // condition text -> { sums, nodes, strength, item }
+    for (const c of contributions()) {
+      if (!c.gate) { for (const e of typeEffects(c.type)) add(e.effect, e.magnitude, 'node'); continue; }
+      const g = gated.get(c.gate.when) || { sums: new Map(), nodes: 0, strength: c.gate.strength, item: c.gate.def.name };
+      g.nodes++;
+      for (const e of typeEffects(c.type)) if (D.effects[e.effect]?.live) add(e.effect, e.magnitude * c.gate.strength, 'node', g.sums);
+      gated.set(c.gate.when, g);
+    }
+    // Socket effects: Empty Shell affinity and the Root Conduit route.
+    const sc = subState();
+    for (const a of sc.active) {
+      const shell = subLine(a.def, 'EVERY_AFFINITY_FLAT_PER_EMPTY_SHELL_NODE');
+      if (shell) for (const k of AFFINITY_KEYS) add(k, shell.max * (sc.shellCount.get(a.socket.id) || 0), 'node');
+    }
+    if (sc.conduit && sc.conduit.count) add(sc.conduit.aff, 5 * sc.conduit.count, 'node');
     const aff = {};
     for (const k of Object.keys(D.affinitySteps || {})) aff[k] = sums.get(k)?.magnitude || 0;
     const affBonuses = [];
@@ -648,7 +1147,7 @@
         if (reached > 0) add(st.effect, reached * st.bonus, 'aff');
       }
     }
-    return { sums, aff, affBonuses };
+    return { sums, aff, affBonuses, gated };
   }
   const GROUPS = [
     ['Affinity', /AFFINITY/],
@@ -802,6 +1301,7 @@
     const choosing = !state.root;
     const treeAlpha = choosing ? 0.35 : 1;
     drawConnectors(view, z, treeAlpha);
+    drawSubroutines(z);
     for (const n of nodes) if (n.tier !== 'ROOT') drawNode(n, view, z, treeAlpha);
     for (const n of roots) drawRoot(n, view, z, choosing);
     if (flash) {
@@ -811,6 +1311,40 @@
     }
     if (hover) drawHover(hover, z);
     drawRegionLabels(z);
+  }
+
+  // Socketed subroutines: a dashed circle for each radius, and the Root Conduit's route in its affinity's colour.
+  const SUB_COLOURS = { DOCTRINE: [255, 211, 77], UNIQUE: [190, 140, 255], ROOT_CONDUIT: [140, 228, 255] };
+  const connectorByPair = new Map(connectors.map(c => [pairKey(c.a.id, c.b.id), c]));
+  function drawSubroutines(z) {
+    const sc = subState();
+    const px = 1 / z;
+    for (const a of sc.active) {
+      const r = subRadius(a.def);
+      if (!r) continue;
+      const col = SUB_COLOURS[a.def.kind] || GLOW;
+      ctx.fillStyle = rgba(col, 0.05);
+      ctx.beginPath(); ctx.arc(a.socket.x, a.socket.y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = rgba(col, 0.6);
+      ctx.lineWidth = 2 * px;
+      ctx.setLineDash([10 * px, 8 * px]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    const c = sc.conduit;
+    if (c && c.route && c.count) {
+      ctx.strokeStyle = rgba(AFFINITY_COLOURS[c.aff] || GLOW, 0.85);
+      ctx.lineWidth = Math.max(3 * px, 10);
+      ctx.lineCap = 'round';
+      for (let i = 1; i < c.route.length; i++) {
+        const con = connectorByPair.get(pairKey(c.route[i - 1], c.route[i]));
+        ctx.beginPath();
+        if (con) traceConnector(con);
+        else { const p = byId.get(c.route[i - 1]), q = byId.get(c.route[i]); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); }
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+    }
   }
 
   // Tree names, drawn in screen space once a tree is small on screen; they fade out as you zoom in.
@@ -1016,7 +1550,7 @@
   }
   function canAllocateNow(n) {
     if (!state.root || sat(n.id) || n.tier === 'WORMHOLE_EXIT' || switchedOff(n)) return false;
-    return n.adj.some(m => sat(m.id));
+    return n.adj.some(m => sat(m.id)) && !staticBlock(n);
   }
   function breath() { return 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time * Math.PI * 2 / 2.2)); }
 
@@ -1024,7 +1558,7 @@
     const fp = n.fp;
     const reach = n.tier === 'NOTABLE' ? fp * 1.7 : n.tier === 'KEYSTONE' ? fp * 1.4 : fp;
     if (!inView(view, n.x, n.y, reach)) return;
-    const allocated = sat(n.id);
+    const allocated = held(n.id);
     const alpha = nodeAlpha(n, treeAlpha);
     const screenSize = fp * z;
     const pAdd = preview && preview.add && preview.add.has(n.id);
@@ -1032,9 +1566,10 @@
     const ac = accent();
     const px = 1 / z;
 
+    const refused = markRefused && isMarkedRefused(n);
     if (screenSize < 5) { // far away: a dot
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = allocated ? rgba(ac, 1) : n.tier === 'KEYSTONE' ? rgba(DEFAULT_AURORA, 0.9) : n.tier === 'NOTABLE' ? rgba(NOTABLE_PINK, 0.8) : 'rgba(170,170,170,0.7)';
+      ctx.fillStyle = refused ? rgba(RULE_PROBLEM, 0.9) : allocated ? rgba(ac, 1) : n.tier === 'KEYSTONE' ? rgba(DEFAULT_AURORA, 0.9) : n.tier === 'NOTABLE' ? rgba(NOTABLE_PINK, 0.8) : 'rgba(170,170,170,0.7)';
       const r = Math.max(1.5 * px, fp * 0.35);
       ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1;
@@ -1067,6 +1602,7 @@
     } else if (n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT') {
       drawWormhole(n, allocated, alpha);
       drawRingState(n, allocated, alpha, ac, pAdd, pRem, z, true);
+      if (refused) drawRefusedMark(n, alpha, z);
       ctx.globalAlpha = 1;
       return;
     } else if (n.tier === 'SOCKET') {
@@ -1087,7 +1623,36 @@
       }
     }
     drawRingState(n, allocated, alpha, ac, pAdd, pRem, z, false);
+    if (refused) drawRefusedMark(n, alpha, z);
     ctx.globalAlpha = 1;
+  }
+  // "Mark refused": a red X on unallocated nodes the rules refuse and on allocated nodes that break a rule.
+  let markRefused = true;
+  try { markRefused = localStorage.getItem('esp.markRefused') !== '0'; } catch { /* storage unavailable */ }
+  function isMarkedRefused(n) {
+    if (!state.root && n.tier === 'ROOT') return false;
+    return sat(n.id) ? rules().problems.has(n.id) : !switchedOff(n) && !!staticBlock(n);
+  }
+  function drawRefusedMark(n, alpha, z) {
+    const px = 1 / z;
+    const r = (n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT' ? n.fp * 0.42 : n.tier === 'SOCKET' ? n.fp * 0.5 : n.fp * ICON_INSET / 2) * 0.62;
+    ctx.globalAlpha = alpha;
+    ctx.lineCap = 'round';
+    for (const [col, w] of [['rgba(0,0,0,0.75)', Math.max(4 * px, n.fp * 0.13)], [rgba(RULE_PROBLEM, 0.95), Math.max(2 * px, n.fp * 0.07)]]) {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      ctx.moveTo(n.x - r, n.y - r); ctx.lineTo(n.x + r, n.y + r);
+      ctx.moveTo(n.x + r, n.y - r); ctx.lineTo(n.x - r, n.y + r);
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+  function setMarkRefused(on) {
+    markRefused = on;
+    els.optRefused.checked = on;
+    try { localStorage.setItem('esp.markRefused', on ? '1' : '0'); } catch { /* storage unavailable */ }
+    requestDraw();
   }
 
   function drawRingState(n, allocated, alpha, ac, pAdd, pRem, z, wormhole) {
@@ -1098,6 +1663,7 @@
     let col = null, a = 1;
     if (pRem) col = PREVIEW_REMOVE;
     else if (pAdd) col = PREVIEW_ADD;
+    else if (allocated && rules().problems.has(n.id)) { col = RULE_PROBLEM; a = 0.6 + 0.4 * breath(); }
     else if (allocated) col = ac;
     else if (canAllocateNow(n)) { col = ac; a = breath(); }
     if (searchHits && searchHits.has(n.id)) {
@@ -1276,9 +1842,17 @@
     hull: document.getElementById('hull'),
     optCore: document.getElementById('opt-core'),
     optVolumes: document.getElementById('opt-volumes'),
+    optRefused: document.getElementById('opt-refused'),
     search: document.getElementById('search'),
     searchCount: document.getElementById('search-count'),
     undo: document.getElementById('btn-undo'),
+    shipBtn: document.getElementById('btn-ship'),
+    storyBtn: document.getElementById('btn-story'),
+    tplGroup: document.getElementById('tpl-group'),
+    tplCurrent: document.getElementById('tpl-current'),
+    tplEdited: document.getElementById('tpl-edited'),
+    shipTab: document.getElementById('tab-ship'),
+    panelShip: document.getElementById('panel-ship'),
     panel: document.getElementById('panel'),
     panelBody: document.getElementById('panel-body'),
     panelSub: document.getElementById('panel-sub'),
@@ -1293,12 +1867,15 @@
   let cachedTotals = null;
 
   function changed() {
+    subCache = null;
+    ruleCache = null;
     cachedTotals = totals();
     updatePreview();
     renderChrome();
     renderPanel();
     if (hover) showTooltip(hover, lastMouse.x, lastMouse.y);
     persist();
+    if (!storyEl.hidden) renderStory();
     if (location.hash) history.replaceState(null, '', location.pathname + location.search);
     requestDraw();
   }
@@ -1315,6 +1892,13 @@
     els.optCore.checked = state.coreWormholes;
     els.optVolumes.checked = state.volumes;
     els.undo.disabled = undoStack.length === 0;
+    const shipN = shipRuleCount(), storyN = storyRuleCount();
+    els.shipBtn.textContent = shipN ? `Ship rules (${shipN})` : 'Ship rules';
+    els.storyBtn.textContent = storyN ? `Story rules (${storyN})` : 'Story rules';
+    els.shipTab.textContent = shipN ? `Ship (${shipN})` : 'Ship';
+    const tm = state.root ? state.template : null;
+    els.tplGroup.hidden = !tm;
+    if (tm) { els.tplCurrent.textContent = tm.name; els.tplEdited.hidden = templateSig() === tm.sig; }
     els.banner.hidden = !!state.root;
     els.banner.textContent = S['ui.node.startingRootPrompt'] || 'Choose a root';
   }
@@ -1327,7 +1911,14 @@
       const v = Math.round((t.aff[k] || 0) * 100) / 100;
       return `<div class="aff" style="border-color:${rgba(AFFINITY_COLOURS[k], 0.4)}"><div class="n" style="color:${rgba(AFFINITY_COLOURS[k], 1)}">${v}</div><div class="t">${AFFINITY_NAMES[k]} affinity</div></div>`;
     }).join('');
+    renderAffMix();
 
+    // The Ship tab is a form, kept in its own element so typing isn't lost when the panel re-renders.
+    const onShip = panelTab === 'ship';
+    els.panelBody.hidden = onShip;
+    els.panelShip.hidden = !onShip;
+    els.shipBtn.setAttribute('aria-pressed', String(onShip && !els.panel.classList.contains('closed')));
+    if (onShip) { renderShipPane(); els.panelFoot.textContent = footText(); return; }
     if (panelTab === 'search') {
       els.panelBody.innerHTML = searchResultsHtml();
       els.panelFoot.textContent = footText();
@@ -1368,6 +1959,15 @@
         for (const txt of c.type.effectText || []) extras.add(styled(txt));
       }
       if (extras.size) html += `<div class="stat-group"><h3>Other effects</h3>${[...extras].map(e => `<div class="stat-line">${e}</div>`).join('')}</div>`;
+      // Gated nodes: their live-in-combat effects at the gate's strength, only under its condition.
+      for (const [when, g] of t.gated || []) {
+        const lines = [...g.sums.values()].filter(s => Math.abs(s.magnitude) > 1e-9);
+        html += `<div class="stat-group"><h3>${esc(when)} (${esc(g.item)}, ×${g.strength})</h3>` +
+          (lines.length ? lines.map(s => `<div class="stat-line">${describe(s.effect, s.magnitude)}</div>`).join('') : '<div class="stat-line muted">Nothing: none of their effects are read live in combat.</div>') +
+          `<div class="stat-line muted">${g.nodes} allocated node${g.nodes === 1 ? '' : 's'} in its radius give these instead of their usual effects.</div></div>`;
+      }
+      const subLines = subState().active.map(a => `<div class="stat-line"><span class="hl">${esc(a.def.name)}</span> <span class="src">${esc(subSummary(a.def, a.entry, a.socket))}</span></div>`);
+      if (subLines.length) html += `<div class="stat-group"><h3>Subroutines</h3>${subLines.join('')}</div>`;
       const reached = t.affBonuses.filter(b => b.reached > 0);
       if (reached.length) {
         html += '<div class="stat-group"><h3>Affinity thresholds reached</h3>';
@@ -1387,9 +1987,72 @@
         return `<div class="node-row ${n.tier.toLowerCase()}" data-node="${esc(n.id)}"><img src="assets/${esc(t2.icon)}" alt=""><div><div class="nm">${esc(t2.name)}</div><div class="tr">${esc(sub)}</div></div></div>`;
       }).join('') : '<div class="empty">No notables or keystones allocated yet.</div>';
     }
+    els.panelBody.insertAdjacentHTML('afterbegin', problemsHtml());
     els.panelFoot.textContent = footText();
   }
-  const footText = () => `Data: Exiled Sector ${D.modVersion || ''} · extracted ${D.generated}. Magnitudes are the mod's current placeholders.`;
+  // Allocated nodes that break a rule, for the top of the summary (rows jump to the node).
+  function problemsHtml() {
+    const problems = rules().problems;
+    if (!problems.size) return '';
+    const rows = [...problems].map(([id, b]) => {
+      const n = byId.get(id), t2 = effectiveType(n);
+      return `<div class="node-row" data-node="${esc(id)}"><img src="assets/${esc(t2.icon)}" alt=""><div><div class="nm">${esc(t2.name)}</div><div class="tr bad">${esc(b.text)}</div></div></div>`;
+    }).join('');
+    const many = problems.size > 1;
+    return `<div class="rule-problems"><h3>${problems.size} node${many ? 's break' : ' breaks'} a node rule</h3>` +
+      `<p class="muted">The game wouldn't allow ${many ? 'these' : 'this'} with the current hull, ship rules and story rules. Remove ${many ? 'them' : 'it'}, or change those settings.</p>${rows}</div>`;
+  }
+  // Affinity nodes block under the affinity totals: set them all to one option, or to a split of the three.
+  const affMix = {
+    box: document.getElementById('aff-mix'),
+    count: document.getElementById('aff-count'),
+    inputs: [...document.querySelectorAll('#aff-mix input[data-mix]')],
+    note: document.getElementById('aff-note'),
+    apply: document.getElementById('aff-apply'),
+  };
+  function affCounts() {
+    const c = Object.fromEntries(affMix.inputs.map(i => [i.dataset.mix, 0]));
+    for (const n of affinityNodes()) { const o = state.choice.get(n.id); if (o in c) c[o]++; }
+    return c;
+  }
+  const affTargets = () => Object.fromEntries(affMix.inputs.map(i => [i.dataset.mix, Math.max(0, Math.round(Number(i.value) || 0))]));
+  function renderAffMix() {
+    const n = state.root ? affinityNodes().length : 0;
+    affMix.box.hidden = !n;
+    if (!n) return;
+    affMix.count.textContent = n;
+    if (!affMix.inputs.includes(document.activeElement)) { const c = affCounts(); for (const i of affMix.inputs) i.value = c[i.dataset.mix]; }
+    updateAffNote();
+  }
+  function updateAffNote() {
+    const n = affinityNodes().length, t = affTargets(), c = affCounts();
+    const sum = Object.values(t).reduce((a, b) => a + b, 0);
+    affMix.apply.disabled = sum !== n || Object.keys(c).every(k => c[k] === t[k]);
+    affMix.note.textContent = sum !== n ? `These add up to ${sum}; ${n} affinity node${n === 1 ? ' is' : 's are'} allocated.` : '';
+    affMix.note.className = sum !== n ? 'bad' : 'muted';
+  }
+  function applyAffinity(targets) {
+    const moved = setAffinitySplit(targets);
+    for (const i of affMix.inputs) i.blur();
+    renderAffMix();
+    if (moved) toast(`Changed ${moved} affinity node${moved === 1 ? '' : 's'}. Undo goes back.`);
+  }
+  for (const i of affMix.inputs) {
+    i.addEventListener('input', updateAffNote);
+    i.addEventListener('keydown', e => { if (e.key === 'Enter' && !affMix.apply.disabled) { e.preventDefault(); applyAffinity(affTargets()); } });
+  }
+  affMix.apply.addEventListener('click', () => applyAffinity(affTargets()));
+  affMix.box.addEventListener('click', e => {
+    const b = e.target.closest('[data-all]');
+    if (b) applyAffinity({ [b.dataset.all]: affinityNodes().length });
+  });
+
+  // After a hull or ship rules change: say so when allocated nodes newly break a rule.
+  function warnNewProblems(before) {
+    const now = rules().problems.size;
+    if (now > before) toast(`${now} allocated node${now > 1 ? 's break' : ' breaks'} a node rule now; see the top of the summary. Undo goes back.`);
+  }
+  const footText = () => `Exiled Sector ${D.modVersion || ''}`.trim();
 
   // ------------------------------------------------------------------ tooltip
   let lastMouse = { x: 0, y: 0 };
@@ -1401,14 +2064,18 @@
 
     if (isChoice(n)) {
       const cur = state.choice.get(n.id);
+      const others = state.root ? (allocated ? buildEntries(n.id) : rules().list) : null;
       for (const id of n.type.options) {
         const o = types.get(id);
         if (!o) continue;
-        html += `<div class="tt-option"><div class="${cur === id ? 'on' : ''}">${esc(o.name)}${cur === id ? ' ✓' : ''}</div>${typeLines(o).map(l => `<div>${l}</div>`).join('')}</div>`;
+        const b = others && cur !== id ? blockOf(n, id, others) : null;
+        html += `<div class="tt-option"><div class="${cur === id ? 'on' : ''}">${esc(o.name)}${cur === id ? ' ✓' : ''}</div>${typeLines(o).map(l => `<div>${l}</div>`).join('')}${b ? `<div class="bad">${esc(b.text)}</div>` : ''}</div>`;
       }
     } else if (n.tier === 'SOCKET') {
       const e = state.links.get(n.id);
-      html += `<div class="tt-effects"><div>${e ? `Linked to the <span class="hl">${esc(volumeName(byId.get(e).volume))}</span> wormhole exit.` : 'Holds a subroutine. Install an anchor to open a wormhole to a faction volume.'}</div></div>`;
+      const se = state.subs.get(n.id), sd = se && SUBS.get(se.id);
+      if (sd) html += `<div class="tt-effects"><div><span class="hl">${esc(sd.name)}</span></div><div>${esc(subSummary(sd, se, n))}</div></div>${sd.description ? `<div class="tt-flavour">${esc(sd.description)}</div>` : ''}`;
+      else html += `<div class="tt-effects"><div>${e ? `Linked to the <span class="hl">${esc(volumeName(byId.get(e).volume))}</span> wormhole exit.` : 'Holds one item: a subroutine, or an anchor that opens a wormhole to a faction volume.'}</div></div>`;
     } else if (n.tier === 'WORMHOLE') {
       const p = partnerOf(n);
       html += `<div class="tt-effects"><div>Leads to ${p ? `<span class="hl">${esc(effectiveType(p).name)}</span>` : 'another wormhole'}. Allocating it also allocates the other end.</div></div>`;
@@ -1422,6 +2089,14 @@
     if (reqs.length) html += `<div class="tt-note">Needs a ship with: ${esc(reqs.join(', '))}</div>`;
     if (n.gates.length) html += `<div class="tt-note">In game, unlocked by: ${esc(n.gates.map(g => humanize(g.slice(5))).join(', '))}</div>`;
     if (t.flavour) html += `<div class="tt-flavour">${esc(t.flavour)}</div>`;
+    const problem = allocated && rules().problems.get(n.id);
+    if (problem) html += `<div class="tt-warn">Breaks a node rule: ${esc(problem.text)}</div>`;
+    html += radiusNotesHtml(n);
+    const grant = subState().granted.get(n.id);
+    if (grant && grant.status === 'active') {
+      html += `<div class="tt-note">Allocated for free by the ${esc(grant.def.name)} (no path, no node slot). Change the cache's notables in its socket to free it.</div>`;
+      return html;
+    }
 
     // action hint
     const jt = jumpTarget(n);
@@ -1432,14 +2107,16 @@
     else if (n.id === state.root) html += '<div class="tt-note">Starting root. Right-click to reset the build.</div>';
     else if (allocated) {
       const gone = removalSet(n) || [];
-      if (n.tier === 'SOCKET') html += `<div class="tt-note">Click to ${state.links.get(n.id) ? 'change or unlink the anchor' : 'link an anchor'}. Right-click to remove.</div>`;
+      if (n.tier === 'SOCKET') html += `<div class="tt-note">Click to ${state.links.get(n.id) || state.subs.get(n.id) ? 'change what it holds' : 'socket a subroutine or link an anchor'}. Right-click to remove.</div>`;
       else if (isChoice(n)) html += '<div class="tt-note">Click to switch the option. Right-click to remove.</div>';
       else html += `<div class="tt-warn">Click to remove${gone.length > 1 ? ` (${gone.length} nodes)` : ''}.</div>`;
     } else if (switchedOff(n)) {
       html += `<div class="tt-warn">${n.tier === 'WORMHOLE' ? 'Core wormholes' : 'Faction volumes'} are off. Turn them on in the top bar.</div>`;
     } else {
-      const path = pathTo(n);
-      if (!path) html += `<div class="tt-warn">${n.tier === 'WORMHOLE_EXIT' ? 'Link an anchor in a subroutine socket to reach this.' : 'Not reachable from your allocated nodes.'}</div>`;
+      const found = findPath(n);
+      const path = found.path;
+      if (!path && found.block) html += `<div class="tt-warn">Can't be allocated. ${esc(refusalText(n, found.block))}</div>`;
+      else if (!path) html += `<div class="tt-warn">${n.tier === 'WORMHOLE_EXIT' ? 'Link an anchor in a subroutine socket to reach this.' : 'Not reachable from your allocated nodes.'}</div>`;
       else if (used() + path.length > state.cap) html += `<div class="tt-warn">Needs ${path.length} node${path.length > 1 ? 's' : ''}; ${Math.max(0, state.cap - used())} left under the cap.</div>`;
       else html += `<div class="tt-note">Click to allocate${path.length > 1 ? ` (${path.length} nodes)` : ''}${isChoice(n) ? ' and pick an option' : ''}.</div>`;
     }
@@ -1451,6 +2128,41 @@
       }
     }
     return html;
+  }
+  // How socketed subroutines affect a node in their radius.
+  function radiusNotesHtml(n) {
+    const sc = subState();
+    let html = '';
+    if (sc.silent.has(n.id)) html += '<div class="tt-warn">Grants nothing: it\'s a small node in the Empty Shell Axion\'s radius (the socket gives affinity for it instead).</div>';
+    else if (n.tier === 'SMALL' && sc.active.some(a => subLine(a.def, 'EVERY_AFFINITY_FLAT_PER_EMPTY_SHELL_NODE') && nodesInRadius(a.socket, subRadius(a.def)).includes(n))) {
+      html += '<div class="tt-note">In the Empty Shell Axion\'s radius: it would grant nothing if allocated.</div>';
+    }
+    const g = sc.gated.get(n.id);
+    if (g) html += `<div class="tt-note">${esc(g.def.name)}: applies only ${esc(g.when.toLowerCase())}, at ×${g.strength}. Effects not read live in combat are lost.</div>`;
+    const d = sc.doctrine;
+    if (d && d.nodes.has(n.id)) {
+      if (d.def.behaviour === 'REWRITE') {
+        const pool = (n.tier === 'KEYSTONE' ? d.def.keystones : n.tier === 'NOTABLE' ? d.def.notables : d.def.small_nodes) || [];
+        html += pool.length ? `<div class="tt-note">${esc(d.def.name)} rewrites it into one of: ${esc(pool.map(id => types.get(id)?.name || id).join(', '))}. Which one is rolled per item; the planner shows the original.</div>`
+          : `<div class="tt-note">In the ${esc(d.def.name)}'s radius, but it has no ${n.tier.toLowerCase()} replacements, so it stays as it is.</div>`;
+      } else {
+        const lines = (d.def.modifiers || []).map(m => (D.subroutineModifiers[m] || []).map(l => describeRange(l)).join(' and ')).filter(Boolean);
+        html += `<div class="tt-note">${esc(d.def.name)} adds ${d.def.minLines === d.def.maxLines ? d.def.minLines : `${d.def.minLines}–${d.def.maxLines}`} of these lines (rolled per item, not in the totals):</div>` +
+          lines.map(l => `<div class="tt-option-line">· ${l}</div>`).join('');
+      }
+    }
+    if (sc.conduit && sc.conduit.route && sc.conduit.route.includes(n.id) && n !== sc.conduit.socket && n.id !== state.root) html += `<div class="tt-note">On the Root Conduit's route: +5 ${esc(affinityName(sc.conduit.aff))} affinity.</div>`;
+    return html;
+  }
+  // "+2–4% more armor": an effect described with a min–max range.
+  function describeRange(l) {
+    if (l.min === l.max) return describe(l.effect, l.min);
+    const lo = describeRaw(l.effect, l.min), hi = describeRaw(l.effect, l.max);
+    // Join the two wordings on their first differing number.
+    const a = lo.match(/-?\d+(\.\d+)?/), b = hi.match(/-?\d+(\.\d+)?/);
+    if (!(a && b && lo.replace(a[0], '') === hi.replace(b[0], ''))) return styled(`${lo} to ${hi}`);
+    const [p, q] = [a[0], b[0]].sort((x, y) => Math.abs(x) - Math.abs(y));
+    return styled(lo.replace(a[0], `${p}–${q}`));
   }
   function showTooltip(n, x, y) {
     els.tooltip.innerHTML = tooltipHtml(n);
@@ -1508,7 +2220,10 @@
   // ------------------------------------------------------------------ picker (choice nodes, sockets, wormholes)
   let pickerFor = null;
   function openPicker(n, sx, sy) {
+    if (!reopening) socketSection = null;
+    reopening = false;
     pickerFor = n;
+    pickerPos = { x: sx, y: sy };
     hideTooltip();
     let html = '';
     if (n.id === state.root) {
@@ -1521,11 +2236,13 @@
     } else if (isChoice(n)) {
       const cur = state.choice.get(n.id);
       html += `<h4>${esc(n.type.name)}: choose an option</h4>`;
+      const others = sat(n.id) ? buildEntries(n.id) : rules().list;
       for (const id of n.type.options) {
         const o = types.get(id);
         if (!o) continue;
         const line = typeLines(o).map(plain).join(' ');
-        html += `<button data-opt="${esc(id)}" class="${cur === id ? 'current' : ''}"><img src="assets/${esc(o.icon)}" alt=""><span><div>${esc(o.name)}</div><div class="sub">${esc(line)}</div></span></button>`;
+        const b = cur === id ? null : blockOf(n, id, others);
+        html += `<button data-opt="${esc(id)}" class="${cur === id ? 'current' : ''}" ${b ? 'disabled' : ''}><img src="assets/${esc(o.icon)}" alt=""><span><div>${esc(o.name)}</div><div class="sub">${esc(line)}</div>${b ? `<div class="sub bad">${esc(b.text)}</div>` : ''}</span></button>`;
       }
       if (sat(n.id)) html += `<button data-act="remove" class="danger">Remove node</button>`;
     } else if (n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT') {
@@ -1545,35 +2262,141 @@
         }
       }
     } else if (n.tier === 'SOCKET') {
+      // Two collapsible sections; the one in use says what the socket holds.
+      const se = state.subs.get(n.id), sd = se && SUBS.get(se.id);
       const cur = state.links.get(n.id);
-      html += '<h4>Install an anchor</h4>';
-      if (cur) html += `<button data-act="jump"><span><div>Jump to ${esc(placeName(byId.get(cur)))}</div><div class="sub">Ctrl+click jumps straight there</div></span></button>`;
-      if (!state.volumes) {
-        html += '<div class="sub" style="padding:2px 0 6px">Faction volumes are off. Turn them on in the top bar to link anchors.</div>';
-        html += '<button data-act="remove" class="danger">Remove socket</button>';
-        els.picker.innerHTML = html;
-        els.picker.hidden = false;
-        placeFloating(els.picker, sx, sy);
-        return;
-      }
-      const taken = new Set([...state.links].filter(([s]) => s !== n.id).map(([, e]) => e));
-      for (const ex of [...exits].sort((a, b) => volumeName(a.volume).localeCompare(volumeName(b.volume)))) {
-        const dis = taken.has(ex.id);
-        const sub = dis ? 'Linked to another socket' : ex.gates.length ? 'In game: ' + ex.gates.map(g => humanize(g.slice(5))).join(', ') : '';
-        html += `<button data-exit="${esc(ex.id)}" class="${cur === ex.id ? 'current' : ''}" ${dis ? 'disabled' : ''}><span><div>${esc(volumeName(ex.volume))}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</span></button>`;
-      }
-      if (cur) html += '<button data-act="unlink">Unlink anchor</button>';
+      html += `<h4>Subroutine socket</h4>`;
+      html += `<button data-section="sub" class="section${socketSection === 'sub' ? ' open' : ''}" aria-expanded="${socketSection === 'sub'}"><span><div>${socketSection === 'sub' ? '▾' : '▸'} Subroutine</div><div class="sub">${esc(sd ? sd.name : 'None socketed')}</div></span></button>`;
+      if (socketSection === 'sub') html += `<div class="section-body">${subroutinePickerHtml(n)}</div>`;
+      html += `<button data-section="anchor" class="section${socketSection === 'anchor' ? ' open' : ''}" aria-expanded="${socketSection === 'anchor'}"><span><div>${socketSection === 'anchor' ? '▾' : '▸'} Wormhole anchor</div><div class="sub">${esc(cur ? `Linked to ${volumeName(byId.get(cur).volume)}` : 'None linked')}</div></span></button>`;
+      if (socketSection === 'anchor') html += `<div class="section-body">${anchorPickerHtml(n)}</div>`;
       html += '<button data-act="remove" class="danger">Remove socket</button>';
     }
     els.picker.innerHTML = html;
     els.picker.hidden = false;
     placeFloating(els.picker, sx, sy);
   }
+  // The subroutine part of a socket's picker: what's socketed (with its settings), then every subroutine to socket.
+  const grantLabel = n => `${n.type.name} · ${volumeName(n.volume)}`;
+  const grantByLabel = new Map(grantableNodes.map(n => [grantLabel(n).toLowerCase(), n.id]));
+  function subroutinePickerHtml(n) {
+    const e = state.subs.get(n.id);
+    const def = e && SUBS.get(e.id);
+    let html = '';
+    if (def) {
+      html += `<h4>Socketed subroutine</h4><div class="sub-current"><img src="assets/${esc(def.icon)}" alt=""><div><div>${esc(def.name)}</div><div class="sub">${esc(subSummary(def, e, n))}</div></div></div>`;
+      if (def.kind === 'ROOT_CONDUIT') {
+        html += '<div class="sub">Affinity (rolled per item; pick the one yours shows):</div><div class="pick-row">' +
+          AFFINITY_KEYS.map(k => `<button data-aff="${k}" class="${e.aff === k ? 'current' : ''}">${esc(affinityName(k))}</button>`).join('') + '</div>';
+      }
+      if (def.kind === 'MODSPEC_CACHE') {
+        const grants = e.grants || [];
+        const sc = subState();
+        html += `<div class="sub">Notables it allocates (${grants.length} of up to ${cacheMax(def)}; rolled per item, pick the ones yours shows):</div>`;
+        for (const id of grants) {
+          const g = byId.get(id), st = sc.granted.get(id);
+          const note = !st ? '' : st.status === 'active' ? '' : st.status === 'byPath' ? ' (idle: already allocated)' : st.status === 'duplicate' ? ' (idle: another cache allocates it)' : st.status === 'volumeOff' ? ' (inert while faction volumes are off)' : ` (inactive: ${st.block ? st.block.text : 'refused'})`;
+          html += `<button data-ungrant="${esc(id)}" title="Remove from the cache"><span><div>${esc(g ? g.type.name : id)} ×</div>${note ? `<div class="sub bad">${esc(note.trim())}</div>` : ''}</span></button>`;
+        }
+        if (grants.length < cacheMax(def)) {
+          html += `<input id="grant-input" list="grant-list" type="text" autocomplete="off" placeholder="Add a notable by name" style="width:100%">` +
+            `<datalist id="grant-list">${grantableNodes.filter(g => !grants.includes(g.id)).map(g => `<option value="${esc(grantLabel(g))}"></option>`).join('')}</datalist>`;
+        }
+      }
+      html += '<button data-act="unsub" class="danger">Remove subroutine</button>';
+    }
+    html += `<h4>${def ? 'Subroutines (click the socketed one again to remove it)' : 'Socket a subroutine'}</h4>`;
+    for (const s of SUBS.values()) {
+      const current = def && s.id === def.id;
+      const problem = current ? null : subLimitProblem(s, n.id);
+      const sub = current ? 'Socketed. Click to remove.' : problem || subKindText(s);
+      html += `<button data-sub="${esc(s.id)}" class="${current ? 'current' : ''}" ${problem ? 'disabled' : ''} title="${current ? 'Remove from this socket' : 'Socket into this socket'}"><img src="assets/${esc(s.icon)}" alt=""><span><div>${esc(s.name)}</div><div class="sub">${esc(sub)}</div></span></button>`;
+    }
+    return html;
+  }
+  const subKindText = s => s.kind === 'DOCTRINE' ? `Doctrine (${s.behaviour === 'REWRITE' ? 'rewrites' : 'augments'} nodes in a ${s.radius.replace('_', ' ')} radius)`
+    : s.kind === 'ROOT_CONDUIT' ? 'Affinity for each node between the root and its socket'
+    : s.kind === 'MODSPEC_CACHE' ? 'Allocates 1 to 3 notables for free'
+    : s.lines && s.lines.some(l => GATE_LINES[l.effect]) ? `Gates nodes in a ${s.radius} radius: ${GATE_LINES[s.lines.find(l => GATE_LINES[l.effect]).effect].toLowerCase()}, ×${s.lines[0].max}`
+    : s.lines && subLine(s, 'EVERY_AFFINITY_FLAT_PER_EMPTY_SHELL_NODE') ? `Silences small nodes in an ${s.radius.replace('_', ' ')} radius for affinity` : humanize(s.kind);
+  // One line on what a socketed subroutine does right now.
+  function subSummary(def, e, socket) {
+    const sc = subState();
+    const on = state.alloc.has(socket.id);
+    if (!on) return 'Inactive: the socket isn\'t allocated.';
+    if (def.kind === 'ROOT_CONDUIT') {
+      const c = sc.conduit && sc.conduit.socket === socket ? sc.conduit : null;
+      return c && c.route ? `+${5 * c.count} ${affinityName(c.aff)} affinity (${c.count} node${c.count === 1 ? '' : 's'} between the root and this socket).` : 'Grants nothing: no allocated route from the root reaches this socket.';
+    }
+    if (subLine(def, 'EVERY_AFFINITY_FLAT_PER_EMPTY_SHELL_NODE')) {
+      const k = sc.shellCount.get(socket.id) || 0, silent = [...sc.silent].length;
+      return `+${k} to every affinity (${k} small nodes in its radius). ${silent} allocated small node${silent === 1 ? '' : 's'} in it grant nothing.`;
+    }
+    const gate = (def.lines || []).find(l => GATE_LINES[l.effect]);
+    if (gate) {
+      const mine = [...sc.gated.values()].filter(g => g.socket === socket);
+      const allocatedIn = [...sc.gated].filter(([id, g]) => g.socket === socket && held(id)).length;
+      return `${GATE_LINES[gate.effect]}: ${allocatedIn} allocated node${allocatedIn === 1 ? '' : 's'} of ${mine.length} in its radius apply ×${gate.max}, live-in-combat effects only.`;
+    }
+    if (def.kind === 'DOCTRINE') {
+      const d = sc.doctrine && sc.doctrine.socket === socket ? sc.doctrine : null;
+      if (!d) return 'Inactive: only one doctrine archive works per ship.';
+      return `${d.nodes.size} nodes in its radius are ${def.behaviour === 'REWRITE' ? 'rewritten' : 'augmented'}. What each gets is rolled per item, so the totals leave it out.`;
+    }
+    if (def.kind === 'MODSPEC_CACHE') {
+      const act = (e.grants || []).filter(id => sc.granted.get(id)?.status === 'active').length;
+      return `${act} notable${act === 1 ? '' : 's'} allocated for free (no path, no node slot).`;
+    }
+    return def.description || '';
+  }
+  // The anchor part of a socket's picker: every faction volume exit to link.
+  function anchorPickerHtml(n) {
+    const cur = state.links.get(n.id);
+    let html = '';
+    if (cur) html += `<button data-act="jump"><span><div>Jump to ${esc(placeName(byId.get(cur)))}</div><div class="sub">Ctrl+click jumps straight there</div></span></button>`;
+    if (!state.volumes) return html + '<div class="sub" style="padding:2px 0 6px">Faction volumes are off. Turn them on in the top bar to link anchors.</div>';
+    const taken = new Set([...state.links].filter(([s]) => s !== n.id).map(([, e]) => e));
+    const list = rules().list;
+    for (const ex of [...exits].sort((a, b) => volumeName(a.volume).localeCompare(volumeName(b.volume)))) {
+      const block = taken.has(ex.id) || cur === ex.id ? null : blockOf(ex, null, list);
+      const dis = taken.has(ex.id) || !!block;
+      const sub = taken.has(ex.id) ? 'Linked to another socket' : block ? block.text : ex.gates.length ? 'In game: ' + ex.gates.map(g => humanize(g.slice(5))).join(', ') : '';
+      html += `<button data-exit="${esc(ex.id)}" class="${cur === ex.id ? 'current' : ''}" ${dis ? 'disabled' : ''}><span><div>${esc(volumeName(ex.volume))}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</span></button>`;
+    }
+    if (cur) html += '<button data-act="unlink">Unlink anchor</button>';
+    return html;
+  }
+  let pickerPos = { x: 0, y: 0 };
+  // Which socket section is expanded ('sub' | 'anchor' | null). Kept while the picker redraws after a change in it.
+  let socketSection = null, reopening = false;
+  function reopenPicker(n) { reopening = true; openPicker(n, pickerPos.x, pickerPos.y); }
+  function addGrantFromInput(n) {
+    const input = document.getElementById('grant-input');
+    if (!input) return;
+    const id = grantByLabel.get(input.value.trim().toLowerCase());
+    if (!id) { toast('Pick a notable from the list.'); return; }
+    const e = state.subs.get(n.id);
+    setGrants(n, [...(e.grants || []), id]);
+    reopenPicker(n);
+    document.getElementById('grant-input')?.focus();
+  }
+  els.picker.addEventListener('change', e => { if (e.target.id === 'grant-input' && pickerFor) addGrantFromInput(pickerFor); });
+  els.picker.addEventListener('keydown', e => { if (e.target.id === 'grant-input' && e.key === 'Enter' && pickerFor) { e.preventDefault(); addGrantFromInput(pickerFor); } });
   function closePicker() { els.picker.hidden = true; pickerFor = null; }
   els.picker.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b || !pickerFor) return;
     const n = pickerFor;
+    if (b.dataset.section) { socketSection = socketSection === b.dataset.section ? null : b.dataset.section; reopenPicker(n); return; }
+    if (b.dataset.sub) {
+      // Clicking the socketed subroutine again takes it out; any other one replaces it.
+      if (state.subs.get(n.id)?.id === b.dataset.sub) removeSub(n); else socketSub(n, b.dataset.sub);
+      reopenPicker(n);
+      return;
+    }
+    if (b.dataset.aff) { const s = state.subs.get(n.id); if (s && s.aff !== b.dataset.aff) { pushUndo(); s.aff = b.dataset.aff; changed(); } reopenPicker(n); return; }
+    if (b.dataset.ungrant) { const s = state.subs.get(n.id); setGrants(n, (s.grants || []).filter(id => id !== b.dataset.ungrant)); reopenPicker(n); return; }
+    if (b.dataset.act === 'unsub') { removeSub(n); reopenPicker(n); return; }
     if (b.dataset.opt) {
       rememberChoice(n, b.dataset.opt);
       if (sat(n.id)) setChoice(n, b.dataset.opt); else allocate(n, b.dataset.opt);
@@ -1609,8 +2432,15 @@
       return;
     }
     if (switchedOff(n)) { toast(`${n.tier === 'WORMHOLE' ? 'Core wormholes' : 'Faction volumes'} are off. Turn them on in the top bar.`); return; }
-    const path = pathTo(n);
-    if (!path) { if (n.tier === 'WORMHOLE_EXIT') toast('Wormhole exits open by linking an anchor in a subroutine socket.'); return; }
+    const found = findPath(n);
+    const path = found.path;
+    if (!path) {
+      // A choice node is refused only when every option is; the picker then shows each option's reason.
+      if (found.block && isChoice(n) && found.block.node === n) { openPicker(n, sx, sy); return; }
+      if (found.block) toast(refusalText(n, found.block));
+      else if (n.tier === 'WORMHOLE_EXIT') toast('Wormhole exits open by linking an anchor in a subroutine socket.');
+      return;
+    }
     if (isChoice(n)) { openPicker(n, sx, sy); return; }
     if (allocate(n) && n.tier === 'SOCKET') openPicker(n, sx, sy);
   }
@@ -1733,12 +2563,35 @@
     const v = parseInt(els.cap.value, 10);
     if (Number.isFinite(v) && v > 0) { state.cap = Math.min(999, v); changed(); } else els.cap.value = state.cap;
   });
-  els.hull.addEventListener('change', () => { state.hull = els.hull.value; changed(); });
+  els.hull.addEventListener('change', () => {
+    const before = rules().problems.size;
+    pushUndo();
+    state.hull = els.hull.value;
+    changed();
+    warnNewProblems(before);
+  });
   els.optCore.addEventListener('change', () => { setWormholeOption('coreWormholes', els.optCore.checked); els.optCore.blur(); });
   els.optVolumes.addEventListener('change', () => { setWormholeOption('volumes', els.optVolumes.checked); els.optVolumes.blur(); });
+  els.optRefused.checked = markRefused;
+  els.optRefused.addEventListener('change', () => { setMarkRefused(els.optRefused.checked); els.optRefused.blur(); });
   document.getElementById('btn-fit').addEventListener('click', frameCore);
   els.undo.addEventListener('click', undo);
   document.getElementById('btn-reset').addEventListener('click', () => { if (state.root || state.alloc.size) { resetBuild(); toast('Build cleared. Undo brings it back.'); } });
+  // Copy code: the build as a template code (the same as Templates → Copy code), named after the template name field.
+  document.getElementById('btn-code').addEventListener('click', async () => {
+    if (!state.root) { toast('Choose a root first.'); return; }
+    let name = tpl.name.value.trim();
+    if (!name) { try { name = (localStorage.getItem('esp.tplName') || '').trim(); } catch { /* storage unavailable */ } }
+    if (!name || templateNameProblem(name)) name = `${byId.get(state.root).type.name} plan`;
+    const code = await templateToCode(buildTemplate(name));
+    try {
+      await navigator.clipboard.writeText(code);
+      toast(`Code for "${name}" copied. Load it with Templates → Load code.`);
+    } catch {
+      toast('', `Copy this code:<br><input style="width:min(560px,80vw);margin-top:6px" readonly value="${esc(code)}" onfocus="this.select()">`);
+      setTimeout(() => els.toast.querySelector('input')?.focus(), 0);
+    }
+  });
   document.getElementById('btn-share').addEventListener('click', async () => {
     const url = shareUrl();
     history.replaceState(null, '', url);
@@ -1893,7 +2746,7 @@
   function toggleKeys(show = keysEl.hidden) {
     keysEl.hidden = !show;
     keysBtn.setAttribute('aria-expanded', String(show));
-    if (show) { closePicker(); hideTooltip(); if (!exportEl.hidden) toggleExport(false); document.getElementById('keys-close').focus(); }
+    if (show) { closePicker(); hideTooltip(); if (!exportEl.hidden) toggleExport(false); if (!storyEl.hidden) toggleStory(false); document.getElementById('keys-close').focus(); }
     else if (keysEl.contains(document.activeElement)) keysBtn.focus();
   }
   keysBtn.addEventListener('click', () => toggleKeys());
@@ -1901,6 +2754,159 @@
   document.addEventListener('pointerdown', e => {
     if (!keysEl.hidden && !keysEl.contains(e.target) && e.target !== keysBtn) toggleKeys(false);
   });
+
+  // Ship rules (the summary panel's Ship tab) and Story rules (dialog): facts the planner can't see (see blockOf).
+  // Both live in state.ship; ship facts describe the hull, story facts the campaign.
+  const shipPane = document.getElementById('panel-ship');
+  const shipBtn = els.shipBtn;
+  const storyEl = document.getElementById('story');
+  const storyBtn = els.storyBtn;
+  const ship = {
+    summary: document.getElementById('ship-summary'),
+    shield: document.getElementById('ship-shield'),
+    armor: document.getElementById('ship-armor'),
+    armorNote: document.getElementById('ship-armor-note'),
+    tris: [...shipPane.querySelectorAll('select[data-tri]')],
+    mods: document.getElementById('ship-mods'),
+    modInput: document.getElementById('ship-mod-input'),
+    modList: document.getElementById('ship-mod-list'),
+    modStatus: document.getElementById('ship-mod-status'),
+    logistics: document.getElementById('ship-logistics'),
+    logisticsNote: document.getElementById('ship-logistics-note'),
+    problems: document.getElementById('ship-problems'),
+  };
+  ship.problems.addEventListener('click', e => { const row = e.target.closest('[data-node]'); if (row) jumpTo(byId.get(row.dataset.node)); });
+  const story = {
+    summary: document.getElementById('story-summary'),
+    gates: document.getElementById('story-gates'),
+    unlocks: document.getElementById('story-unlocks'),
+  };
+  // Types that can appear in the tree (node types and their options), and the hull mods any of them can clash with.
+  const treeTypes = [...new Map(nodes.flatMap(n => [n.type.id, ...(n.type.options || [])]).filter(id => types.has(id)).map(id => [id, types.get(id)])).values()];
+  const relevantHullMods = new Map();
+  for (const t of treeTypes) for (const h of typeRules(t).exclusiveAndOwn) { if (!relevantHullMods.has(h)) relevantHullMods.set(h, []); relevantHullMods.get(h).push(t); }
+  // Hull mods are listed by their in-game name; the id is added only where two share a name.
+  const nameUses = new Map();
+  for (const h of relevantHullMods.keys()) { const k = hullModName(h).toLowerCase(); nameUses.set(k, (nameUses.get(k) || 0) + 1); }
+  const hullModLabel = h => (nameUses.get(hullModName(h).toLowerCase()) > 1 ? `${hullModName(h)} (${h})` : hullModName(h));
+  let shipListBuilt = false, storyListsBuilt = false;
+  const refusedSummary = () => {
+    const refused = nodes.filter(n => !sat(n.id) && staticBlock(n)).length;
+    const problems = rules().problems.size;
+    return `With the current build and hull, ${refused} unallocated node${refused === 1 ? ' is' : 's are'} refused` +
+      (problems ? ` and ${problems} allocated node${problems === 1 ? ' breaks' : 's break'} a rule.` : '.');
+  };
+  function renderShipPane() {
+    if (!shipListBuilt) {
+      shipListBuilt = true;
+      ship.modList.innerHTML = [...relevantHullMods.keys()].sort((a, b) => hullModName(a).localeCompare(hullModName(b)))
+        .map(h => `<option value="${esc(hullModLabel(h))}"></option>`).join('');
+    }
+    const sh = state.ship;
+    ship.shield.value = sh.shield || '';
+    if (document.activeElement !== ship.armor) ship.armor.value = sh.armor ?? '';
+    const cut = D.effects.ARMOR_FLAT_FOR_LOW_BASE_ARMOR?.hullArgs?.[HULL_ENUM[state.hull]];
+    ship.armorNote.textContent = cut ? `Low-armor nodes need ${fmt(evalExpr(cut.cutoff, 1))} or less on a ${hullLabel()}.` : '';
+    for (const sel of ship.tris) sel.value = sh[sel.dataset.tri] == null ? '' : sh[sel.dataset.tri] ? '1' : '0';
+    ship.mods.innerHTML = sh.hullMods.size ? [...sh.hullMods].map(h => {
+      const hits = relevantHullMods.get(h) || [];
+      return `<span class="chip" title="${esc(`${hullModName(h)} (${h}). ` + (hits.length ? 'Refuses ' + hits.map(t => t.name).join(', ') : 'No node clashes with this hull mod'))}">${esc(hullModLabel(h))} <button data-rm="${esc(h)}" title="Remove" aria-label="Remove ${esc(hullModName(h))}">×</button></span>`;
+    }).join('') : '<span class="muted">None listed.</span>';
+    if (document.activeElement !== ship.logistics) ship.logistics.value = sh.extraLogistics || 0;
+    ship.logisticsNote.textContent = `Limit: ${logisticsCap()} logistics notables and keystones. Some items add slots in game.`;
+    const n = shipRuleCount();
+    ship.summary.textContent = `${n} ship rule${n === 1 ? '' : 's'} set. ${refusedSummary()}`;
+    ship.problems.innerHTML = problemsHtml();
+  }
+  function renderStory() {
+    if (!storyListsBuilt) {
+      storyListsBuilt = true;
+      const gateCounts = new Map();
+      for (const n of nodes) for (const g of n.gates) gateCounts.set(g, (gateCounts.get(g) || 0) + 1);
+      story.gates.innerHTML = [...gateCounts.keys()].sort((a, b) => gateText(a).localeCompare(gateText(b))).map(g =>
+        `<label><input type="checkbox" data-gate="${esc(g)}"> ${esc(gateText(g))} <span class="muted">(${gateCounts.get(g)} node${gateCounts.get(g) > 1 ? 's' : ''})</span></label>`).join('');
+      story.unlocks.innerHTML = treeTypes.filter(t => (t.unlockConditions || []).length).sort((a, b) => a.name.localeCompare(b.name)).map(t =>
+        `<label><input type="checkbox" data-type="${esc(t.id)}"> ${esc(t.name)} <span class="muted">(${esc(unlockText(t))})</span></label>`).join('');
+    }
+    const sh = state.ship;
+    for (const cb of story.gates.querySelectorAll('input')) cb.checked = !sh.lockedGates.has(cb.dataset.gate);
+    for (const cb of story.unlocks.querySelectorAll('input')) cb.checked = !sh.lockedTypes.has(cb.dataset.type);
+    const n = storyRuleCount();
+    story.summary.textContent = `${n ? `${n} gate${n === 1 ? ' or unlock is' : 's or unlocks are'} unticked.` : 'Everything is ticked.'} ${refusedSummary()}`;
+  }
+  function setShip(fn) {
+    const before = rules().problems.size;
+    pushUndo();
+    fn(state.ship);
+    changed();
+    warnNewProblems(before);
+  }
+  // The toolbar's Ship rules button opens the summary panel on its Ship tab, or leaves the tab if it's showing.
+  shipBtn.addEventListener('click', () => {
+    const closed = els.panel.classList.contains('closed');
+    if (!closed && panelTab === 'ship') { setPanelTab('stats'); return; }
+    if (closed) togglePanel();
+    setPanelTab('ship');
+  });
+  function toggleStory(show = storyEl.hidden) {
+    storyEl.hidden = !show;
+    storyBtn.setAttribute('aria-expanded', String(show));
+    if (show) {
+      closePicker(); hideTooltip(); toggleKeys(false); if (!exportEl.hidden) toggleExport(false);
+      renderStory();
+      document.getElementById('story-close').focus();
+    } else if (storyEl.contains(document.activeElement)) storyBtn.focus();
+  }
+  storyBtn.addEventListener('click', () => toggleStory());
+  document.getElementById('story-close').addEventListener('click', () => toggleStory(false));
+  document.addEventListener('pointerdown', e => {
+    if (!storyEl.hidden && !storyEl.contains(e.target) && e.target !== storyBtn) toggleStory(false);
+  });
+  ship.shield.addEventListener('change', () => setShip(s => { s.shield = SHIELDS[ship.shield.value] ? ship.shield.value : null; }));
+  ship.armor.addEventListener('change', () => {
+    const v = ship.armor.value.trim() === '' ? null : Math.max(0, Math.min(99999, Math.round(Number(ship.armor.value))));
+    setShip(s => { s.armor = Number.isFinite(v) ? v : null; });
+  });
+  for (const sel of ship.tris) sel.addEventListener('change', () => setShip(s => { s[sel.dataset.tri] = sel.value === '' ? null : sel.value === '1'; }));
+  ship.logistics.addEventListener('change', () => {
+    const v = Math.max(0, Math.min(20, Math.round(Number(ship.logistics.value) || 0)));
+    setShip(s => { s.extraLogistics = v; });
+  });
+  function addHullMod() {
+    const raw = ship.modInput.value.trim();
+    if (!raw) return;
+    const inParens = raw.match(/\(([^()]+)\)\s*$/);
+    const folded = raw.toLowerCase();
+    const id = inParens && relevantHullMods.has(inParens[1]) ? inParens[1]
+      : [...relevantHullMods.keys()].find(h => hullModLabel(h).toLowerCase() === folded || hullModName(h).toLowerCase() === folded || h.toLowerCase() === folded);
+    if (!id) { ship.modStatus.textContent = `No node clashes with "${raw}", so it doesn't change anything. Pick one from the list.`; return; }
+    ship.modStatus.textContent = '';
+    ship.modInput.value = '';
+    if (!state.ship.hullMods.has(id)) setShip(s => { s.hullMods.add(id); });
+  }
+  ship.modInput.addEventListener('change', addHullMod);
+  ship.modInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addHullMod(); } });
+  ship.mods.addEventListener('click', e => {
+    const b = e.target.closest('[data-rm]');
+    if (b) setShip(s => { s.hullMods.delete(b.dataset.rm); });
+  });
+  document.getElementById('ship-clear').addEventListener('click', () => setShip(s => {
+    const fresh = blankShip();
+    for (const k of SHIP_KEYS) s[k] = fresh[k];
+  }));
+  story.gates.addEventListener('change', e => {
+    const g = e.target.dataset.gate;
+    if (g) setShip(s => { if (e.target.checked) s.lockedGates.delete(g); else s.lockedGates.add(g); });
+  });
+  story.unlocks.addEventListener('change', e => {
+    const t = e.target.dataset.type;
+    if (t) setShip(s => { if (e.target.checked) s.lockedTypes.delete(t); else s.lockedTypes.add(t); });
+  });
+  document.getElementById('story-unlock-all').addEventListener('click', () => setShip(s => { s.lockedTypes.clear(); }));
+  document.getElementById('story-unlock-none').addEventListener('click', () => setShip(s => {
+    for (const cb of story.unlocks.querySelectorAll('input')) s.lockedTypes.add(cb.dataset.type);
+  }));
+  document.getElementById('story-clear').addEventListener('click', () => setShip(s => { s.lockedGates.clear(); s.lockedTypes.clear(); }));
 
   // templates dialog: linked file (remembered between visits), import, export
   const exportEl = document.getElementById('export');
@@ -2107,13 +3113,16 @@
     const anchors = new Map();
     for (const [socket, aid] of Object.entries(t.anchors || {})) { const a = anchorById.get(String(aid).trim()); if (a) anchors.set(currentNodeId(socket), a.exit); }
     pushUndo();
-    state.root = root; state.alloc.clear(); state.choice.clear(); state.links.clear();
+    state.root = root; state.alloc.clear(); state.choice.clear(); state.links.clear(); state.subs.clear(); state.template = null;
     if (HULL_FROM_ENUM[t.hull]) state.hull = HULL_FROM_ENUM[t.hull];
     const turnedOn = [];
     if (!state.coreWormholes && entries.some(e => byId.get(e.id)?.tier === 'WORMHOLE')) { state.coreWormholes = true; turnedOn.push('Core wormholes'); }
     if (!state.volumes && (anchors.size || entries.some(e => byId.get(e.id)?.tier === 'WORMHOLE_EXIT'))) { state.volumes = true; turnedOn.push('Faction volumes'); }
     const unknown = entries.filter(e => !byId.has(e.id)).map(e => e.id);
     let pending = entries.filter(e => byId.has(e.id));
+    // Steps the rules refuse are skipped, as the game skips them when it applies a template.
+    const placed = [entryFor(byId.get(root), null)];
+    const refused = [];
     // Repeat passes so a step listed before the node it hangs off still lands; the mod's own order needs one pass.
     for (let progress = true; progress && pending.length;) {
       progress = false;
@@ -2124,29 +3133,41 @@
         const p = partnerOf(n);
         const ok = n.tier === 'WORMHOLE_EXIT' ? !!(p && sat(p.id)) : (n.adj.length === 0 || n.adj.some(m => sat(m.id)));
         if (!ok || switchedOff(n)) { next.push(e); continue; }
+        const opt = isChoice(n) ? (e.opt && n.type.options.includes(e.opt) ? e.opt : defaultOption(n)) : null;
+        const b = blockOf(n, opt, placed);
+        if (b) { refused.push({ node: n, block: b }); progress = true; continue; }
         state.alloc.add(n.id);
-        if (isChoice(n)) state.choice.set(n.id, e.opt && n.type.options.includes(e.opt) ? e.opt : defaultOption(n));
+        placed.push(entryFor(n, opt));
+        if (opt) state.choice.set(n.id, opt);
         if (n.tier === 'SOCKET' && anchors.has(n.id)) {
           const exit = anchors.get(n.id);
-          if (byId.has(exit) && !linkedSocketOf(exit)) { state.links.set(n.id, exit); state.alloc.add(exit); }
+          if (byId.has(exit) && !linkedSocketOf(exit) && !blockOf(byId.get(exit), null, placed)) {
+            state.links.set(n.id, exit); state.alloc.add(exit); placed.push(entryFor(byId.get(exit), null));
+          }
         }
         const partner = partnerOf(n);
-        if (partner && !sat(partner.id)) state.alloc.add(partner.id);
+        if (partner && !sat(partner.id)) { state.alloc.add(partner.id); placed.push(entryFor(partner, null)); }
         progress = true;
       }
       pending = next;
     }
-    return { name: t.name, taken: state.alloc.size, unknown, unplaced: pending.map(e => e.id), turnedOn };
+    return { name: t.name, taken: state.alloc.size, unknown, unplaced: pending.map(e => e.id), turnedOn, refused };
   }
   // Loads a template (from the file or a code) into the planner and reports through `report(message, kind)`.
   function loadTemplate(t, report, extraNote) {
     try {
       const r = importTemplate(t);
       tpl.name.value = [...String(t.name).trim()].slice(0, TEMPLATE_NAME_MAX).join(''); // saving again under this name replaces it
+      state.template = { name: tpl.name.value, sig: templateSig() };
       changed();
       const notes = [];
       if (extraNote) notes.push(extraNote);
+      if (badNameChars(tpl.name.value).length) notes.push('its name has characters outside English letters, digits and keyboard symbols, so rename it before saving');
       if (r.unknown.length) notes.push(`${r.unknown.length} step${r.unknown.length > 1 ? 's' : ''} not in this version of the tree`);
+      if (r.refused.length) {
+        const f = r.refused[0];
+        notes.push(`${r.refused.length} step${r.refused.length > 1 ? 's' : ''} refused by the node rules (${effectiveType(f.node).name}: ${f.block.text.replace(/\.$/, '')}${r.refused.length > 1 ? ', …' : ''})`);
+      }
       if (r.unplaced.length) notes.push(`${r.unplaced.length} step${r.unplaced.length > 1 ? 's' : ''} couldn't be connected`);
       if (r.turnedOn.length) notes.push(`turned on ${r.turnedOn.join(' and ')}`);
       if (used() > state.cap) notes.push(`${used()} nodes is over the ${state.cap} cap`);
@@ -2199,7 +3220,7 @@
     exportEl.hidden = !show;
     exportBtn.setAttribute('aria-expanded', String(show));
     if (show) {
-      closePicker(); hideTooltip(); toggleKeys(false);
+      closePicker(); hideTooltip(); toggleKeys(false); if (!storyEl.hidden) toggleStory(false);
       if (!tpl.name.value) {
         let saved = null;
         try { saved = localStorage.getItem('esp.tplName'); } catch { /* ignore */ }
@@ -2226,6 +3247,7 @@
     return tpl.name.value.trim();
   }
   function reportMerge(result, where) {
+    setCurrentTemplate(result.template.name);
     exportStatus(`${result.replaced ? 'Replaced' : 'Added'} "${result.template.name}" (${result.template.steps.length} steps) ${where}. The file now has ${result.count} template${result.count === 1 ? '' : 's'}.`, 'ok');
   }
   function download(text) {
@@ -2375,9 +3397,15 @@
       toast('Couldn\'t copy: the browser blocked the clipboard.');
     }
   });
-  tpl.name.addEventListener('input', () => { exportStatus(''); hideConflict(); refreshExport(); });
+  guardNameInput(tpl.name, exportStatus);
+  guardNameInput(conflict.newName, exportStatus);
+  tpl.name.addEventListener('input', () => {
+    if (tpl.name.dataset.cleaned) delete tpl.name.dataset.cleaned; else exportStatus('');
+    hideConflict(); refreshExport();
+  });
   tpl.name.addEventListener('keydown', e => { if (e.key === 'Enter' && !tpl.save.disabled && !tpl.save.hidden) saveIntoLinked(); });
   exportBtn.addEventListener('click', () => toggleExport());
+  els.tplGroup.addEventListener('click', () => toggleExport(true));
   document.getElementById('export-close').addEventListener('click', () => toggleExport(false));
   document.addEventListener('pointerdown', e => {
     if (!exportEl.hidden && !exportEl.contains(e.target) && e.target !== exportBtn) toggleExport(false);
@@ -2397,9 +3425,10 @@
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !exportEl.hidden) { toggleExport(false); return; }
     if (e.key === 'Escape' && !keysEl.hidden) { toggleKeys(false); return; }
+    if (e.key === 'Escape' && !storyEl.hidden) { toggleStory(false); return; }
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
     if (CAM_KEYS.includes(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      if (!keysEl.hidden || !exportEl.hidden || !els.picker.hidden) return; // open lists keep the keys for scrolling
+      if (!keysEl.hidden || !exportEl.hidden || !storyEl.hidden || !els.picker.hidden) return; // open lists keep the keys for scrolling
       e.preventDefault();
       camKeys.add(e.key);
       return;
@@ -2408,6 +3437,7 @@
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
     else if (e.key === 'Home') frameCore();
     else if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey) togglePanel();
+    else if (e.key.toLowerCase() === 'x' && !e.ctrlKey && !e.metaKey && !e.altKey) { setMarkRefused(!markRefused); toast(markRefused ? 'Refused nodes marked with an X.' : 'Refused nodes no longer marked.'); }
     else if (e.key === 'Escape') closePicker();
     else if (e.key === '/') { e.preventDefault(); els.search.focus(); }
   });
@@ -2443,5 +3473,8 @@
     pick: (id, opt) => { rememberChoice(byId.get(id), opt); },
     load: json => { deserialize(json); changed(); },
     setWormholeOption, templateSteps, buildTemplate, mergeTemplate, planMerge, uniqueTemplateName, importTemplate, currentNodeId,
-    templateToCode, codeToTemplate, pathTo, removalSet, allocate: id => allocate(byId.get(id)), chooseRoot: id => chooseRoot(byId.get(id)), totals, describe, serialize };
+    templateToCode, codeToTemplate, pathTo, removalSet, allocate: id => allocate(byId.get(id)), chooseRoot: id => chooseRoot(byId.get(id)), totals, describe, serialize,
+    findPath: (id, opt) => findPath(byId.get(id), opt), blockOf: (id, opt) => blockOf(byId.get(id), opt || null, rules().list),
+    problems: () => [...rules().problems].map(([id, b]) => ({ id, text: b.text })), setShip, setAffinitySplit,
+    socketSub: (socket, id, extra) => socketSub(byId.get(socket), id, extra), setGrants: (socket, ids) => setGrants(byId.get(socket), ids), subState: () => subState(), typesExclusive: (a, b) => typesExclusive(types.get(a), types.get(b)) };
 })();

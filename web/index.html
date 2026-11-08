@@ -20,6 +20,12 @@
     <span id="root-name" class="value muted">Choose a root</span>
   </div>
 
+  <div class="bar-group" id="tpl-group" hidden title="The template this build was loaded from or last saved as. Click to open Templates.">
+    <span class="label">Template</span>
+    <span id="tpl-current" class="value"></span>
+    <span id="tpl-edited" class="muted" hidden>(edited)</span>
+  </div>
+
   <div class="bar-group">
     <span class="label">Nodes</span>
     <span class="value"><span id="used">0</span> / <input id="cap" type="number" min="1" max="999" value="60" title="Node cap (mod default is 60)"></span>
@@ -38,6 +44,7 @@
   <div class="bar-group">
     <label title="The paired wormholes that link the tech regions"><input id="opt-core" type="checkbox" checked> Core wormholes</label>
     <label title="Anchors in subroutine sockets that open wormholes to the faction volumes"><input id="opt-volumes" type="checkbox" checked> Faction volumes</label>
+    <label title="Put a red X on nodes the node rules refuse: conflicts with your build, hull size, the logistics limit, ship and story rules (X)"><input id="opt-refused" type="checkbox" checked> Mark refused</label>
   </div>
 
   <div class="bar-group search">
@@ -49,7 +56,9 @@
     <button id="btn-fit" title="Frame the core tree (Home)">Center</button>
     <button id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
     <button id="btn-reset" title="Clear the build and choose a new root">Reset</button>
-    <button id="btn-share" class="primary" title="Copy a link to this build">Copy link</button>
+    <button id="btn-code" class="primary" title="Copy a template code for this build, to paste in chat or load with Templates → Load code">Copy code</button>
+    <button id="btn-ship" title="The ship's shield, armor and hull mods, in the summary panel" aria-controls="panel-ship">Ship rules</button>
+    <button id="btn-story" title="Story gates and unlocks your campaign has reached" aria-haspopup="dialog" aria-controls="story">Story rules</button>
     <button id="btn-export" title="Import and export in-game skill tree templates" aria-haspopup="dialog" aria-controls="export">Templates</button>
     <button id="btn-panel" title="Show or hide the summary (S)">Summary</button>
     <button id="btn-keys" title="Show all shortcuts (?)" aria-haspopup="dialog" aria-controls="keys">Shortcuts</button>
@@ -62,12 +71,72 @@
     <span id="panel-sub" class="muted"></span>
   </div>
   <div id="affinity"></div>
+  <div id="aff-mix" hidden>
+    <div class="aff-mix-row">
+      <span><span class="muted">Affinity nodes:</span> <b id="aff-count">0</b></span>
+      <span class="aff-all"><span class="muted">All to</span>
+        <button data-all="low_tech_affinity" title="Set every allocated affinity node to Low Tech">Low</button><button data-all="midline_affinity" title="Set every allocated affinity node to Midline">Mid</button><button data-all="high_tech_affinity" title="Set every allocated affinity node to High Tech">High</button></span>
+    </div>
+    <div class="aff-mix-row">
+      <label>Low <input data-mix="low_tech_affinity" type="number" min="0" step="1"></label>
+      <label>Mid <input data-mix="midline_affinity" type="number" min="0" step="1"></label>
+      <label>High <input data-mix="high_tech_affinity" type="number" min="0" step="1"></label>
+      <button id="aff-apply" title="Change affinity nodes to this split (Enter)">Apply</button>
+    </div>
+    <div id="aff-note" class="muted"></div>
+  </div>
   <div class="panel-tabs">
     <button data-tab="stats" class="active">Effects</button>
     <button data-tab="nodes">Notables &amp; keystones</button>
+    <button data-tab="ship" id="tab-ship">Ship</button>
     <button data-tab="search" id="tab-search" hidden>Search</button>
   </div>
   <div id="panel-body"></div>
+  <div id="panel-ship" hidden>
+    <p class="muted">Facts about the ship the planner can't see. Anything left as "Not set" isn't checked. Hull size is the Hull dropdown. Saved with the build and its share link.</p>
+    <p id="ship-summary"></p>
+    <div id="ship-problems"></div>
+
+    <h3>Hull</h3>
+    <table class="ship-form">
+      <tr><td><label for="ship-shield">Shield</label></td><td>
+        <select id="ship-shield">
+          <option value="">Not set</option>
+          <option value="FRONT">Front shield</option>
+          <option value="OMNI">Omni shield</option>
+          <option value="NONE">No shield</option>
+          <option value="PHASE">Phase cloak</option>
+        </select></td></tr>
+      <tr><td><label for="ship-armor">Base armor</label> <span class="muted">(before hull mods and skills)</span></td><td>
+        <input id="ship-armor" type="number" min="0" max="99999" step="1" placeholder="Not set"></td></tr>
+      <tr><td colspan="2" id="ship-armor-note" class="muted"></td></tr>
+      <tr><td><label for="ship-civilian">Civilian-grade hull</label></td><td>
+        <select id="ship-civilian" data-tri="civilian"><option value="">Not set</option><option value="1">Yes</option><option value="0">No</option></select></td></tr>
+      <tr><td><label for="ship-charges">System uses charges</label></td><td>
+        <select id="ship-charges" data-tri="charges"><option value="">Not set</option><option value="1">Yes</option><option value="0">No</option></select></td></tr>
+      <tr><td><label for="ship-modules">Has station modules</label></td><td>
+        <select id="ship-modules" data-tri="modules"><option value="">Not set</option><option value="1">Yes</option><option value="0">No</option></select></td></tr>
+      <tr><td><label for="ship-wings">Only built-in fighter wings</label></td><td>
+        <select id="ship-wings" data-tri="builtInWings"><option value="">Not set</option><option value="1">Yes</option><option value="0">No</option></select></td></tr>
+    </table>
+
+    <h3>Hull mods on the ship</h3>
+    <p class="muted">Built-in or installed. A node can't be taken if it adds one of these or clashes with one. Only hull mods some node clashes with are offered.</p>
+    <div id="ship-mods"></div>
+    <p><label for="ship-mod-input">Add a hull mod</label><br>
+      <input id="ship-mod-input" list="ship-mod-list" type="text" autocomplete="off" placeholder="Type the hull mod's name" style="width:100%">
+      <datalist id="ship-mod-list"></datalist></p>
+    <p id="ship-mod-status" class="bad" role="status"></p>
+
+    <h3>Logistics</h3>
+    <p><label for="ship-logistics">Extra logistics slots</label> <input id="ship-logistics" type="number" min="0" max="20" step="1" value="0"></p>
+    <p id="ship-logistics-note" class="muted"></p>
+
+    <h3>Not checked</h3>
+    <p class="muted">Item costs, ordnance points, hull mod clashes the game learns while you play, and the weapon and shield requirements shown in tooltips. The game doesn't block allocation on those either.</p>
+
+    <div class="export-actions"><button id="ship-clear">Clear ship rules</button></div>
+  </div>
   <footer id="panel-foot"></footer>
 </aside>
 
@@ -139,10 +208,38 @@
       <button id="tpl-merge">Add to a file and download it…</button>
       <button id="tpl-new">Download as a new file</button>
       <button id="tpl-copy">Copy template JSON</button>
+      <button id="btn-share" title="Copy a link that opens this build in the planner">Copy link to this build</button>
     </div>
     <p class="muted">Downloads land in your Downloads folder; move the file into <code>saves/common</code>. "Download as a new file" holds only this template, so placing it over an existing file drops the templates already there.</p>
     <input id="tpl-file" type="file" accept=".data,.json,application/json" hidden>
     <p id="tpl-status" role="status"></p>
+  </div>
+</div>
+
+<div id="story" role="dialog" aria-modal="true" aria-labelledby="story-title" hidden>
+  <div class="keys-head">
+    <h2 id="story-title">Story rules</h2>
+    <button id="story-close" title="Close (Esc)">Close</button>
+  </div>
+  <div class="keys-body">
+    <p>What your campaign has reached. Nodes behind a gate or unlock you untick are refused. Everything starts ticked, so nothing is refused until you change it. Saved with the build and its share link.</p>
+    <p id="story-summary"></p>
+
+    <h3>Story gates reached</h3>
+    <p class="muted">Untick a gate you haven't reached yet.</p>
+    <div id="story-gates" class="ship-checks"></div>
+
+    <h3>Unlocked skill types</h3>
+    <p class="muted">These need a blueprint or another unlock. Untick the ones you don't have.</p>
+    <div class="export-actions">
+      <button id="story-unlock-all">Tick all</button>
+      <button id="story-unlock-none">Untick all</button>
+    </div>
+    <div id="story-unlocks" class="ship-checks"></div>
+
+    <div class="export-actions" style="margin-top:12px">
+      <button id="story-clear">Clear story rules</button>
+    </div>
   </div>
 </div>
 
@@ -160,6 +257,7 @@
       <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> <span class="muted">(<kbd>Cmd</kbd>+<kbd>Z</kbd> on Mac)</span></td><td>Undo the last change</td></tr>
       <tr><td><kbd>Home</kbd></td><td>Re-centre on the core tree</td></tr>
       <tr><td><kbd>S</kbd></td><td>Show or hide the summary panel</td></tr>
+      <tr><td><kbd>X</kbd></td><td>Turn the red X on refused nodes on or off (Mark refused)</td></tr>
       <tr><td><kbd>/</kbd></td><td>Jump to the search box</td></tr>
       <tr><td><kbd>?</kbd></td><td>Show or hide this list</td></tr>
       <tr><td><kbd>Esc</kbd></td><td>Close this list or the option/anchor picker</td></tr>
@@ -200,7 +298,7 @@
 
 <div id="help">
   <b>Click</b> allocate (finds the shortest path) · <b>Click</b> an allocated node to remove it and anything cut off ·
-  <b>Right-click</b> your root to reset ·
+  <b>Right-click</b> your root to reset · <b>X</b> marks refused nodes ·
   <b>Drag</b>/<b>arrows</b> pan · <b>Wheel</b>/<b>PgUp</b>/<b>PgDn</b> zoom · <b>?</b> all shortcuts
 </div>
 
