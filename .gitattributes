@@ -1,0 +1,2 @@
+# Keep the files' LF line endings on Windows checkouts.
+* text=auto eol=lf

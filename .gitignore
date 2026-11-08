@@ -1,0 +1,5 @@
+# The mod is its own git checkout (the data source).
+/ExiledSector/
+
+# Personal skill tree template files copied from the game's saves/common folder.
+*.json.data
