@@ -141,6 +141,13 @@ The planner ships no images. Click **Show mod art** in the top bar and choose th
      - Affinity nodes never match a theme, only Show affinity nodes. The mod tags the affinity options too (Low Tech: Hull, Armor; Midline: Flux, Hull; High Tech: Flux), so they would otherwise drown out Flux, Hull and Armor. Show affinity nodes adds to whatever the themes match.
      - Tooltips list a node's themes.
    - When zoomed out, each tree is labelled. Click a label to zoom into that tree.
+   - **List** in the top bar (or `L`) swaps the map for a list of every node except affinity nodes and the structural ones (roots, wormholes, sockets): icon, name, tier, tree, themes, an "allocated" tag and its effects.
+     - The search box and **Filter** narrow the list exactly as they highlight the map, and Enter in the search box steps through it.
+     - **Sort** by **Name (A to Z)**, with numbers in natural order, or by **Skill tree**: the Low Tech, Midline and High Tech sides of the core, then each volume, keystones and notables first. The choice is remembered.
+     - In the Skill tree sort, click a tree's heading to collapse or expand it, or use **Collapse all** / **Expand all**. Collapsed trees are remembered, and the count says how many matches are in collapsed trees.
+     - Click a node to go back to the map, centred on it. **Map** (or `L`) goes back without moving.
+     - In **target mode** (`T` or the Targets button), the All nodes list gets **Want** and **Forbid** buttons on every row, and clicking a row cycles its mark as on the map (right-click clears). The Targets bar with **Allocate** sits at the top of the list. Marked rows have a green or red edge, and keep a "wanted" or "forbidden" tag after target mode is turned off.
+     - **All nodes** / **Build (N)** at the top switches lists. **Build** shows what's allocated: your root, every chosen node (including wormholes, exits and sockets, with what each socket holds) and one row per tech for the affinity nodes, such as "High Tech Affinity ×20" with their combined effect. It also sorts by **Order taken**. Nodes granted by a modspec cache aren't allocated, so they aren't listed.
 6. **Node rules:** the planner refuses nodes the game would refuse, with the game's own reason in the tooltip or a toast. See the section below.
 7. **Save and share:**
    - The build is kept in your browser between visits.

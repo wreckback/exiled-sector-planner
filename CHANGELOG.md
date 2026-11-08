@@ -81,6 +81,16 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
   - When the hulls differ, saving asks first: keep the existing hull, change it, or save as a new template under a free name.
   - The summary line warns ahead of time.
 
+**List view**
+- A **List** button (or `L`) switches the map area to a list of every non-affinity, non-structural node (479 in mod 0.11.1) with icon, tier, tree, themes, an "allocated" tag and effects. Unallocated choice nodes list each option's effects.
+- The top bar's search box and Filter drive it, so search matches exactly as on the map. Enter steps through it. While it's showing, the panel's Search tab stays away, since the list already shows the matches.
+- Sort by name (natural order) or by skill tree (core sides in Low Tech, Midline, High Tech order, then volumes; keystones and notables first), remembered in `localStorage['esp.listSort']`.
+- Clicking a node returns to the map and jumps to it.
+- In the Skill tree sort, each tree's heading collapses or expands it, with Collapse all / Expand all. Collapsed trees are remembered in `localStorage['esp.listCollapsed']`, Enter skips them, and the count notes matches hidden in collapsed trees.
+- **Build** list (All nodes / Build switch, remembered in `localStorage['esp.listMode']`): the root and every allocated node, including wormholes, exits and sockets (with their subroutine or anchor), with affinity nodes summed into one row per tech ("High Tech Affinity ×20" and the total effect). Adds an **Order taken** sort, and an "Affinity nodes" group first in the Skill tree sort. Search and Filter apply.
+- Target mode in the All nodes list: Want / Forbid buttons on each row, row click cycles the mark and right-click clears it, like the map. Marked rows get a green or red edge, or a "wanted"/"forbidden" tag outside target mode. The Targets bar docks inside the list while it shows, so Allocate stays reachable.
+- Fix: the Full Sheet now also refreshes on build changes while the panel shows its Ship tab.
+
 **Stats tab and Full Sheet (the in-game stat sheet)**
 - A **Stats** tab in the summary panel lists the build's effects in the game's stat sheet sections, in its order and with its names (`StatGroup`), each effect in the section of its effect class's package, as `StatGroup.of` does. Temporary and gated effects keep the game's "For the first ... seconds after deployment" and "While phased" style wording.
 - **Full Sheet** opens an overlay in the game's layout (`StatSheetLayout`): centred section headings over a thin rule, gold values, square bullets, sections placed into the shortest of as many 400 px columns as fit. **Side Panel** returns to the tab. It uses the game's colours in the dark theme and follows the light theme with light colours (deep blue headings and bullets, deepened gold and green), as does its Sources box.

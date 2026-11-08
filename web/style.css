@@ -148,6 +148,42 @@ button:disabled { opacity: 0.5; cursor: default; }
 .search-head { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
 #btn-themes { flex: none; }
 
+/* list view: covers the map area (left of the summary panel when it's open) */
+#listview {
+  position: fixed; z-index: 8; left: 0; right: 0; bottom: 0;
+  top: calc(var(--bar-h, 44px) + env(safe-area-inset-top, 0px));
+  display: flex; flex-direction: column;
+  background: var(--bg); color: var(--text);
+}
+@media (min-width: 720px) { body.panel-open #listview { right: min(380px, 100vw); } }
+#listview .lv-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--edge); }
+#listview .lv-hint { flex: 1 1 260px; font-size: 12px; }
+#listview-body { flex: 1; overflow-y: auto; padding: 8px 16px 16px; user-select: text; }
+#listview .lv-row { align-items: flex-start; border-bottom: 1px solid var(--rule); padding: 6px 4px; }
+#listview .lv-main { min-width: 0; }
+#listview .lv-effects { font-size: 13px; margin-top: 2px; }
+#listview .lv-group { margin: 14px 0 4px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--edge); }
+#listview .lv-group:first-child { margin-top: 4px; }
+#listview .lv-group button { display: block; width: 100%; text-align: left; font-weight: 600; color: var(--text); background: none; border: none; padding: 3px 2px; }
+#listview .lv-group button:hover { background: var(--raised); }
+#listview .lv-caret { display: inline-block; width: 1em; color: var(--muted); }
+#listview .lv-groups { display: flex; gap: 6px; }
+#listview .lv-modes { display: flex; }
+#listview .lv-modes button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+#listview .lv-modes button + button { margin-left: -1px; }
+#listview .lv-count { color: var(--hl); font-weight: 600; }
+/* target marks in the All nodes list */
+#listview .lv-row.lv-want { border-left: 3px solid var(--good); }
+#listview .lv-row.lv-forbid { border-left: 3px solid var(--bad); }
+#listview .lv-target { margin-left: auto; display: flex; gap: 4px; flex: none; align-self: center; }
+#listview .lv-target button[data-mark="want"][aria-pressed="true"] { border-color: var(--good); color: var(--good); font-weight: 600; }
+#listview .lv-target button[data-mark="forbid"][aria-pressed="true"] { border-color: var(--bad); color: var(--bad); font-weight: 600; }
+#listview .lv-mark { margin-left: auto; flex: none; align-self: center; font-size: 12px; font-weight: 600; }
+#listview .lv-mark.want { color: var(--good); }
+#listview .lv-mark.forbid { color: var(--bad); }
+/* the Targets bar, docked in the list while it shows */
+#listview #targets { position: static; transform: none; width: auto; margin: 8px 16px 0; }
+
 /* stat sheet: the Stats tab follows the theme; the Full Sheet uses the game's own colours (StatSheetLayout) in the
    dark theme, and the same layout in light colours in the light theme */
 .gs {

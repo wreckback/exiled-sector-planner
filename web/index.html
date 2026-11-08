@@ -54,6 +54,7 @@
   </div>
 
   <div class="bar-group actions">
+    <button id="btn-view" title="Show every non-affinity node as a list, with search, sorting and the Filter (L)" aria-pressed="false" aria-controls="listview">List</button>
     <button id="btn-fit" title="Frame the core tree (Home)">Center</button>
     <button id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
     <button id="btn-reset" title="Clear the build and choose a new root">Reset</button>
@@ -165,6 +166,26 @@
     <button id="fn-dismiss">Dismiss</button>
   </div>
 </div>
+<section id="listview" aria-label="Node list" hidden>
+  <div class="lv-bar">
+    <span class="lv-modes" role="group" aria-label="Which list">
+      <button type="button" data-mode="all" aria-pressed="true" title="Every node except affinity nodes">All nodes</button>
+      <button type="button" data-mode="build" aria-pressed="false" title="The nodes allocated in this build, with affinity nodes counted per tech">Build</button>
+    </span>
+    <span id="listview-count" class="muted"></span>
+    <span id="listview-hint" class="muted lv-hint"></span>
+    <label>Sort <select id="listview-sort">
+      <option value="name">Name (A to Z)</option>
+      <option value="tree">Skill tree</option>
+      <option value="order">Order taken</option>
+    </select></label>
+    <span id="listview-groups" class="lv-groups" hidden>
+      <button id="lv-collapse-all" title="Collapse every tree to its heading">Collapse all</button>
+      <button id="lv-expand-all" title="Expand every tree">Expand all</button>
+    </span>
+  </div>
+  <div id="listview-body"></div>
+</section>
 <div id="theme-filter" role="group" aria-label="Filter" hidden></div>
 <div id="statsheet" role="dialog" aria-modal="true" aria-labelledby="statsheet-title" hidden>
   <div class="gs-bar">
@@ -333,6 +354,7 @@
       <tr><td><kbd>S</kbd></td><td>Show or hide the summary panel</td></tr>
       <tr><td><kbd>X</kbd></td><td>Turn the red X on refused nodes on or off (Mark refused)</td></tr>
       <tr><td><kbd>T</kbd></td><td>Turn target mode on or off</td></tr>
+      <tr><td><kbd>L</kbd></td><td>Switch between the map and the list of all nodes</td></tr>
       <tr><td><kbd>/</kbd></td><td>Jump to the search box</td></tr>
       <tr><td><kbd>?</kbd></td><td>Show or hide this list</td></tr>
       <tr><td><kbd>Esc</kbd></td><td>Close this list, the Filter list, the full stat sheet or the option/anchor picker, clear waypoints, or leave target mode</td></tr>
@@ -376,7 +398,7 @@
 
 <div id="help">
   <b>Click</b> allocate (finds the shortest path) · <b>Shift+click</b> waypoints to force a route · <b>Click</b> an allocated node to remove it and anything cut off ·
-  <b>Right-click</b> your root to reset · <b>X</b> marks refused nodes · <b>T</b> target mode ·
+  <b>Right-click</b> your root to reset · <b>X</b> marks refused nodes · <b>T</b> target mode · <b>L</b> list view ·
   <b>Drag</b>/<b>arrows</b> pan · <b>Wheel</b>/<b>PgUp</b>/<b>PgDn</b> zoom · <b>?</b> all shortcuts
 </div>
 

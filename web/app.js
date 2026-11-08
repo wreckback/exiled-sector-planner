@@ -2305,9 +2305,11 @@
     els.panelBody.hidden = onShip;
     els.panelShip.hidden = !onShip;
     els.shipBtn.setAttribute('aria-pressed', String(onShip && !els.panel.classList.contains('closed')));
-    if (onShip) { renderShipPane(); els.panelFoot.textContent = footText(); return; }
+    // Views outside the panel that show the build follow every change (whatever tab the panel shows).
     const sheetOpen = document.getElementById('statsheet');
     if (sheetOpen && !sheetOpen.hidden) renderSheet();
+    refreshList();
+    if (onShip) { renderShipPane(); els.panelFoot.textContent = footText(); return; }
     if (panelTab === 'search') {
       els.panelBody.innerHTML = searchResultsHtml();
       els.panelFoot.textContent = footText();
@@ -2910,6 +2912,7 @@
     renderTargets();
     if (hover) showTooltip(hover, lastMouse.x, lastMouse.y);
     requestDraw();
+    refreshList();
   }
   function cycleTarget(n) {
     if (n.id === state.root) { toast('The starting root is always in the build.'); return; }
@@ -3569,7 +3572,7 @@
     const textOn = q.length >= 2, filterOn = filterCount() > 0;
     if (!textOn && !filterOn) {
       searchHits = null; searchOrder = []; searchTerms = []; els.searchCount.textContent = '';
-      updateSearchTab(false); requestDraw(); return;
+      updateSearchTab(false); requestDraw(); refreshList(); return;
     }
     searchTerms = textOn ? q.split(/\s+/) : [];
     searchOrder = sortSearchResults(nodes.filter(n => {
@@ -3581,8 +3584,16 @@
     searchHits = new Set(searchOrder.map(n => n.id));
     searchCursor = -1;
     els.searchCount.textContent = `${searchOrder.length}`;
-    updateSearchTab(true);
+    // The list view already shows the matches, so the panel's Search tab only appears on the map.
+    const listShowing = !(document.getElementById('listview') || { hidden: true }).hidden;
+    updateSearchTab(!listShowing);
     requestDraw();
+    refreshList();
+  }
+  // The list view (see setView) follows the search and Filter; looked up by id so it's safe before that section runs.
+  function refreshList() {
+    const el = document.getElementById('listview');
+    if (el && !el.hidden) renderList();
   }
   els.search.addEventListener('input', runFilter);
 
@@ -3650,7 +3661,8 @@
   });
   renderThemeFilter();
   els.search.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && searchOrder.length) {
+    if (e.key === 'Enter' && !listEl.hidden) listStep();
+    else if (e.key === 'Enter' && searchOrder.length) {
       searchCursor = (searchCursor + 1) % searchOrder.length;
       jumpTo(searchOrder[searchCursor]);
       els.searchCount.textContent = `${searchCursor + 1}/${searchOrder.length}`;
@@ -3820,6 +3832,230 @@
       showSheetTip(rowsOf()[+el.dataset.row], e.clientX, e.clientY, game);
     });
     container.addEventListener('mouseleave', () => { sheetTip.hidden = true; });
+  }
+
+  // ------------------------------------------------------------------ list view
+  // The List button (or L) swaps the map for a list of every skill node except affinity nodes and the structural ones
+  // (roots, wormholes, exits, sockets). The top bar's search box and Filter drive it exactly as they drive the map
+  // (searchHits), so search matches the same way. Sort by name (natural order, so "2" before "10") or by skill tree.
+  // Clicking a row goes back to the map and jumps to the node.
+  const listEl = document.getElementById('listview');
+  const listBody = document.getElementById('listview-body');
+  const listCount = document.getElementById('listview-count');
+  const listSort = document.getElementById('listview-sort');
+  const viewBtn = document.getElementById('btn-view');
+  const listNodes = nodes.filter(n => !STRUCTURAL_TIERS.has(n.tier) && !isAffinityNode(n));
+  const TIER_RANK = { ROOT: -1, KEYSTONE: 0, NOTABLE: 1, SMALL: 2 };
+  const CORE_SIDE_ORDER = ['root_low_tech', 'root_midline', 'root_high_tech'].map(id => (types.get(id) || { name: id }).name);
+  const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  let listSortMode = 'name';
+  try { const v = localStorage.getItem('esp.listSort'); listSortMode = v === 'tree' || v === 'order' ? v : 'name'; } catch { /* storage unavailable */ }
+  listSort.value = listSortMode;
+  let listCursor = -1;
+  // Trees collapsed in the Skill tree sort, by their place name ("Hegemony volume").
+  const listCollapsed = new Set();
+  try { for (const p of JSON.parse(localStorage.getItem('esp.listCollapsed') || '[]')) listCollapsed.add(p); } catch { /* storage unavailable */ }
+  const saveCollapsed = () => { try { localStorage.setItem('esp.listCollapsed', JSON.stringify([...listCollapsed])); } catch { /* storage unavailable */ } };
+  let listGroupsShown = [];
+  const listGroupBtns = document.getElementById('listview-groups');
+  const listOpen = () => !listEl.hidden;
+  const listName = n => (isChoice(n) && !held(n.id) ? n.type : effectiveType(n)).name;
+  function listRowHtml(n) {
+    const t = isChoice(n) && !held(n.id) ? n.type : effectiveType(n);
+    const themes = nodeThemes(n);
+    const meta = [TIER_LABEL[n.tier] || n.tier, shortPlace(n)];
+    if (n.tier === 'SOCKET' && sat(n.id)) {
+      const e = state.subs.get(n.id), d = e && SUBS.get(e.id), exit = state.links.get(n.id);
+      meta.push(d ? `Holds ${d.name}` : exit && byId.get(exit) ? `Anchor to the ${volumeName(byId.get(exit).volume)} volume` : 'Empty');
+    }
+    if (themes && themes.size) meta.push(`Themes: ${[...themes].map(themeName).join(', ')}`);
+    const lines = isChoice(n) && !held(n.id)
+      ? n.type.options.map(id => types.get(id)).filter(Boolean).map(o => `<div><span class="muted">${esc(o.name)}:</span> ${typeLines(o).join(' ')}</div>`)
+      : typeLines(t).map(l => `<div>${l}</div>`);
+    // Target marks (All nodes list): Want / Forbid buttons while target mode is on, a small tag otherwise.
+    const mark = targets.want.has(n.id) ? 'want' : targets.forbid.has(n.id) ? 'forbid' : '';
+    const marks = listMode !== 'all' ? ''
+      : targets.mode ? `<span class="lv-target">` +
+        `<button type="button" data-mark="want" aria-pressed="${mark === 'want'}" title="${mark === 'want' ? 'Clear the mark' : 'Mark wanted: the plan reaches it'}">Want</button>` +
+        `<button type="button" data-mark="forbid" aria-pressed="${mark === 'forbid'}" title="${mark === 'forbid' ? 'Clear the mark' : 'Mark forbidden: the plan avoids it'}">Forbid</button></span>`
+      : mark ? `<span class="lv-mark ${mark}">${mark === 'want' ? 'wanted' : 'forbidden'}</span>` : '';
+    return `<div class="node-row lv-row ${n.tier.toLowerCase()}${listMode === 'all' && mark ? ` lv-${mark}` : ''}" data-node="${esc(n.id)}">${nodeIconHtml(n, t)}<div class="lv-main">` +
+      `<div class="nm">${esc(t.name)}${sat(n.id) && listMode !== 'build' ? '<span class="have">allocated</span>' : ''}</div>` +
+      `<div class="tr">${esc(meta.join(' · '))}</div>` +
+      (lines.length ? `<div class="lv-effects">${lines.join('')}</div>` : '') + `</div>${marks}</div>`;
+  }
+  // Two lists: "all" (every non-affinity node) and "build" (what's allocated: the root, every chosen node including
+  // wormholes, exits and sockets, and the affinity nodes summed into one row per tech). Each row is an entry with a
+  // place (its tree), a rank (tier), a name, an allocation order and a count, so both lists sort and group alike.
+  const AFF_ORDER = ['low_tech_affinity', 'midline_affinity', 'high_tech_affinity'];
+  const AFF_GROUP = 'Affinity nodes';
+  let listMode = 'all';
+  try { listMode = localStorage.getItem('esp.listMode') === 'build' ? 'build' : 'all'; } catch { /* storage unavailable */ }
+  const listModeBtns = [...document.querySelectorAll('#listview [data-mode]')];
+  const listHint = document.getElementById('listview-hint');
+  const nodeEntry = (n, order) => ({ place: shortPlace(n), core: n.volume === 'core', rank: TIER_RANK[n.tier] ?? 3, name: listName(n), order, count: 1, html: () => listRowHtml(n) });
+  function affRowHtml(g) {
+    const k = g.nodes.length, t = g.type;
+    const lines = typeEffects(t).map(e => `<div>${describe(e.effect, e.magnitude * k)}</div>`);
+    return `<div class="node-row lv-row lv-aff" data-node="${esc(g.nodes[0].id)}">${nodeIconHtml(g.nodes[0], t)}<div class="lv-main">` +
+      `<div class="nm">${esc(t.name)} <span class="lv-count">×${k}</span></div>` +
+      `<div class="tr">${k} affinity node${k === 1 ? '' : 's'}</div>` +
+      (lines.length ? `<div class="lv-effects">${lines.join('')}</div>` : '') + '</div></div>';
+  }
+  function listEntries(hits) {
+    if (listMode !== 'build') return listNodes.filter(n => !hits || hits.has(n.id)).map(n => nodeEntry(n, 0));
+    const ids = state.root ? [state.root, ...state.alloc] : [];
+    const out = [];
+    const aff = new Map();
+    ids.forEach((id, i) => {
+      const n = byId.get(id);
+      if (!n || (hits && !hits.has(id))) return;
+      if (!isAffinityNode(n)) { out.push(nodeEntry(n, i)); return; }
+      const t = effectiveType(n);
+      const g = aff.get(t.id) || { type: t, nodes: [], order: i };
+      g.nodes.push(n);
+      aff.set(t.id, g);
+    });
+    for (const g of aff.values()) {
+      out.push({ place: AFF_GROUP, affinity: true, rank: AFF_ORDER.indexOf(g.type.id), name: g.type.name, order: g.order, count: g.nodes.length, html: () => affRowHtml(g) });
+    }
+    return out;
+  }
+  let listOrder = [];
+  function renderList() {
+    if (!listOpen()) return;
+    for (const b of listModeBtns) b.setAttribute('aria-pressed', String(b.dataset.mode === listMode));
+    const buildSize = state.root ? state.alloc.size + 1 : 0;
+    listModeBtns.find(b => b.dataset.mode === 'build').textContent = `Build (${buildSize})`;
+    const orderOpt = listSort.querySelector('option[value="order"]');
+    orderOpt.hidden = orderOpt.disabled = listMode !== 'build';
+    const sortMode = listSortMode === 'order' && listMode !== 'build' ? 'name' : listSortMode;
+    listSort.value = sortMode;
+    listHint.textContent = listMode === 'build'
+      ? 'Your root and every allocated node, with the affinity nodes counted per tech. The search box and Filter above narrow the list. Click a node to see it on the map.'
+      : targets.mode
+        ? 'Target mode: mark nodes Want or Forbid (clicking a node cycles its mark, as on the map), then Allocate. Affinity nodes are left out.'
+        : 'Affinity nodes are left out. The search box and Filter above narrow the list. Click a node to see it on the map.';
+    const entries = listEntries(searchHits);
+    const total = entries.reduce((a, e) => a + e.count, 0);
+    const byName = (a, b) => nameCollator.compare(a.name, b.name) || nameCollator.compare(a.place, b.place);
+    let html = '', visible = 0;
+    if (sortMode === 'tree') {
+      const groups = new Map();
+      for (const e of entries) {
+        if (!groups.has(e.place)) groups.set(e.place, { core: !!e.core, affinity: !!e.affinity, list: [] });
+        groups.get(e.place).list.push(e);
+      }
+      // Affinity first (build list), then the core sides in the game's Low Tech, Midline, High Tech order, then the volumes.
+      const coreRank = place => { const i = CORE_SIDE_ORDER.findIndex(name => place.startsWith(name)); return i < 0 ? CORE_SIDE_ORDER.length : i; };
+      const groupRank = g => (g.affinity ? 0 : g.core ? 1 : 2);
+      const ordered = [...groups].sort(([a, ga], [b, gb]) => groupRank(ga) - groupRank(gb)
+        || (ga.core ? coreRank(a) - coreRank(b) : 0) || nameCollator.compare(a, b));
+      for (const [place, g] of ordered) {
+        g.list.sort((a, b) => a.rank - b.rank || byName(a, b));
+        const n = g.list.reduce((a, e) => a + e.count, 0);
+        const collapsed = listCollapsed.has(place);
+        if (!collapsed) visible += n;
+        const cap = place.charAt(0).toUpperCase() + place.slice(1);
+        // Each tree's heading collapses or expands it (remembered in esp.listCollapsed).
+        html += `<h3 class="lv-group"><button type="button" data-group="${esc(place)}" aria-expanded="${!collapsed}" title="${collapsed ? 'Show' : 'Hide'} this tree's nodes">` +
+          `<span class="lv-caret">${collapsed ? '▸' : '▾'}</span> ${esc(cap)} <span class="muted">${n}</span></button></h3>` +
+          (collapsed ? '' : g.list.map(e => e.html()).join(''));
+      }
+      listGroupsShown = ordered.map(([place]) => place);
+    } else {
+      entries.sort(sortMode === 'order' ? (a, b) => a.order - b.order : (a, b) => (a.affinity && b.affinity ? a.rank - b.rank : 0) || byName(a, b));
+      html = entries.map(e => e.html()).join('');
+      visible = total;
+    }
+    listOrder = entries;
+    const filtered = searchHits ? ' matching the search and Filter' : '';
+    const inCollapsed = total - visible;
+    const collapsedNote = inCollapsed ? `, ${inCollapsed} in collapsed trees` : '';
+    if (listMode === 'build') {
+      const affCount = entries.filter(e => e.affinity).reduce((a, e) => a + e.count, 0);
+      listCount.textContent = !state.root ? 'No build yet.'
+        : `${total} of ${buildSize} allocated nodes${filtered} (${affCount} affinity)${collapsedNote}`;
+    } else listCount.textContent = `${total} of ${listNodes.length} nodes${filtered}${collapsedNote}`;
+    listGroupBtns.hidden = sortMode !== 'tree';
+    const empty = listMode === 'build' && !state.root ? 'Pick a root on the map to start a build.'
+      : listMode === 'build' && !searchHits ? 'Nothing allocated yet besides the root.' : 'No nodes match. Change the search or the Filter.';
+    listBody.innerHTML = html || `<div class="empty">${empty}</div>`;
+    listCursor = -1;
+  }
+  for (const b of listModeBtns) {
+    b.addEventListener('click', () => {
+      listMode = b.dataset.mode === 'build' ? 'build' : 'all';
+      try { localStorage.setItem('esp.listMode', listMode); } catch { /* storage unavailable */ }
+      renderList();
+      listBody.scrollTop = 0;
+    });
+  }
+  function setView(list) {
+    listEl.hidden = !list;
+    viewBtn.textContent = list ? 'Map' : 'List';
+    viewBtn.setAttribute('aria-pressed', String(list));
+    viewBtn.title = list ? 'Back to the skill tree map (L)' : 'Show every non-affinity node as a list, with search, sorting and the Filter (L)';
+    closePicker(); hideTooltip(); setHover(null);
+    // The Targets bar (Allocate, Keep current build) floats over the map; while the list shows it's docked inside the
+    // list, above the rows, so it isn't covered.
+    const targetsBar = document.getElementById('targets');
+    if (list) listEl.insertBefore(targetsBar, listBody);
+    else document.body.insertBefore(targetsBar, document.getElementById('file-notice'));
+    runFilter(); // puts the panel's Search tab away for the list, or back for the map; renders the list
+    if (list) listBody.scrollTop = 0;
+  }
+  viewBtn.addEventListener('click', () => setView(!listOpen()));
+  listSort.addEventListener('change', () => {
+    listSortMode = listSort.value === 'tree' || listSort.value === 'order' ? listSort.value : 'name';
+    try { localStorage.setItem('esp.listSort', listSortMode); } catch { /* storage unavailable */ }
+    renderList();
+  });
+  listBody.addEventListener('click', e => {
+    const head = e.target.closest('[data-group]');
+    if (head) {
+      const place = head.dataset.group;
+      if (listCollapsed.has(place)) listCollapsed.delete(place); else listCollapsed.add(place);
+      saveCollapsed();
+      renderList();
+      const again = [...listBody.querySelectorAll('[data-group]')].find(b => b.dataset.group === place);
+      if (again) again.focus();
+      return;
+    }
+    const row = e.target.closest('[data-node]');
+    if (!row) return;
+    const n = byId.get(row.dataset.node);
+    // Target mode in the All nodes list: the buttons set a mark, and clicking the row cycles it like on the map.
+    const markBtn = e.target.closest('[data-mark]');
+    if (markBtn) { setTargetMark(n, markBtn.dataset.mark); return; }
+    if (targets.mode && listMode === 'all') { cycleTarget(n); return; }
+    setView(false);
+    jumpTo(n);
+  });
+  // Right-click clears a mark, as the Targets bar says (and as on the map).
+  listBody.addEventListener('contextmenu', e => {
+    const row = e.target.closest('[data-node]');
+    if (!row || !targets.mode || listMode !== 'all') return;
+    e.preventDefault();
+    clearTarget(byId.get(row.dataset.node));
+  });
+  function setTargetMark(n, kind) {
+    const on = kind === 'want' ? targets.want : targets.forbid, off = kind === 'want' ? targets.forbid : targets.want;
+    if (on.has(n.id)) on.delete(n.id);
+    else { on.add(n.id); off.delete(n.id); }
+    targetsChanged();
+  }
+  document.getElementById('lv-collapse-all').addEventListener('click', () => { for (const p of listGroupsShown) listCollapsed.add(p); saveCollapsed(); renderList(); });
+  document.getElementById('lv-expand-all').addEventListener('click', () => { listCollapsed.clear(); saveCollapsed(); renderList(); });
+  // Enter in the search box steps through the list while it's showing.
+  function listStep() {
+    const rows = [...listBody.querySelectorAll('.lv-row')];
+    if (!rows.length) return;
+    if (rows[listCursor]) rows[listCursor].classList.remove('current');
+    listCursor = (listCursor + 1) % rows.length;
+    rows[listCursor].classList.add('current');
+    rows[listCursor].scrollIntoView({ block: 'nearest' });
+    els.searchCount.textContent = `${listCursor + 1}/${rows.length}`;
   }
 
   // shortcuts list
@@ -4985,7 +5221,7 @@
     if (e.key === 'Escape' && !artEl.hidden) { toggleArt(false); return; }
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
     if (CAM_KEYS.includes(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      if (!keysEl.hidden || !exportEl.hidden || !storyEl.hidden || !artEl.hidden || !sheetEl.hidden || !els.picker.hidden) return; // open lists keep the keys for scrolling
+      if (!keysEl.hidden || !exportEl.hidden || !storyEl.hidden || !artEl.hidden || !sheetEl.hidden || !listEl.hidden || !els.picker.hidden) return; // open lists keep the keys for scrolling
       e.preventDefault();
       camKeys.add(e.key);
       return;
@@ -4996,6 +5232,7 @@
     else if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey) togglePanel();
     else if (e.key.toLowerCase() === 'x' && !e.ctrlKey && !e.metaKey && !e.altKey) { setMarkRefused(!markRefused); toast(markRefused ? 'Refused nodes marked with an X.' : 'Refused nodes no longer marked.'); }
     else if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey && !e.altKey) setTargetMode(!targets.mode);
+    else if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey) setView(listEl.hidden);
     else if (e.key === 'Escape') { if (!els.picker.hidden) closePicker(); else if (waypoints.length) clearWaypoints(); else if (targets.mode) setTargetMode(false); }
     else if (e.key === '/') { e.preventDefault(); els.search.focus(); }
   });
