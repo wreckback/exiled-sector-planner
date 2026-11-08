@@ -167,6 +167,25 @@ if ($classText['LowBaseArmorBonus']) {
     }
 }
 
+# The in-game stat sheet (StatGroup): its sections in order, and which section each effect package goes to
+# (StatGroup.of: by the effect class's package; generated weapon effects go to WEAPONS).
+$statGroups = @()
+$packageGroups = @{}
+$defaultGroup = 'MECHANICS'
+$sgf = $javaFiles | Where-Object { $_.BaseName -eq 'StatGroup' } | Select-Object -First 1
+if ($sgf) {
+    $sgText = [IO.File]::ReadAllText($sgf.FullName, $utf8)
+    $enumBody = [regex]::Match($sgText, 'enum\s+StatGroup\s*\{([^;]*);', 'Singleline')
+    if ($enumBody.Success) { $statGroups = @([regex]::Matches($enumBody.Groups[1].Value, '\b([A-Z][A-Z0-9_]*)\b') | ForEach-Object { $_.Groups[1].Value }) }
+    foreach ($m in [regex]::Matches($sgText, 'case\s+((?:"[^"]+"\s*,?\s*)+)->\s*([A-Z][A-Z0-9_]*)\s*;')) {
+        foreach ($p in [regex]::Matches($m.Groups[1].Value, '"([^"]+)"')) { $packageGroups[$p.Groups[1].Value] = $m.Groups[2].Value }
+    }
+    $dm = [regex]::Match($sgText, 'default\s*->\s*([A-Z][A-Z0-9_]*)\s*;')
+    if ($dm.Success) { $defaultGroup = $dm.Groups[1].Value }
+}
+if ($statGroups.Count) { Write-Host "Stat sheet: $($statGroups.Count) sections, $($packageGroups.Count) effect packages mapped" }
+else { Write-Host '  ! StatGroup.java not found or not parsed; the Stats tab will put everything under one section' -ForegroundColor Yellow }
+
 $effects = @{}
 $enumFiles = $javaFiles | Where-Object { $_.Name -like '*SkillEffect.java' }
 foreach ($f in $enumFiles) {
@@ -181,6 +200,8 @@ foreach ($f in $enumFiles) {
         $to = if ($i + 1 -lt $starts.Count) { $starts[$i + 1].Index } else { $text.Length }
         $body = $text.Substring($from, $to - $from)
         $info = [ordered]@{}
+        $pkg = Split-Path (Split-Path $f.FullName -Parent) -Leaf
+        $info.group = if ($packageGroups.ContainsKey($pkg)) { $packageGroups[$pkg] } else { $defaultGroup }
 
         $mode = [regex]::Match($body, '(?:statEffect|ConditionalStatEffect|DerivedStatEffect|ScaledBonus|statEffectFor\w*)\s*\(\s*(?:StatMode\.)?(PERCENT|FLAT|MULT)\b')
         if (-not $mode.Success) { $mode = [regex]::Match($body, '\b(PERCENT|FLAT|MULT)\s*,') }
@@ -343,7 +364,7 @@ foreach ($name in ($usedEffects.Keys | Sort-Object)) {
     $w = [regex]::Match($name, '^(BALLISTIC_|MISSILE_|NON_BEAM_ENERGY_|ENERGY_|BEAM_)?WEAPON_([A-Z_]+)_(PERCENT|FLAT|MULT)$')
     if (-not $info.stat -and $w.Success -and $strings.ContainsKey("weapon.stat.$($w.Groups[2].Value)")) {
         $family = $w.Groups[2].Value
-        $info = [ordered]@{ mode = $w.Groups[3].Value.ToLower(); weaponFamily = $family }
+        $info = [ordered]@{ mode = $w.Groups[3].Value.ToLower(); weaponFamily = $family; group = 'WEAPONS' }
         if ($w.Groups[1].Success) { $info.weaponScope = $w.Groups[1].Value.TrimEnd('_') }
         if ($weaponUnqualified -contains $family) { $info.unqualified = $true }
         if ($weaponLive -contains $family) { $info.live = $true }
@@ -461,7 +482,8 @@ else { Write-Host '  ! no theme list found (SkillTags.THEME); the theme filter w
 # UI strings the planner reuses.
 foreach ($k in $strings.Keys) {
     if ($k -like 'ui.node.*' -or $k -like 'tier.*' -or $k -like 'node.block.*' -or $k -like 'node.requires.*' -or $k -like 'socketable.anchor.gate.*' -or
-        $k -like 'socketable.doctrine.*' -or $k -like 'socketable.radius*' -or $k -like 'socketable.rootConduit.*' -or $k -like 'subroutine.grant.*') {
+        $k -like 'socketable.doctrine.*' -or $k -like 'socketable.radius*' -or $k -like 'socketable.rootConduit.*' -or $k -like 'subroutine.grant.*' -or
+        $k -like 'ui.stats.group.*' -or $k -like 'summary.gated.*' -or $k -in 'summary.forFirst', 'ui.stats.expand', 'ui.stats.collapse', 'ui.stats.nodes', 'ui.stats.breakdown.heading') {
         $neededStrings[$k] = $strings[$k]
     }
 }
@@ -470,7 +492,7 @@ foreach ($k in $strings.Keys) {
 $typeOut = foreach ($t in $types) {
     $o = [ordered]@{ id = $t.id; name = $t.name; icon = $t.icon; tier = $(if ($t.tier) { $t.tier } else { 'SMALL' }) }
     foreach ($k in 'effects', 'hullSizeEffects', 'options', 'tags', 'flavour', 'effectText', 'phantomHullMods', 'exclusiveHullMods',
-                   'exclusiveSkillTypes', 'vanillaHullMod', 'requiredHullSizes', 'itemCost', 'unlockConditions', 'todo') {
+                   'exclusiveSkillTypes', 'vanillaHullMod', 'requiredHullSizes', 'itemCost', 'unlockConditions', 'todo', 'temporaryAfterDeploymentSeconds') {
         if ($null -ne $t.$k) { $o[$k] = $t.$k }
     }
     $o
@@ -507,6 +529,7 @@ $data = [ordered]@{
     typeRenames      = $typeRenames
     retiredOptions   = $retiredOptions
     themes           = @($themes)
+    statGroups       = @($statGroups)
     strings          = $neededStrings
 }
 $modInfo = "$ModRoot\mod_info.json"

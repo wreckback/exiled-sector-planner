@@ -125,14 +125,20 @@ The planner ships no images. Click **Show mod art** in the top bar and choose th
    - The **Core wormholes** and **Faction volumes** checkboxes turn each kind off. Turning one off removes the nodes that depend on it, and Undo brings them back.
 5. **Read the results:**
    - The summary panel (S) totals every effect for the hull size you pick. It also shows affinity totals and the threshold bonuses they unlock.
+   - The **Stats** tab shows the same effects the way the game's stat sheet does: its sections in its order (Progression, Durability, Shields, Phase Cloak, Flux, Weapons, Strikecraft, Mobility, Ship System, Fleet and Battle, Combat Readiness, Logistics, Mechanics), each effect in the section the game puts it in, with the game's wording for temporary and gated effects. Hover a line to see its sources (each node or affinity step and how much it adds).
+     - **Full Sheet** opens it like the game's full stat sheet, laid out in as many columns as fit: the game's colours in the dark theme, the same layout in light colours in the light theme. **Side Panel**, Close or Esc goes back.
+     - The planner has no real ship, so the game's stat rows with base and modified values (armor 1000 to 1200 and so on) aren't shown, only the effect lines. Granted hull mods and text-only effects stay on the Effects tab, as the game doesn't list them in its sheet either.
+     - Nodes whose effects only last a while after deployment (Knight's Charge, Temporary Maneuverability) are shown separately, "For the first N seconds after deployment", on both tabs.
    - **Search** with `/`:
      - Matching nodes get a pulsing gold glow and an outlined gold ring, visible at any zoom, in both themes and with or without the mod's art. The result Enter last stepped to gets a second ring. Other nodes and the lanes are dimmed only lightly, so the tree's shape stays readable.
      - A **Search** tab in the summary panel lists every match with its location, an "allocated" tag, and the line that matched. Click a result to jump to it, or press Enter to step through them.
      - Clearing the search puts the panel back how it was.
-   - **Themes** (next to the search box) filters by the mod's own theme tags: Flux, Shield, Armor, Hull, Speed, Weapons, Strikecraft, Logistics and so on, each with its node count.
+   - **Filter** (next to the search box) highlights groups of nodes:
+     - **Show affinity nodes** highlights all 155 affinity nodes (the Low / Mid / High choice nodes).
+     - **Themes** are the mod's own theme tags: Flux, Shield, Armor, Hull, Speed, Weapons, Strikecraft, Logistics and so on, each with its node count.
      - Ticked themes highlight and list their nodes the same way as search. Match **any ticked** or **all ticked**, and combine with search text (for example Weapons plus "emp").
      - A choice node matches if any of its options has the theme. Roots, wormholes and sockets never match. **No theme** finds the few nodes without a theme tag.
-     - **Include affinity nodes** is off by default. The mod tags the affinity options too (Low Tech: Hull, Armor; Midline: Flux, Hull; High Tech: Flux), so the 155 affinity nodes would otherwise drown out Flux, Hull and Armor.
+     - Affinity nodes never match a theme, only Show affinity nodes. The mod tags the affinity options too (Low Tech: Hull, Armor; Midline: Flux, Hull; High Tech: Flux), so they would otherwise drown out Flux, Hull and Armor. Show affinity nodes adds to whatever the themes match.
      - Tooltips list a node's themes.
    - When zoomed out, each tree is labelled. Click a label to zoom into that tree.
 6. **Node rules:** the planner refuses nodes the game would refuse, with the game's own reason in the tooltip or a toast. See the section below.

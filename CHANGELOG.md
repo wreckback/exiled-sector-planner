@@ -81,14 +81,21 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
   - When the hulls differ, saving asks first: keep the existing hull, change it, or save as a new template under a free name.
   - The summary line warns ahead of time.
 
+**Stats tab and Full Sheet (the in-game stat sheet)**
+- A **Stats** tab in the summary panel lists the build's effects in the game's stat sheet sections, in its order and with its names (`StatGroup`), each effect in the section of its effect class's package, as `StatGroup.of` does. Temporary and gated effects keep the game's "For the first ... seconds after deployment" and "While phased" style wording.
+- **Full Sheet** opens an overlay in the game's layout (`StatSheetLayout`): centred section headings over a thin rule, gold values, square bullets, sections placed into the shortest of as many 400 px columns as fit. **Side Panel** returns to the tab. It uses the game's colours in the dark theme and follows the light theme with light colours (deep blue headings and bullets, deepened gold and green), as does its Sources box.
+- Hovering a line shows its **Sources**: each node, socket item or affinity step and its share, merged by name like the game's breakdown.
+- Temporary nodes (`temporaryAfterDeploymentSeconds`) are now kept out of the permanent totals and shown as their own group on the Effects tab too. Before, they counted as permanent.
+- The extractor writes each effect's `group`, the section order (`statGroups`), the temporary seconds on types, and the sheet's strings. `update.ps1` watches `StatGroup`, `ShipStatSheets` and `SkillTreeBonusSummary`.
+
 **Stronger search highlight**
 - Search and theme-filter matches get a pulsing gold glow under the node and an outlined gold ring with a ripple over it, each with a minimum size on screen so they show even fully zoomed out (where hit dots also turn gold). The result Enter stepped to gets a second, wider ring. The outline is dark in the dark theme and white in the light theme.
 - Less dimming while searching: lanes stay at 75% (were 35%) and other nodes at 45% (were 30%).
 
 **Theme filter**
-- A **Themes** button beside the search box lists the mod's theme tags (`SkillTags.THEME`, with names from `theme.*`), each with its node count, plus "No theme".
+- A **Filter** button beside the search box (first named Themes) lists the mod's theme tags (`SkillTags.THEME`, with names from `theme.*`), each with its node count, plus "No theme".
 - Ticked themes highlight their nodes and list them in the Search tab, matching any or all ticked, and combined with any search text. Choice nodes take the themes of all their options, and structural nodes never match.
-- Affinity nodes are left out unless **Include affinity nodes** is ticked, because the mod tags the affinity options with Flux, Hull and Armor.
+- **Show affinity nodes** is its own Filter entry and highlights all 155 affinity nodes, alongside any themes. Affinity nodes never match a theme, because the mod tags the affinity options with Flux, Hull and Armor. (It started as an "Include affinity nodes" switch on the theme matching.)
 - Tooltips show a "Themes:" line. The extractor writes the theme list to the data (`themes`), and `update.ps1` watches `SkillTags`.
 
 **Search results list**

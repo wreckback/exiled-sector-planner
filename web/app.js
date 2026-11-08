@@ -1209,28 +1209,41 @@
   }
   function totals() {
     const sums = new Map();
-    const add = (effect, mag, src, into = sums) => {
-      const cur = into.get(effect) || { effect, magnitude: 0, sources: 0, affinity: 0 };
+    // `by` keeps each source's share (by name, like the game's stat breakdown), for the Stats tab's Sources.
+    const add = (effect, mag, src, into = sums, label = '') => {
+      const cur = into.get(effect) || { effect, magnitude: 0, sources: 0, affinity: 0, by: new Map() };
       cur.magnitude += mag;
       if (src === 'aff') cur.affinity += mag; else cur.sources++;
+      if (label) cur.by.set(label, (cur.by.get(label) || 0) + mag);
       into.set(effect, cur);
     };
     // Gated nodes: only effects read live in combat survive, at the gate's strength (SkillTreeEffectSource.gatedEffects).
     const gated = new Map(); // condition text -> { sums, nodes, strength, item }
+    // Temporary nodes (temporaryAfterDeploymentSeconds): their effects only last that long after deployment, so they're
+    // kept apart from the permanent totals, as the game's EffectTotals groups them.
+    const temp = new Map(); // seconds -> { sums, nodes }
     for (const c of contributions()) {
-      if (!c.gate) { for (const e of typeEffects(c.type)) add(e.effect, e.magnitude, 'node'); continue; }
+      const secs = c.type.temporaryAfterDeploymentSeconds;
+      if (!c.gate && secs) {
+        const g = temp.get(secs) || { sums: new Map(), nodes: 0 };
+        g.nodes++;
+        for (const e of typeEffects(c.type)) add(e.effect, e.magnitude, 'node', g.sums, c.type.name);
+        temp.set(secs, g);
+        continue;
+      }
+      if (!c.gate) { for (const e of typeEffects(c.type)) add(e.effect, e.magnitude, 'node', sums, c.type.name); continue; }
       const g = gated.get(c.gate.when) || { sums: new Map(), nodes: 0, strength: c.gate.strength, item: c.gate.def.name };
       g.nodes++;
-      for (const e of typeEffects(c.type)) if (D.effects[e.effect]?.live) add(e.effect, e.magnitude * c.gate.strength, 'node', g.sums);
+      for (const e of typeEffects(c.type)) if (D.effects[e.effect]?.live) add(e.effect, e.magnitude * c.gate.strength, 'node', g.sums, c.type.name);
       gated.set(c.gate.when, g);
     }
     // Socket effects: Empty Shell affinity and the Root Conduit route.
     const sc = subState();
     for (const a of sc.active) {
       const shell = subLine(a.def, 'EVERY_AFFINITY_FLAT_PER_EMPTY_SHELL_NODE');
-      if (shell) for (const k of AFFINITY_KEYS) add(k, shell.max * (sc.shellCount.get(a.socket.id) || 0), 'node');
+      if (shell) for (const k of AFFINITY_KEYS) add(k, shell.max * (sc.shellCount.get(a.socket.id) || 0), 'node', sums, a.def.name);
     }
-    if (sc.conduit && sc.conduit.count) add(sc.conduit.aff, 5 * sc.conduit.count, 'node');
+    if (sc.conduit && sc.conduit.count) add(sc.conduit.aff, 5 * sc.conduit.count, 'node', sums, 'Root Conduit');
     const aff = {};
     for (const k of Object.keys(D.affinitySteps || {})) aff[k] = sums.get(k)?.magnitude || 0;
     const affBonuses = [];
@@ -1238,10 +1251,10 @@
       for (const st of steps) {
         const reached = Math.floor((aff[k] || 0) / st.size);
         affBonuses.push({ affinity: k, ...st, reached });
-        if (reached > 0) add(st.effect, reached * st.bonus, 'aff');
+        if (reached > 0) add(st.effect, reached * st.bonus, 'aff', sums, `${AFFINITY_NAMES[k] || humanize(k)} affinity ${reached}×${st.size}`);
       }
     }
-    return { sums, aff, affBonuses, gated };
+    return { sums, aff, affBonuses, gated, temp };
   }
   const GROUPS = [
     ['Affinity', /AFFINITY/],
@@ -2293,6 +2306,8 @@
     els.panelShip.hidden = !onShip;
     els.shipBtn.setAttribute('aria-pressed', String(onShip && !els.panel.classList.contains('closed')));
     if (onShip) { renderShipPane(); els.panelFoot.textContent = footText(); return; }
+    const sheetOpen = document.getElementById('statsheet');
+    if (sheetOpen && !sheetOpen.hidden) renderSheet();
     if (panelTab === 'search') {
       els.panelBody.innerHTML = searchResultsHtml();
       els.panelFoot.textContent = footText();
@@ -2302,6 +2317,11 @@
     }
     if (!state.root) {
       els.panelBody.innerHTML = '<div class="empty">Pick one of the three roots near the centre to start.</div>';
+      els.panelFoot.textContent = footText();
+      return;
+    }
+    if (panelTab === 'sheet') {
+      els.panelBody.innerHTML = sheetTabHtml();
       els.panelFoot.textContent = footText();
       return;
     }
@@ -2333,6 +2353,13 @@
         for (const txt of c.type.effectText || []) extras.add(styled(txt));
       }
       if (extras.size) html += `<div class="stat-group"><h3>Other effects</h3>${[...extras].map(e => `<div class="stat-line">${e}</div>`).join('')}</div>`;
+      // Temporary nodes: their effects only for the first N seconds after deployment.
+      for (const [secs, g] of t.temp || []) {
+        const lines = [...g.sums.values()].filter(s => Math.abs(s.magnitude) > 1e-9);
+        if (!lines.length) continue;
+        html += `<div class="stat-group"><h3>For the first ${esc(secs)} seconds after deployment</h3>` +
+          lines.map(s => `<div class="stat-line">${describe(s.effect, s.magnitude)}<span class="src">${s.sources} node${s.sources > 1 ? 's' : ''}</span></div>`).join('') + '</div>';
+      }
       // Gated nodes: their live-in-combat effects at the gate's strength, only under its condition.
       for (const [when, g] of t.gated || []) {
         const lines = [...g.sums.values()].filter(s => Math.abs(s.magnitude) > 1e-9);
@@ -3465,10 +3492,12 @@
     return '';
   }
   function searchResultsHtml() {
-    if (!searchOrder.length) return `<div class="empty">No nodes match ${themeFilter.size && searchTerms.length ? 'that search and theme filter' : themeFilter.size ? 'that theme filter' : 'that search'}.</div>`;
+    if (!searchOrder.length) return `<div class="empty">No nodes match ${filterCount() && searchTerms.length ? 'that search and filter' : filterCount() ? 'that filter' : 'that search'}.</div>`;
     const have = searchOrder.filter(n => sat(n.id)).length;
-    const themesText = themeFilter.size
-      ? ` with ${themeFilter.size > 1 ? (themeMatchAll ? 'all of' : 'any of') : 'the theme'} ${[...themeFilter].map(themeName).join(', ')}` : '';
+    const filterParts = [];
+    if (themeFilter.size) filterParts.push(`${themeFilter.size > 1 ? (themeMatchAll ? 'all of the themes' : 'any of the themes') : 'the theme'} ${[...themeFilter].map(themeName).join(', ')}`);
+    if (showAffinity) filterParts.push('affinity nodes');
+    const themesText = filterParts.length ? ` for ${filterParts.join(' or ')}` : '';
     let html = `<div class="search-head">${searchOrder.length} match${searchOrder.length === 1 ? '' : 'es'}${esc(themesText)}` +
       `${state.root ? `, ${have} allocated` : ''}. Click one to jump to it.</div>`;
     searchOrder.forEach((n, i) => {
@@ -3519,28 +3548,32 @@
   }
   const themeFilter = new Set(); // theme ids, plus NO_THEME
   let themeMatchAll = false;
-  // The mod tags the affinity options too (Low Tech: hull, armour; Midline: flux, hull; High Tech: flux), so all 155
-  // affinity nodes would match Flux, Hull or Armor. They're left out unless asked for.
-  let themeAffinity = false;
+  // Affinity nodes are their own Filter entry ("Show affinity nodes") and are never matched by a theme: the mod tags
+  // the affinity options too (Low Tech: hull, armour; Midline: flux, hull; High Tech: flux), so all 155 of them would
+  // otherwise bury the real Flux, Hull and Armor nodes.
+  let showAffinity = false;
   const isAffinityNode = n => isChoice(n) && n.type.options.every(id => OPTION_TINT[id]);
   const hasTheme = (set, id) => (id === NO_THEME ? set.size === 0 : set.has(id));
   function themeMatch(n) {
     const set = nodeThemes(n);
-    if (!set || (!themeAffinity && isAffinityNode(n))) return false;
+    if (!set || !themeFilter.size || isAffinityNode(n)) return false;
     const ids = [...themeFilter];
     return themeMatchAll ? ids.every(id => hasTheme(set, id)) : ids.some(id => hasTheme(set, id));
   }
-  // The search box and the theme filter together decide searchHits (dimming on the canvas) and the Search tab list.
+  const filterCount = () => themeFilter.size + (showAffinity ? 1 : 0);
+  // A node passes the Filter when a ticked theme matches it, or when it's an affinity node and those are shown.
+  const filterMatch = n => themeMatch(n) || (showAffinity && isAffinityNode(n));
+  // The search box and the Filter together decide searchHits (the canvas highlight) and the Search tab list.
   function runFilter() {
     const q = els.search.value.trim().toLowerCase();
-    const textOn = q.length >= 2, themesOn = themeFilter.size > 0;
-    if (!textOn && !themesOn) {
+    const textOn = q.length >= 2, filterOn = filterCount() > 0;
+    if (!textOn && !filterOn) {
       searchHits = null; searchOrder = []; searchTerms = []; els.searchCount.textContent = '';
       updateSearchTab(false); requestDraw(); return;
     }
     searchTerms = textOn ? q.split(/\s+/) : [];
     searchOrder = sortSearchResults(nodes.filter(n => {
-      if (themesOn && !themeMatch(n)) return false;
+      if (filterOn && !filterMatch(n)) return false;
       if (!textOn) return true;
       const s = nodeSearchText(n);
       return searchTerms.every(t => s.includes(t));
@@ -3555,32 +3588,35 @@
 
   const themeEl = document.getElementById('theme-filter');
   const themeBtnEl = document.getElementById('btn-themes');
-  // Node counts per theme, without and with the affinity nodes.
-  const themeCountSets = [false, true].map(withAffinity => {
-    const counts = new Map([[NO_THEME, 0]]);
-    for (const n of nodes) {
-      const set = nodeThemes(n);
-      if (!set || (!withAffinity && isAffinityNode(n))) continue;
-      if (!set.size) counts.set(NO_THEME, counts.get(NO_THEME) + 1);
-      for (const id of set) counts.set(id, (counts.get(id) || 0) + 1);
-    }
-    return counts;
-  });
+  // Node counts per theme (affinity nodes aside), and the affinity node count.
+  const themeCounts = new Map([[NO_THEME, 0]]);
+  for (const n of nodes) {
+    const set = nodeThemes(n);
+    if (!set || isAffinityNode(n)) continue;
+    if (!set.size) themeCounts.set(NO_THEME, themeCounts.get(NO_THEME) + 1);
+    for (const id of set) themeCounts.set(id, (themeCounts.get(id) || 0) + 1);
+  }
   const affinityNodeCount = nodes.filter(isAffinityNode).length;
+  function renderFilterButton() {
+    const k = filterCount();
+    themeBtnEl.textContent = k ? `Filter (${k})` : 'Filter';
+    themeBtnEl.setAttribute('aria-pressed', String(k > 0));
+    const clear = document.getElementById('theme-clear');
+    if (clear) clear.disabled = !k;
+  }
   function renderThemeFilter() {
-    themeBtnEl.textContent = themeFilter.size ? `Themes (${themeFilter.size})` : 'Themes';
-    themeBtnEl.setAttribute('aria-pressed', String(themeFilter.size > 0));
+    renderFilterButton();
     if (themeEl.hidden) return;
-    const themeCounts = themeCountSets[themeAffinity ? 1 : 0];
     const row = id => `<label><input type="checkbox" data-theme-tag="${esc(id)}"${themeFilter.has(id) ? ' checked' : ''}> ${esc(themeName(id))} <span class="muted">${themeCounts.get(id) || 0}</span></label>`;
     const used = THEME_LIST.filter(t => themeCounts.get(t.id)).map(t => t.id);
     themeEl.innerHTML =
-      `<div class="theme-head"><b>Filter by theme</b><label>Match <select id="theme-match">` +
+      `<div class="theme-head"><b>Filter</b></div>` +
+      `<p class="filter-affinity"><label title="Highlight every affinity node (the Low / Mid / High choice nodes)"><input type="checkbox" id="filter-affinity"${showAffinity ? ' checked' : ''}> Show affinity nodes <span class="muted">${affinityNodeCount}</span></label></p>` +
+      `<div class="theme-head"><b>Themes</b><label>Match <select id="theme-match">` +
       `<option value="any"${themeMatchAll ? '' : ' selected'}>any ticked</option><option value="all"${themeMatchAll ? ' selected' : ''}>all ticked</option></select></label></div>` +
       `<div class="theme-list">${used.map(row).join('')}${themeCounts.get(NO_THEME) ? row(NO_THEME) : ''}</div>` +
-      `<p><label title="The mod tags affinity options with the stats their thresholds lean to (Low Tech: Hull, Armor; Midline: Flux, Hull; High Tech: Flux)"><input type="checkbox" id="theme-affinity"${themeAffinity ? ' checked' : ''}> Include affinity nodes <span class="muted">${affinityNodeCount}</span></label></p>` +
-      `<p class="muted">The mod's own theme tags. Matching nodes are highlighted and listed in the Search tab, together with any search text. Numbers are nodes in all trees.</p>` +
-      `<div class="export-actions"><button id="theme-clear"${themeFilter.size ? '' : ' disabled'}>Clear</button><button id="theme-close">Close</button></div>`;
+      `<p class="muted">Themes are the mod's own tags. Affinity nodes aren't counted in any theme, only under Show affinity nodes. Everything ticked is highlighted and listed in the Search tab, together with any search text. Numbers are nodes in all trees.</p>` +
+      `<div class="export-actions"><button id="theme-clear"${filterCount() ? '' : ' disabled'}>Clear</button><button id="theme-close">Close</button></div>`;
   }
   function toggleThemeFilter(show = themeEl.hidden) {
     themeEl.hidden = !show;
@@ -3600,16 +3636,13 @@
     const box = e.target.matches('[data-theme-tag]') ? e.target : null;
     if (box) { if (box.checked) themeFilter.add(box.dataset.themeTag); else themeFilter.delete(box.dataset.themeTag); }
     else if (e.target.id === 'theme-match') themeMatchAll = e.target.value === 'all';
-    else if (e.target.id === 'theme-affinity') { themeAffinity = e.target.checked; renderThemeFilter(); document.getElementById('theme-affinity').focus(); }
+    else if (e.target.id === 'filter-affinity') showAffinity = e.target.checked;
     else return;
-    const clear = document.getElementById('theme-clear');
-    if (clear) clear.disabled = !themeFilter.size;
-    themeBtnEl.textContent = themeFilter.size ? `Themes (${themeFilter.size})` : 'Themes';
-    themeBtnEl.setAttribute('aria-pressed', String(themeFilter.size > 0));
+    renderFilterButton();
     runFilter();
   });
   themeEl.addEventListener('click', e => {
-    if (e.target.id === 'theme-clear') { themeFilter.clear(); renderThemeFilter(); runFilter(); }
+    if (e.target.id === 'theme-clear') { themeFilter.clear(); showAffinity = false; renderThemeFilter(); runFilter(); }
     else if (e.target.id === 'theme-close') toggleThemeFilter(false);
   });
   document.addEventListener('pointerdown', e => {
@@ -3671,6 +3704,123 @@
     window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (themeSetting === 'auto') setTheme('auto'); });
   }
   renderThemeButton();
+
+  // ------------------------------------------------------------------ stat sheet (the Stats tab and the Full Sheet)
+  // Mirrors the mod's in-game stat sheet (ShipStatSheets, StatSheetLayout): sections in StatGroup order, each effect
+  // under the section of its effect class's package (D.effects[name].group, from the extractor). The planner has no
+  // real ship, so there are no base stats to show; every effect is an effect row, as the game does for effects no stat
+  // row covers. Temporary and gated effects stay in their section with the game's own wording around them. Hovering a
+  // row shows its sources (each node or affinity step and its share), like the game's breakdown.
+  const STAT_GROUPS = D.statGroups && D.statGroups.length ? D.statGroups : ['MECHANICS'];
+  const GATE_KEYS = { 'While phased': 'PHASED', 'Below 50% hull': 'LOW_HULL', 'While the ship system is active': 'SYSTEM_ACTIVE' };
+  const gameString = (k, fallback) => (k && D.strings && D.strings[k]) || fallback;
+  const SHEET_MIN_COLUMN = 400, SHEET_COLUMN_GAP = 24; // StatSheetLayout.MIN_COLUMN_WIDTH, COLUMN_GAP
+  function statSheet() {
+    const t = cachedTotals || totals();
+    const last = STAT_GROUPS[STAT_GROUPS.length - 1];
+    const sections = new Map(STAT_GROUPS.map(g => [g, []]));
+    if (STAT_GROUPS[0] === 'PROGRESSION') sections.get('PROGRESSION').push({ label: gameString('ui.stats.nodes', 'Nodes'), value: `${state.alloc.size + 1}/${state.cap}` });
+    const push = (s, wrap) => {
+      if (Math.abs(s.magnitude) < 1e-9) return;
+      const g = (D.effects[s.effect] && D.effects[s.effect].group) || last;
+      const raw = describeRaw(s.effect, s.magnitude);
+      (sections.get(g) || sections.get(last)).push({ html: styled(wrap ? wrap(raw) : raw), effect: s.effect, by: [...(s.by || [])] });
+    };
+    for (const s of t.sums.values()) push(s);
+    const forFirst = gameString('summary.forFirst', 'For the first {seconds} seconds after deployment: {text}');
+    for (const [secs, g] of t.temp || []) for (const s of g.sums.values()) push(s, raw => forFirst.replace('{seconds}', secs).replace('{text}', raw));
+    for (const [when, g] of t.gated || []) {
+      const tpl = gameString(GATE_KEYS[when] ? `summary.gated.${GATE_KEYS[when]}` : '', `${when}: {text}`);
+      for (const s of g.sums.values()) push(s, raw => tpl.replace('{text}', raw));
+    }
+    return STAT_GROUPS.filter(g => sections.get(g).length).map(g => ({ id: g, name: gameString(`ui.stats.group.${g}`, humanize(g)), rows: sections.get(g) }));
+  }
+  function sheetSectionHtml(sec, rows) {
+    let h = `<section class="gs-sec"><h3>${esc(sec.name)}</h3>`;
+    for (const r of sec.rows) {
+      const i = rows.push(r) - 1;
+      h += r.label != null
+        ? `<div class="gs-row" data-row="${i}"><span>${esc(r.label)}</span><span class="gs-val">${esc(r.value)}</span></div>`
+        : `<div class="gs-eff" data-row="${i}">${r.html}</div>`;
+    }
+    return h + '</section>';
+  }
+  // The Stats tab: one column, like the game's side panel.
+  let sheetTabRows = [];
+  function sheetTabHtml() {
+    const rows = [];
+    const html = `<div class="gs-tabhead"><span class="muted">The in-game stat sheet's sections. Hover a line for its sources.</span>` +
+      `<button id="gs-expand" title="Open the stat sheet in full, laid out like the game's">${esc(gameString('ui.stats.expand', 'Full Sheet'))}</button></div>` +
+      `<div class="gs gs-side">${statSheet().map(s => sheetSectionHtml(s, rows)).join('')}</div>`;
+    sheetTabRows = rows;
+    return html;
+  }
+  // The Full Sheet: the game's colours, sections laid into as many 400 px columns as fit, each into the shortest
+  // column so far (StatSheetLayout.build).
+  const sheetEl = document.getElementById('statsheet');
+  const sheetBody = document.getElementById('statsheet-body');
+  const sheetSub = document.getElementById('statsheet-sub');
+  const sheetTip = document.getElementById('sheet-tip');
+  let sheetRows = [];
+  function renderSheet() {
+    if (sheetEl.hidden) return;
+    const rows = [];
+    if (!state.root) {
+      sheetBody.innerHTML = '<div class="gs-col"><p class="gs-empty">Pick one of the three roots near the centre to start.</p></div>';
+      sheetSub.textContent = '';
+      sheetRows = rows;
+      return;
+    }
+    const width = sheetBody.clientWidth - 32;
+    const columns = Math.max(1, Math.floor((width + SHEET_COLUMN_GAP) / (SHEET_MIN_COLUMN + SHEET_COLUMN_GAP)));
+    sheetBody.innerHTML = '<div class="gs-col"></div>'.repeat(columns);
+    const cols = [...sheetBody.children];
+    for (const sec of statSheet()) {
+      const col = cols.reduce((a, b) => (b.offsetHeight < a.offsetHeight ? b : a));
+      col.insertAdjacentHTML('beforeend', sheetSectionHtml(sec, rows));
+    }
+    sheetRows = rows;
+    const root = byId.get(state.root);
+    const hull = hullLabel();
+    sheetSub.textContent = `${root ? root.type.name : ''} \u00b7 ${hull.charAt(0).toUpperCase() + hull.slice(1)} \u00b7 ${state.alloc.size + 1}/${state.cap} nodes`;
+  }
+  function toggleSheet(show = sheetEl.hidden) {
+    sheetEl.hidden = !show;
+    sheetTip.hidden = true;
+    if (show) {
+      closePicker(); hideTooltip(); toggleKeys(false);
+      if (!storyEl.hidden) toggleStory(false);
+      if (!exportEl.hidden) toggleExport(false);
+      if (!artEl.hidden) toggleArt(false);
+      renderSheet();
+      document.getElementById('statsheet-close').focus();
+    }
+  }
+  document.getElementById('statsheet-close').addEventListener('click', () => toggleSheet(false));
+  document.getElementById('statsheet-side').addEventListener('click', () => {
+    toggleSheet(false);
+    if (els.panel.classList.contains('closed')) togglePanel();
+    setPanelTab('sheet');
+  });
+  els.panelBody.addEventListener('click', e => { if (e.target.id === 'gs-expand') toggleSheet(true); });
+  window.addEventListener('resize', () => { if (!sheetEl.hidden) renderSheet(); });
+  // Sources on hover, in both views.
+  function showSheetTip(row, x, y, game) {
+    if (!row || !row.by || !row.by.length) { sheetTip.hidden = true; return; }
+    sheetTip.classList.toggle('game', game);
+    sheetTip.innerHTML = `<div class="tt-title">${esc(gameString('ui.stats.breakdown.heading', 'Sources'))}</div>` +
+      row.by.map(([name, amount]) => `<div class="gs-src"><b>${esc(name)}</b>${describe(row.effect, amount)}</div>`).join('');
+    sheetTip.hidden = false;
+    placeFloating(sheetTip, x, y);
+  }
+  for (const [container, rowsOf, game] of [[els.panelBody, () => sheetTabRows, false], [sheetBody, () => sheetRows, true]]) {
+    container.addEventListener('mousemove', e => {
+      const el = e.target.closest('.gs [data-row]');
+      if (!el || !container.contains(el)) { sheetTip.hidden = true; return; }
+      showSheetTip(rowsOf()[+el.dataset.row], e.clientX, e.clientY, game);
+    });
+    container.addEventListener('mouseleave', () => { sheetTip.hidden = true; });
+  }
 
   // shortcuts list
   const keysEl = document.getElementById('keys');
@@ -4812,13 +4962,14 @@
 
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !themeEl.hidden) { toggleThemeFilter(false); return; }
+    if (e.key === 'Escape' && !sheetEl.hidden) { toggleSheet(false); return; }
     if (e.key === 'Escape' && !exportEl.hidden) { toggleExport(false); return; }
     if (e.key === 'Escape' && !keysEl.hidden) { toggleKeys(false); return; }
     if (e.key === 'Escape' && !storyEl.hidden) { toggleStory(false); return; }
     if (e.key === 'Escape' && !artEl.hidden) { toggleArt(false); return; }
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
     if (CAM_KEYS.includes(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      if (!keysEl.hidden || !exportEl.hidden || !storyEl.hidden || !artEl.hidden || !els.picker.hidden) return; // open lists keep the keys for scrolling
+      if (!keysEl.hidden || !exportEl.hidden || !storyEl.hidden || !artEl.hidden || !sheetEl.hidden || !els.picker.hidden) return; // open lists keep the keys for scrolling
       e.preventDefault();
       camKeys.add(e.key);
       return;
@@ -4867,6 +5018,6 @@
     findPath: (id, opt) => findPath(byId.get(id), opt), blockOf: (id, opt) => blockOf(byId.get(id), opt || null, rules().list),
     problems: () => [...rules().problems].map(([id, b]) => ({ id, text: b.text })), setShip, setAffinitySplit,
     waypoints: () => waypoints.map(n => n.id), toggleWaypoint: id => toggleWaypoint(byId.get(id)), clearWaypoints, routeTo: (id, opt) => routeTo(byId.get(id), opt),
-    targets, setTargetMode, setTargetKeep, cycleTarget: id => cycleTarget(byId.get(id)), plan: () => currentPlan(), applyPlan,
+    statSheet, toggleSheet, targets, setTargetMode, setTargetKeep, cycleTarget: id => cycleTarget(byId.get(id)), plan: () => currentPlan(), applyPlan,
     socketSub: (socket, id, extra) => socketSub(byId.get(socket), id, extra), setGrants: (socket, ids) => setGrants(byId.get(socket), ids), subState: () => subState(), typesExclusive: (a, b) => typesExclusive(types.get(a), types.get(b)) };
 })();

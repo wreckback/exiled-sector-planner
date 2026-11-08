@@ -147,6 +147,67 @@ button:disabled { opacity: 0.5; cursor: default; }
 .node-row .have { color: var(--accent); font-weight: 400; font-size: 12px; margin-left: 4px; }
 .search-head { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
 #btn-themes { flex: none; }
+
+/* stat sheet: the Stats tab follows the theme; the Full Sheet uses the game's own colours (StatSheetLayout) in the
+   dark theme, and the same layout in light colours in the light theme */
+.gs {
+  --gs-head: var(--text); --gs-label: var(--text); --gs-value: var(--hl); --gs-text: var(--text);
+  --gs-rule: var(--edge); --gs-bullet: var(--accent); --gs-hover: var(--raised);
+}
+.gs-tabhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12px; }
+.gs-tabhead button { flex: none; }
+.gs-sec { margin-bottom: 14px; }
+.gs-sec h3 { margin: 0 0 6px; padding-bottom: 3px; text-align: center; font-size: 14px; font-weight: 600; color: var(--gs-head); border-bottom: 1px solid var(--gs-rule); }
+.gs-row { display: flex; justify-content: space-between; gap: 10px; padding: 1px 2px; color: var(--gs-label); }
+.gs-val { color: var(--gs-value); font-variant-numeric: tabular-nums; }
+.gs-eff { position: relative; padding: 1px 2px 1px 14px; color: var(--gs-text); }
+.gs-eff::before { content: ""; position: absolute; left: 5px; top: 0.65em; width: 3px; height: 3px; background: var(--gs-bullet); }
+.gs [data-row]:hover { background: var(--gs-hover); }
+#statsheet {
+  position: fixed; z-index: 36;
+  top: calc(var(--bar-h, 44px) + 12px + env(safe-area-inset-top, 0px)); left: 16px; right: 16px; bottom: 16px;
+  display: flex; flex-direction: column;
+  background: #000; border: 2px solid rgb(120, 200, 255); color: #e6e6e6;
+  user-select: text;
+}
+#statsheet .gs-bar { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid rgba(120, 200, 255, 0.5); }
+#statsheet h2 { margin: 0; font-size: 16px; font-weight: 600; color: #cbf5ff; }
+#statsheet .gs-sub { flex: 1; color: #9ab8c4; }
+#statsheet button { color: #cbf5ff; background: #06121a; border: 1px solid rgba(120, 200, 255, 0.6); }
+#statsheet-body {
+  flex: 1; overflow-y: auto; padding: 16px; display: flex; gap: 24px; align-items: flex-start;
+  --gs-head: #cbf5ff; --gs-label: #cbf5ff; --gs-value: #ffd200; --gs-text: #e6e6e6;
+  --gs-rule: rgba(120, 200, 255, 0.5); --gs-bullet: #cbf5ff; --gs-hover: rgba(120, 200, 255, 0.18);
+}
+#statsheet-body .gs-sec h3 { font-size: 15px; }
+.gs-col { flex: 1 1 0; min-width: 0; }
+.gs-empty { color: #9ab8c4; }
+#statsheet .good, #sheet-tip.game .good { color: #98fb00; }
+#statsheet .bad, #sheet-tip.game .bad { color: #fc6300; }
+#statsheet .hl, #sheet-tip.game .hl { color: #ffd200; }
+#sheet-tip {
+  position: fixed; z-index: 45; pointer-events: none;
+  width: max-content; max-width: min(380px, calc(100vw - 32px));
+  background: var(--panel); border: 1px solid var(--edge); padding: 8px 10px; font-size: 13px;
+}
+#sheet-tip.game { background: #000; border: 2px solid rgb(120, 200, 255); color: #e6e6e6; }
+/* Light theme: the game's layout kept, in light colours (deep blue for the game's light-cyan, deepened gold and green). */
+:root[data-theme="light"] #statsheet { background: var(--panel); border-color: var(--accent); color: var(--text); }
+:root[data-theme="light"] #statsheet .gs-bar { border-bottom-color: var(--edge); }
+:root[data-theme="light"] #statsheet h2 { color: #0b4f80; }
+:root[data-theme="light"] #statsheet .gs-sub, :root[data-theme="light"] .gs-empty { color: var(--muted); }
+:root[data-theme="light"] #statsheet button { color: var(--text); background: var(--raised); border-color: var(--edge); }
+:root[data-theme="light"] #statsheet-body {
+  --gs-head: #0b4f80; --gs-label: #1d4258; --gs-value: var(--hl); --gs-text: var(--text);
+  --gs-rule: rgba(11, 104, 173, 0.45); --gs-bullet: #0b68ad; --gs-hover: rgba(11, 104, 173, 0.12);
+}
+:root[data-theme="light"] #statsheet .good, :root[data-theme="light"] #sheet-tip.game .good { color: var(--good); }
+:root[data-theme="light"] #statsheet .bad, :root[data-theme="light"] #sheet-tip.game .bad { color: var(--bad); }
+:root[data-theme="light"] #statsheet .hl, :root[data-theme="light"] #sheet-tip.game .hl { color: var(--hl); }
+:root[data-theme="light"] #sheet-tip.game { background: var(--panel); border-color: var(--accent); color: var(--text); }
+#sheet-tip .tt-title { font-size: 14px; margin-bottom: 4px; }
+.gs-src { padding: 2px 0; }
+.gs-src b { display: block; font-weight: 600; }
 #theme-filter {
   position: fixed; z-index: 30;
   width: min(340px, calc(100vw - 32px)); max-height: min(70vh, 560px); overflow-y: auto;
@@ -157,6 +218,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 #theme-filter .theme-list { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
 #theme-filter .theme-list label { white-space: nowrap; cursor: pointer; padding: 2px 0; }
 #theme-filter p { font-size: 12px; margin: 8px 0; }
+#theme-filter p.filter-affinity { font-size: 14px; margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
 .node-row.keystone .nm { color: var(--keystone); }
 .node-row.notable .nm { color: var(--notable); }
 

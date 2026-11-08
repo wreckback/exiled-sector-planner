@@ -50,7 +50,7 @@
   <div class="bar-group search">
     <input id="search" type="search" placeholder="Search nodes…" autocomplete="off">
     <span id="search-count" class="muted"></span>
-    <button id="btn-themes" title="Filter nodes by the mod's theme tags (Flux, Speed, Weapons and so on)" aria-haspopup="true" aria-expanded="false" aria-pressed="false" aria-controls="theme-filter">Themes</button>
+    <button id="btn-themes" title="Filter nodes by the mod's theme tags (Flux, Speed, Weapons and so on), or show the affinity nodes" aria-haspopup="true" aria-expanded="false" aria-pressed="false" aria-controls="theme-filter">Filter</button>
   </div>
 
   <div class="bar-group actions">
@@ -92,6 +92,7 @@
   </div>
   <div class="panel-tabs">
     <button data-tab="stats" class="active">Effects</button>
+    <button data-tab="sheet" title="The effects in the in-game stat sheet's sections, with a Full Sheet view">Stats</button>
     <button data-tab="nodes">Notables &amp; keystones</button>
     <button data-tab="ship" id="tab-ship">Ship</button>
     <button data-tab="search" id="tab-search" hidden>Search</button>
@@ -164,7 +165,17 @@
     <button id="fn-dismiss">Dismiss</button>
   </div>
 </div>
-<div id="theme-filter" role="group" aria-label="Filter by theme" hidden></div>
+<div id="theme-filter" role="group" aria-label="Filter" hidden></div>
+<div id="statsheet" role="dialog" aria-modal="true" aria-labelledby="statsheet-title" hidden>
+  <div class="gs-bar">
+    <h2 id="statsheet-title">Stats</h2>
+    <span id="statsheet-sub" class="gs-sub"></span>
+    <button id="statsheet-side" title="Back to the Stats tab in the summary panel">Side Panel</button>
+    <button id="statsheet-close" title="Close (Esc)">Close</button>
+  </div>
+  <div id="statsheet-body" class="gs gs-full"></div>
+</div>
+<div id="sheet-tip" hidden></div>
 <div id="tooltip" hidden></div>
 <div id="picker" hidden></div>
 <div id="toast" hidden></div>
@@ -318,7 +329,7 @@
       <tr><td><kbd>T</kbd></td><td>Turn target mode on or off</td></tr>
       <tr><td><kbd>/</kbd></td><td>Jump to the search box</td></tr>
       <tr><td><kbd>?</kbd></td><td>Show or hide this list</td></tr>
-      <tr><td><kbd>Esc</kbd></td><td>Close this list, the theme filter or the option/anchor picker, clear waypoints, or leave target mode</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Close this list, the Filter list, the full stat sheet or the option/anchor picker, clear waypoints, or leave target mode</td></tr>
     </table>
     <p class="muted">Keys don't work while you're typing in the search, cap or hull fields.</p>
 
