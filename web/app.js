@@ -3455,6 +3455,11 @@
     forget: document.getElementById('tf-forget'),
     note: document.getElementById('tf-note'),
     list: document.getElementById('tf-list'),
+    watch: document.getElementById('tf-watch'),
+    watchNote: document.getElementById('tf-watch-note'),
+    watchMode: document.getElementById('tf-watch-mode'),
+    watchSecsWrap: document.getElementById('tf-watch-secs'),
+    watchLimits: document.getElementById('tf-watch-limits'),
   };
   const canWriteFiles = typeof window.showOpenFilePicker === 'function';
   let linkedHandle = null;   // FileSystemFileHandle, kept in IndexedDB so the link survives reloads
@@ -3488,16 +3493,220 @@
     return linkedAccess === 'granted';
   }
   async function readLinked() {
-    const text = await (await linkedHandle.getFile()).text();
-    fileTemplates = parseTemplateFile(text);
+    const f = await linkedHandle.getFile();
+    const text = await f.text();
+    const list = parseTemplateFile(text);
+    noticeOutsideChange(text, list);
+    fileTemplates = list;
+    linkedText = text;
+    linkedStamp = `${f.lastModified}:${f.size}`;
+    if (!observer && !watchTimer && !observerStarting) scheduleWatch(); // the first read of a link starts watching
     return text;
   }
+
+  // --- watching the linked file: the game rewrites it when a template changes in game. The browser has no change event
+  // for a linked file, so it's polled (timestamp and size every LINK_POLL_MS, and when the tab comes back), and read only
+  // when those change. A read that differs from what the planner last read or wrote raises the file notice.
+  // How to watch, set in the Templates dialog: 'observe' (the default: the browser's FileSystemObserver tells the planner
+  // as soon as the file changes; nothing is watched where the browser has none or after it reports an error), 'poll'
+  // (checking every watchSecs seconds, only when chosen) or 'off'. The top bar's Check file button checks on demand in
+  // any mode. Saved as localStorage 'esp.watchMode' and 'esp.watchSecs'.
+  const WATCH_DEFAULT = 2, WATCH_MAX = 600;
+  const canObserve = typeof window.FileSystemObserver === 'function';
+  let watchMode = 'observe', watchSecs = WATCH_DEFAULT, watchTimer = 0;
+  let observer = null, observerBroken = false, observerStarting = false, observeDelay = 0, readRetries = 0;
+  try {
+    const m = localStorage.getItem('esp.watchMode'), s = localStorage.getItem('esp.watchSecs');
+    const v = Number(s);
+    if (['observe', 'poll', 'off'].includes(m)) watchMode = m;
+    else if (s === '0') watchMode = 'off'; // the interval setting used to turn watching off with 0
+    if (s != null && Number.isFinite(v) && v >= 1) watchSecs = Math.min(WATCH_MAX, Math.round(v));
+  } catch { /* storage unavailable */ }
+  let linkedText = null;    // the file as the planner last read or wrote it; null until the first read of this link
+  let linkedStamp = '';     // lastModified:size of that read
+  let linkedWriting = false, linkedPolling = false;
+  let fileChange = null;    // what the notice reports: { added, changed, removed (name lists), current }
+  const fileNotice = {
+    box: document.getElementById('file-notice'),
+    msg: document.getElementById('file-notice-msg'),
+    load: document.getElementById('fn-load'),
+    open: document.getElementById('fn-open'),
+    dismiss: document.getElementById('fn-dismiss'),
+  };
+  const templateKey = t => (t.id ? 'id:' + t.id : `${t.root}|${String(t.name).trim().toLowerCase()}`);
+  const templateBody = t => JSON.stringify([t.name, t.root, t.hull, t.steps, t.anchors || null]);
+  const validTemplate = t => t && typeof t === 'object' && t.root && t.name;
+  function noticeOutsideChange(text, now) {
+    if (linkedText == null || text === linkedText) return;
+    let before;
+    try { before = parseTemplateFile(linkedText); } catch { before = []; }
+    const om = new Map(before.filter(validTemplate).map(t => [templateKey(t), t]));
+    const nm = new Map(now.filter(validTemplate).map(t => [templateKey(t), t]));
+    const added = [...nm].filter(([k]) => !om.has(k)).map(([, t]) => t.name);
+    const removed = [...om].filter(([k]) => !nm.has(k)).map(([, t]) => t.name);
+    const changed = [...nm].filter(([k, t]) => om.has(k) && templateBody(om.get(k)) !== templateBody(t)).map(([, t]) => t.name);
+    if (!added.length && !removed.length && !changed.length) return; // rewritten, same templates
+    // The template the current build came from: did it change there?
+    let current = null;
+    if (state.root && state.template) {
+      const i = findTemplateIndex(before, state.template.name);
+      const old = i >= 0 ? before[i] : null;
+      const j = findTemplateIndex(now, state.template.name);
+      const next = old ? nm.get(templateKey(old)) || (j >= 0 ? now[j] : null) : j >= 0 ? now[j] : null;
+      if (old && !next) current = { removed: true, name: old.name };
+      else if (next && (!old || templateBody(old) !== templateBody(next))) current = { t: next, name: next.name };
+    }
+    const merge = (a, b) => [...new Set([...(a || []), ...b])];
+    fileChange = { added: merge(fileChange?.added, added), changed: merge(fileChange?.changed, changed), removed: merge(fileChange?.removed, removed), current: current || fileChange?.current || null };
+    renderFileNotice();
+  }
+  function renderFileNotice() {
+    const c = fileChange;
+    fileNotice.box.hidden = !c;
+    if (!c) return;
+    const list = (label, names) => (names.length ? ` ${label}: ${names.slice(0, 3).map(n => `"${n}"`).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}.` : '');
+    let text = `The templates file ${linkedHandle ? linkedHandle.name : ''} was changed outside the planner, most likely by Starsector.` +
+      list('Changed', c.changed) + list('Added', c.added) + list('Removed', c.removed) + ' The Templates list is up to date.';
+    const cur = c.current;
+    if (cur && cur.removed) text += ` "${cur.name}", which your build came from, was removed there. Your build is kept.`;
+    else if (cur) {
+      const edited = state.template && templateSig() !== state.template.sig;
+      text += ` Your build came from "${cur.name}", which changed there. Load the new version? It replaces your build${edited ? ', including the edits you made since loading or saving it' : ''}. Undo brings it back.`;
+    }
+    fileNotice.msg.textContent = text;
+    fileNotice.load.hidden = !(cur && !cur.removed);
+    fileNotice.dismiss.textContent = cur && !cur.removed ? 'Keep my build' : 'Dismiss';  }
+  function closeFileNotice() { fileChange = null; renderFileNotice(); }
+  // One check: compare timestamp and size, and read the file only when they changed. The observer and the timer both
+  // come here. A read that fails (the game halfway through writing, say) is retried shortly when the observer is in
+  // charge, since no further event may come; the timer just tries again on its next tick.
+  async function pollLinked() {
+    if (watchMode === 'off' || document.hidden || !linkedHandle || linkedAccess !== 'granted' || linkedWriting || linkedPolling || linkedText == null) return;
+    linkedPolling = true;
+    try {
+      const f = await linkedHandle.getFile();
+      if (`${f.lastModified}:${f.size}` !== linkedStamp && !linkedWriting) {
+        await readLinked();
+        if (!exportEl.hidden) renderTemplatesFile();
+      }
+      readRetries = 0;
+    } catch {
+      if (observer && readRetries < 3) { readRetries++; setTimeout(pollLinked, 1000); }
+    } finally { linkedPolling = false; }
+  }
+  // Watching runs only while the page is visible: a hidden tab (another tab in front, the window minimized or covered
+  // by the game) has no observer and no timer, and coming back checks at once. It also needs a linked file with access
+  // allowed this visit.
+  const watchReady = () => watchMode !== 'off' && !document.hidden && !!linkedHandle && linkedAccess === 'granted' && linkedText != null;
+  function stopObserver() {
+    if (observer) { try { observer.disconnect(); } catch { /* already gone */ } }
+    observer = null;
+    clearTimeout(observeDelay);
+  }
+  async function startObserver() {
+    observerStarting = true;
+    try {
+      const o = new FileSystemObserver(records => {
+        // 'errored' ends the observation (the system stopped watching, after sleep for example).
+        if (records.some(r => r.type === 'errored')) { observerBroken = true; stopObserver(); renderWatchStatus(); return; }
+        // One save can arrive as several events; read once, after they settle.
+        clearTimeout(observeDelay);
+        observeDelay = setTimeout(pollLinked, 300);
+      });
+      await o.observe(linkedHandle);
+      if (watchReady() && watchMode === 'observe') observer = o; else o.disconnect();
+    } catch { observerBroken = true; }
+    finally { observerStarting = false; }
+  }
+  async function scheduleWatch() {
+    clearInterval(watchTimer);
+    watchTimer = 0;
+    if (!watchReady()) { stopObserver(); renderWatchStatus(); return; }
+    if (watchMode === 'observe') {
+      // No fallback to checking: without a working observer nothing is watched (Check file still works).
+      if (canObserve && !observerBroken && !observer && !observerStarting) await startObserver();
+      renderWatchStatus();
+      return;
+    }
+    stopObserver();
+    watchTimer = setInterval(pollLinked, watchSecs * 1000);
+    renderWatchStatus();
+  }
+  // What the Templates dialog says about watching, including what the browser can't do.
+  function renderWatchStatus() {
+    tf.watchMode.value = watchMode;
+    tf.watch.value = watchSecs;
+    tf.watchSecsWrap.hidden = watchMode !== 'poll';
+    const manual = ' Use Check file in the top bar to check by hand, or choose checking every few seconds.';
+    let now;
+    if (watchMode === 'off') now = 'Off. Use Check file in the top bar to look for changes the game made, or open this dialog.';
+    else if (!linkedHandle || linkedAccess !== 'granted') now = 'Starts once the file is linked and the browser allows access (after a browser restart, click Reconnect or Check file).';
+    else if (observer) now = 'Watching instantly: the browser reports each change to the file as it happens.';
+    else if (watchMode === 'observe' && !canObserve) now = 'This browser has no file observer, so the file isn\'t being watched.' + manual;
+    else if (watchMode === 'observe' && observerBroken) now = 'Instant watching isn\'t working for this file (the browser couldn\'t start it, or the system stopped reporting changes), so the file isn\'t being watched. It tries again when you come back to this tab or relink.' + manual;
+    else if (watchMode === 'observe') now = 'Starting instant watching…';
+    else now = `Checking every ${watchSecs} s.`;
+    tf.watchNote.textContent = now;
+    checkFileBtn.hidden = !linkedHandle;
+  }
+  // Check file (top bar): one check on demand, whatever the watch setting, with the same notice. As a click, it can
+  // also ask the browser for access, so after a browser restart it reconnects the file too.
+  const checkFileBtn = document.getElementById('btn-checkfile');
+  async function checkFileNow() {
+    if (!linkedHandle) { toast('Link the templates file in Templates first.'); return; }
+    try {
+      if (!(await checkAccess(true))) { toast('The browser wasn\'t allowed to read the templates file.'); renderWatchStatus(); return; }
+      const before = linkedText, noticeBefore = fileChange;
+      const text = await readLinked();
+      if (!exportEl.hidden) renderTemplatesFile();
+      scheduleWatch();
+      const n = fileTemplates ? fileTemplates.length : 0;
+      if (before == null) toast(`Connected to ${linkedHandle.name}: ${n} template${n === 1 ? '' : 's'}. Changes from now on are noticed.`);
+      else if (text === before) toast('No changes in the templates file since the last check.');
+      else if (fileChange === noticeBefore) toast('The templates file was rewritten, but its templates are the same.');
+    } catch (err) { toast(err.message || String(err)); }
+  }
+  checkFileBtn.addEventListener('click', () => { checkFileNow(); checkFileBtn.blur(); });
+  function setWatch(mode, secs) {
+    if (mode) watchMode = mode;
+    const n = Number(secs);
+    if (secs != null && Number.isFinite(n) && n >= 1) watchSecs = Math.min(WATCH_MAX, Math.round(n));
+    try { localStorage.setItem('esp.watchMode', watchMode); localStorage.setItem('esp.watchSecs', String(watchSecs)); } catch { /* storage unavailable */ }
+    observerBroken = false;
+    stopObserver();
+    scheduleWatch();
+  }
+  tf.watchMode.addEventListener('change', () => { setWatch(tf.watchMode.value); tf.watchMode.blur(); });
+  tf.watch.addEventListener('change', () => setWatch(null, tf.watch.value));
+  tf.watch.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); tf.watch.blur(); } });
+  tf.watchLimits.textContent = (canObserve
+    ? 'Instant watching uses the browser\'s File System Observer. The system can stop reporting changes (after the computer sleeps, for example); the planner then stops watching until you come back to this tab or relink.'
+    : 'This browser has no File System Observer, the feature instant watching needs (recent Chrome and Edge have it).') +
+    ' Watching only happens while this tab is visible, and needs access the browser asks for again each visit.';
+  renderWatchStatus();
+  document.getElementById('tf-watch-row').hidden = !canWriteFiles; // read-only browsers can't watch the file
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) observerBroken = false; // worth trying the observer again after a break
+    scheduleWatch();
+    if (!document.hidden) pollLinked();
+  });
+  window.addEventListener('focus', pollLinked);
+  fileNotice.load.addEventListener('click', () => {
+    const cur = fileChange && fileChange.current;
+    closeFileNotice();
+    if (cur && cur.t) loadTemplate(cur.t, msg => toast(msg));
+  });
+  fileNotice.open.addEventListener('click', () => { closeFileNotice(); toggleExport(true); });
+  fileNotice.dismiss.addEventListener('click', closeFileNotice);
   async function linkFile() {
     try {
       const opts = { types: [{ description: 'Exiled Sector templates', accept: { 'application/json': ['.data', '.json'] } }], multiple: false };
       if (linkedHandle) opts.startIn = linkedHandle;
       const [h] = await window.showOpenFilePicker(opts);
       linkedHandle = h;
+      linkedText = null; // a new link: its first read isn't a change
+      stopObserver(); clearInterval(watchTimer); watchTimer = 0; observerBroken = false;
+      closeFileNotice();
       await rememberHandle(h);
       if (await checkAccess(true)) await readLinked();
       exportStatus('');
@@ -3522,6 +3731,9 @@
   }
   async function forgetLinked() {
     linkedHandle = null; linkedAccess = 'none'; fileTemplates = null; openedFile = null;
+    linkedText = null;
+    closeFileNotice();
+    scheduleWatch(); // nothing to watch: stops the observer or timer
     await rememberHandle(null);
     renderTemplatesFile();
   }
@@ -3837,9 +4049,15 @@
       }
       const result = mergeTemplate(text, saveName, mode === 'keep' ? 'keep' : 'change');
       if (p.target === 'linked') {
-        const w = await linkedHandle.createWritable();
-        await w.write(result.text);
-        await w.close();
+        linkedWriting = true; // the planner's own save isn't a change from outside
+        try {
+          const w = await linkedHandle.createWritable();
+          await w.write(result.text);
+          await w.close();
+          const f = await linkedHandle.getFile();
+          linkedText = result.text;
+          linkedStamp = `${f.lastModified}:${f.size}`;
+        } finally { linkedWriting = false; }
         fileTemplates = JSON.parse(result.text).templates;
         reportMerge(result, `in ${linkedHandle.name}`);
       } else {
@@ -3939,13 +4157,26 @@
     if (!exportEl.hidden && !exportEl.contains(e.target) && e.target !== exportBtn) toggleExport(false);
   });
   // Debug/testing: show a file's templates without linking (the picker needs a real click).
-  window.plannerTemplatesTest = Object.assign(text => { fileTemplates = parseTemplateFile(text); renderTemplatesFile(); }, { startSave });
+  // link(handle) links a stand-in file handle (getFile, queryPermission, createWritable) so the watcher can be tested;
+  // poll() runs one watcher check.
+  window.plannerTemplatesTest = Object.assign(text => { fileTemplates = parseTemplateFile(text); renderTemplatesFile(); }, {
+    startSave,
+    link: async h => {
+      linkedHandle = h; linkedText = null; stopObserver(); clearInterval(watchTimer); watchTimer = 0; observerBroken = false; closeFileNotice();
+      if (await checkAccess(false)) await readLinked();
+      renderTemplatesFile();
+    },
+    poll: pollLinked,
+    watch: () => ({ mode: watchMode, secs: watchSecs, observing: !!observer, timer: !!watchTimer, broken: observerBroken, canObserve }),
+    setWatch,
+  });
   // Restore the linked file from the last visit (access is re-granted with one click when needed).
   if (canWriteFiles && window.indexedDB) {
     recallHandle().then(async h => {
       if (!h) return;
       linkedHandle = h;
       try { if (await checkAccess(false)) await readLinked(); } catch { fileTemplates = null; }
+      renderWatchStatus(); // shows Check file, which can reconnect if access lapsed
       if (!exportEl.hidden) renderTemplatesFile();
     });
   }

@@ -183,6 +183,14 @@ button:disabled { opacity: 0.5; cursor: default; }
 #targets-status.bad { color: var(--bad); }
 #btn-targets.on { border-color: var(--accent); color: var(--accent); }
 @media (min-width: 960px) { body.panel-open #targets { left: calc((100vw - 380px) / 2); } }
+#file-notice {
+  position: fixed; left: 16px; top: calc(var(--bar-h, 44px) + 12px + env(safe-area-inset-top, 0px));
+  z-index: 45; /* over the dialogs (40), under toasts (50) */
+  width: min(420px, calc(100vw - 32px));
+  background: var(--panel); border: 1px solid var(--hl);
+  padding: 8px 10px; font-size: 13px; user-select: text;
+}
+#file-notice p { margin: 0 0 6px; }
 #banner.small { font-size: 13px; font-weight: 400; }
 #toast {
   position: fixed; left: 50%; bottom: calc(40px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
@@ -222,7 +230,8 @@ body.panel-open #help { max-width: calc(100vw - 420px); }
 .keys-body code { font: 12px ui-monospace, Consolas, monospace; }
 .export-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 #tpl-status:empty, #tpl-save-note:empty, #tpl-summary:empty { display: none; }
-#tf-note:empty, #tf-status:empty { display: none; }
+#tf-note:empty, #tf-status:empty, #tf-watch-note:empty { display: none; }
+#tf-watch { width: 64px; padding: 1px 4px; }
 #tf-list table { width: 100%; border-collapse: collapse; table-layout: auto; }
 #tf-list td { padding: 3px 6px 3px 0; border-bottom: 1px solid #1a2630; vertical-align: middle; width: auto; }
 #tf-list td:first-child { width: auto; font-weight: 600; }

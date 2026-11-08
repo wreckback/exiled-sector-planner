@@ -18,7 +18,8 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - One command to follow a mod release: fetch tags, check out the newest release (or `-Tag`), run the extractor, check the data, compare the tree, list changed mod rule files, and record the sync in `tools/mod-sync.json`.
 - The checks run without a browser: unfilled wording placeholders, effects newly without wording, newly missing art, unknown node types and tiers, missing, one-way or non-mutual links, the template format versions, and the default node cap.
 - The project folder is now a git repo, so each sync can be one commit (`-Commit`).
-- `tools/release.ps1` tags releases and candidates as `vX.Y.Z[-rc.N]+es<mod release>`. It numbers candidates, promotes them, bumps from the last release, and refuses on a dirty tree or stale data. The tag message lists the changes.
+- `tools/release.ps1` tags releases and pre-releases as `vX.Y.Z[-alpha.N|-beta.N|-rc.N]+es<mod release>`. It numbers pre-releases, moves them through the stages, releases them, bumps from the last release, and refuses on a dirty tree or stale data. The tag message lists the changes. The first internal test build, tagged `v0.2.0-rc.1`, was renamed `v0.2.0-alpha.1`.
+- `tools/package.ps1` builds the ready-to-use zip for a tag: the site from the tag (`git archive`), the art from `web/assets` (checked against the tag's mod release), a README.txt and the mod's CREDITS.md.
 
 ## Local server (`tools/serve.ps1`)
 
@@ -112,6 +113,16 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - The search treats a node and its partner (wormhole pair, linked socket and exit) as one unit, with directed edges because an exit is entered only through its socket. It's an exact Steiner tree search (Dreyfus-Wagner) for up to 10 wanted nodes, about 120 ms at 10, and a shortest-path heuristic above that.
 - The node rules are replayed on the plan in allocation order. A node that clashes with a wanted one is routed around, and a wanted node that can't be had is reported.
 - "Keep current build" off plans from the root alone and removes what the plan doesn't need.
+
+**Templates file watching**
+- While the templates file is linked, the planner watches it. A setting in the Templates dialog chooses how:
+  - **Instantly** (the default) uses the browser's File System Observer. It notices a change in about 0.3 s, with no work in between, and never falls back to checking on its own.
+  - **By checking** looks at the file every N seconds (default 2), only when chosen.
+  - **Off** doesn't watch.
+  The dialog shows which method is running and explains the browser limits.
+- **Check file** in the top bar checks the linked file on demand, in any mode, with the same notice. It also reconnects the file after a browser restart. When the game or anything else changes it, a notice lists the templates added, changed or removed, and the Templates list refreshes.
+- If the template the build came from changed, the notice offers to load the new version, warning about unsaved edits (Undo brings the build back). A removed template keeps the build.
+- The planner's own saves, and rewrites with the same templates, are ignored. Checking pauses while the tab is hidden and runs at once when it's shown again.
 
 **Waypoints**
 - Shift+click marks numbered waypoints, and the next allocation runs through them in order, each leg the shortest legal path from the waypoint before. This forces longer routes, for example to raise a Root Conduit's route count. The preview, tooltip and wormhole picker follow the waypoint route, a banner shows the count, and Esc clears them.

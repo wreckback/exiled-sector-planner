@@ -53,20 +53,34 @@ The last line says either "All checks passed, no rule files changed", in which c
 
 ## Tag a release
 
-Planner tags carry the planner's own version, with the mod release its data was synced from as build metadata: `v0.4.0-rc.1+es0.11.1-alpha` for a candidate, `v0.4.0+es0.11.1-alpha` for the release.
+Planner tags carry the planner's own version, with the mod release its data was synced from as build metadata: `v0.4.0-alpha.1+es0.11.1-alpha` for a pre-release, `v0.4.0+es0.11.1-alpha` for the release. (The trailing `-alpha` there is the mod's own release name.)
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Version 0.4.0 -RC   # first candidate: v0.4.0-rc.1+es...
-powershell -ExecutionPolicy Bypass -File tools\release.ps1 -RC                  # next candidate:  v0.4.0-rc.2+es...
-powershell -ExecutionPolicy Bypass -File tools\release.ps1                      # promote it:      v0.4.0+es...
-powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Bump minor -RC      # from the last release: v0.5.0-rc.1+es...
+powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Version 0.4.0 -Pre alpha   # first alpha:  v0.4.0-alpha.1+es...
+powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Pre alpha                  # next alpha:   v0.4.0-alpha.2+es...
+powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Pre rc                     # candidate:    v0.4.0-rc.1+es...
+powershell -ExecutionPolicy Bypass -File tools\release.ps1                             # release it:   v0.4.0+es...
+powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Bump minor -Pre alpha      # from the last release: v0.5.0-alpha.1+es...
 ```
 
+- Pre-release stages follow the usual order, and sort that way:
+  - **alpha:** internal testing; features still changing.
+  - **beta:** feature-complete, wider testing.
+  - **rc:** a release candidate; fixes only.
+  Stages only move forward for a version: after an rc, the script refuses a new alpha. `-RC` is short for `-Pre rc`.
 - Which number to raise: **patch** for a mod sync or fixes, **minor** for new features, **major** when old share links or saved builds stop loading.
 - `-Push` pushes the tag, `-DryRun` only shows the tag and its message, and `-Plain` leaves out the `+es…` part.
 - The tag message names the mod release and commit and lists the commits since the previous tag.
 - It refuses when the working tree has changes, when the version isn't newer than the last release, or when `ExiledSector\` or `planner-data.js` doesn't match `tools\mod-sync.json`. Run `update.ps1` first after a mod release.
 - Tags that don't look like `vX.Y.Z`, such as the earlier `0.11.1-alpha`, are ignored.
+
+To build the ready-to-use zip for a tag (the site, its data, the art, a README.txt and the mod's CREDITS.md, in one folder that runs from a double-clicked `index.html`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Tag "v0.2.0-rc.1+es0.11.1-alpha"   # or no -Tag for the tag on HEAD
+```
+
+It writes `dist\exiled-sector-planner-<tag>.zip`. The site files come from the tag itself, so any tag can be packaged. The art comes from `web\assets`, which has to be extracted from the same mod release; the script refuses otherwise. Attach the zip to the GitHub release for that tag, marked as a pre-release for an alpha, beta or rc. The zip's README.txt says which stage it is. The art belongs to the mod and the authors it credits, so the zip goes on releases, never into the repository.
 
 ## Use it
 
@@ -178,6 +192,30 @@ The Templates button reads and writes the mod's shared template file, `saves\com
 - Click "Link templates file…" and pick the file. The planner remembers it between visits; when the browser asks again, click Reconnect.
 - Browsers can't open a typed path, so you pick the file instead.
 - Other browsers can only open the file read-only, each visit.
+
+**Changes from the game:** while the file is linked, and the browser allows access this visit, the planner watches it for changes. Choose how in the Templates dialog, under **Watch the linked file for changes from the game**:
+
+| Setting | What it does |
+|---|---|
+| **Instantly (file observer)** (default) | The browser tells the planner as soon as the file changes, so the notice appears within about a third of a second, and nothing runs in between. Where the observer isn't available, nothing is watched and the dialog says so; it never falls back to checking on its own. |
+| **By checking every few seconds** | Only when you choose it. Looks at the file's timestamp and size every **Check every … seconds** (1 to 600, default 2), and reads the file only when they change. |
+| **Off** | No watching. |
+
+**Check file** in the top bar checks the linked file right away, whatever the setting, with the same notice. It reports "No changes" when there are none. Because it's a click, it can also ask the browser for access, so after a browser restart it reconnects the file too. It shows once a file is linked.
+
+The settings are kept in your browser, and the dialog says which method is running right now. Whichever you choose:
+- It only watches while the tab is visible. A hidden tab (another tab in front, the window minimized, or covered by the game) does nothing. Coming back checks at once and picks up whatever changed meanwhile. A planner open on a second monitor counts as visible, so it keeps up while you play.
+- When Starsector, or anything else, changes it, a notice at the top left lists the templates added, changed or removed, and the Templates list updates by itself.
+- If the template your build came from changed in the game, the notice offers **Load the new version**. That replaces your build, including any edits since you loaded or saved it, and Undo brings it back. **Keep my build** leaves it as it is.
+- If that template was removed in the game, your build is kept.
+- The planner's own saves, and rewrites that leave the templates the same, don't raise the notice.
+
+**Browser limitations:**
+- **Instant watching** needs the browser's File System Observer. Recent Chrome and Edge have it. Where it's missing, the file isn't watched: use **Check file**, or choose checking every few seconds. The dialog says so.
+- **The observer can stop**, for example after the computer sleeps. Watching then stops, and the observer is tried again when you come back to the tab or relink the file. **Check file** works meanwhile.
+- **Access is asked for each visit.** After a browser restart, nothing is watched until you click **Check file**, or **Reconnect** in the Templates dialog.
+- **Firefox and Safari** can only open the file read-only, a copy picked each visit, so they can't watch it at all. The watch settings are hidden there.
+- **Only while visible:** a hidden tab doesn't watch, as described above.
 
 **Import:**
 - The dialog lists the file's templates, grouped by root, and re-reads the file each time it opens. **Load** replaces your build with a template.

@@ -1,12 +1,17 @@
 <#
-  Tags a planner release or release candidate. The tag is the planner's own version, with the mod release the data
-  was synced from (tools\mod-sync.json) as build metadata: v0.4.0-rc.1+es0.11.1-alpha, v0.4.0+es0.11.1-alpha.
+  Tags a planner release or pre-release. The tag is the planner's own version, with the mod release the data was
+  synced from (tools\mod-sync.json) as build metadata: v0.4.0-alpha.1+es0.11.1-alpha, v0.4.0+es0.11.1-alpha.
 
-    powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Version 0.4.0 -RC   # v0.4.0-rc.1+es...
-    powershell -ExecutionPolicy Bypass -File tools\release.ps1 -RC                  # next candidate: v0.4.0-rc.2+es...
-    powershell -ExecutionPolicy Bypass -File tools\release.ps1                      # promote it: v0.4.0+es...
-    powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Bump minor -RC      # from the last release: v0.5.0-rc.1+es...
-    Add -Plain to leave out the +es part, -Push to push the tag, -DryRun to only show what it would do.
+    powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Version 0.4.0 -Pre alpha   # v0.4.0-alpha.1+es...
+    powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Pre alpha                  # next: v0.4.0-alpha.2+es...
+    powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Pre rc                     # move on: v0.4.0-rc.1+es...
+    powershell -ExecutionPolicy Bypass -File tools\release.ps1                             # release it: v0.4.0+es...
+    powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Bump minor -Pre alpha      # from the last release: v0.5.0-alpha.1+es...
+    -RC is short for -Pre rc. Add -Plain to leave out the +es part, -Push to push the tag, -DryRun to only show it.
+
+  Pre-release stages, in order (semantic versioning sorts them this way): alpha (internal testing, features still
+  changing), beta (feature-complete, wider testing), rc (release candidate, fixes only). Without -Version or -Bump,
+  -Pre continues the newest open pre-release's version, and no -Pre releases it.
 
   Which number to raise: patch for a mod sync or fixes, minor for new features, major when old share links or saved
   builds stop loading.
@@ -17,6 +22,7 @@
 param(
     [string]$Version,
     [ValidateSet('', 'major', 'minor', 'patch')][string]$Bump = '',
+    [ValidateSet('', 'alpha', 'beta', 'rc')][string]$Pre = '',
     [switch]$RC,
     [switch]$Plain,
     [switch]$Push,
@@ -62,17 +68,22 @@ if ($sync.modVersion -and $dataVersion -ne $sync.modVersion) {
 }
 
 # 3. Existing planner tags.
-$pattern = '^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?(?:\+.*)?$'
+if ($RC) { if ($Pre -and $Pre -ne 'rc') { Fail "-RC and -Pre $Pre don't go together." }; $Pre = 'rc' }
+$stageRank = @{ alpha = 1; beta = 2; rc = 3 } # a release ranks above all of them
+$pattern = '^v(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.(\d+))?(?:\+.*)?$'
 $tags = @(Invoke-Git $Root @('tag', '-l', 'v*') | Where-Object { $_ -match $pattern } | ForEach-Object {
     $m = [regex]::Match($_, $pattern)
+    $stage = if ($m.Groups[4].Success) { $m.Groups[4].Value } else { $null }
     [pscustomobject]@{
-        Name = $_
-        Key  = [version]("{0}.{1}.{2}" -f $m.Groups[1].Value, $m.Groups[2].Value, $m.Groups[3].Value)
-        Rc   = if ($m.Groups[4].Success) { [int]$m.Groups[4].Value } else { $null }
+        Name  = $_
+        Key   = [version]("{0}.{1}.{2}" -f $m.Groups[1].Value, $m.Groups[2].Value, $m.Groups[3].Value)
+        Stage = $stage
+        Num   = if ($stage) { [int]$m.Groups[5].Value } else { 0 }
+        Rank  = if ($stage) { $stageRank[$stage] } else { 4 }
     }
 })
-$byNewest = @($tags | Sort-Object -Property @{ Expression = 'Key'; Descending = $true }, @{ Expression = { if ($null -eq $_.Rc) { [int]::MaxValue } else { $_.Rc } }; Descending = $true })
-$lastRelease = $byNewest | Where-Object { $null -eq $_.Rc } | Select-Object -First 1
+$byNewest = @($tags | Sort-Object -Property @{ Expression = 'Key'; Descending = $true }, @{ Expression = 'Rank'; Descending = $true }, @{ Expression = 'Num'; Descending = $true })
+$lastRelease = $byNewest | Where-Object { $null -eq $_.Stage } | Select-Object -First 1
 $latest = $byNewest | Select-Object -First 1
 
 # 4. The version to tag.
@@ -86,8 +97,8 @@ if ($Version) {
         'minor' { [version]("{0}.{1}.0" -f $from.Major, ($from.Minor + 1)) }
         'patch' { [version]("{0}.{1}.{2}" -f $from.Major, $from.Minor, ($from.Build + 1)) }
     }
-} elseif ($latest -and $null -ne $latest.Rc) {
-    $base = $latest.Key # continue or promote the open candidate
+} elseif ($latest -and $latest.Stage) {
+    $base = $latest.Key # continue the open pre-release, or release it
 } else {
     Fail 'Say which version: -Version X.Y.Z, or -Bump major|minor|patch.'
 }
@@ -95,10 +106,13 @@ if ($lastRelease -and $base -le $lastRelease.Key) { Fail "v$base isn't newer tha
 $baseText = "{0}.{1}.{2}" -f $base.Major, $base.Minor, $base.Build
 
 $name = "v$baseText"
-if ($RC) {
-    $rcs = @($tags | Where-Object { $_.Key -eq $base -and $null -ne $_.Rc } | ForEach-Object { $_.Rc })
-    $next = if ($rcs.Count) { ($rcs | Measure-Object -Maximum).Maximum + 1 } else { 1 }
-    $name += "-rc.$next"
+if ($Pre) {
+    # Stages only move forward: an alpha after this version's rc would sort before it.
+    $later = @($tags | Where-Object { $_.Key -eq $base -and $_.Stage -and $_.Rank -gt $stageRank[$Pre] })
+    if ($later.Count) { Fail "v$baseText already has $($later[0].Name), and $Pre comes before $($later[0].Stage), so it would sort before it. Use -Pre $($later[0].Stage) or a later stage." }
+    $nums = @($tags | Where-Object { $_.Key -eq $base -and $_.Stage -eq $Pre } | ForEach-Object { $_.Num })
+    $next = if ($nums.Count) { ($nums | Measure-Object -Maximum).Maximum + 1 } else { 1 }
+    $name += "-$Pre.$next"
 }
 if (-not $Plain) { $name += "+es$($sync.release)" }
 & git check-ref-format "refs/tags/$name" | Out-Null
