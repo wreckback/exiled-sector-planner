@@ -3862,6 +3862,7 @@
     summary: document.getElementById('story-summary'),
     gates: document.getElementById('story-gates'),
     unlocks: document.getElementById('story-unlocks'),
+    other: document.getElementById('story-other'),
   };
   // Types that can appear in the tree (node types and their options), and the hull mods any of them can clash with.
   const treeTypes = [...new Map(nodes.flatMap(n => [n.type.id, ...(n.type.options || [])]).filter(id => types.has(id)).map(id => [id, types.get(id)])).values()];
@@ -3907,12 +3908,18 @@
       for (const n of nodes) for (const g of n.gates) gateCounts.set(g, (gateCounts.get(g) || 0) + 1);
       story.gates.innerHTML = [...gateCounts.keys()].sort((a, b) => gateText(a).localeCompare(gateText(b))).map(g =>
         `<label><input type="checkbox" data-gate="${esc(g)}"> ${esc(gateText(g))} <span class="muted">(${gateCounts.get(g)} node${gateCounts.get(g) > 1 ? 's' : ''})</span></label>`).join('');
-      story.unlocks.innerHTML = treeTypes.filter(t => (t.unlockConditions || []).length).sort((a, b) => a.name.localeCompare(b.name)).map(t =>
+      // Blueprint unlocks are hull mods (Unlocked hullmods, by name only; the condition is in the hover title). Anything
+      // else (today only the Wormhole, unlocked by $playerCanUseGates) goes in the section at the top, with its condition.
+      const unlockTypes = treeTypes.filter(t => (t.unlockConditions || []).length).sort((a, b) => a.name.localeCompare(b.name));
+      const isBlueprint = t => t.unlockConditions.some(c => c.type === 'blueprint');
+      story.unlocks.innerHTML = unlockTypes.filter(isBlueprint).map(t =>
+        `<label title="Needs ${esc(unlockText(t))}"><input type="checkbox" data-type="${esc(t.id)}"> ${esc(t.name)}</label>`).join('');
+      story.other.innerHTML = unlockTypes.filter(t => !isBlueprint(t)).map(t =>
         `<label><input type="checkbox" data-type="${esc(t.id)}"> ${esc(t.name)} <span class="muted">(${esc(unlockText(t))})</span></label>`).join('');
     }
     const sh = state.ship;
     for (const cb of story.gates.querySelectorAll('input')) cb.checked = !sh.lockedGates.has(cb.dataset.gate);
-    for (const cb of story.unlocks.querySelectorAll('input')) cb.checked = !sh.lockedTypes.has(cb.dataset.type);
+    for (const cb of [...story.unlocks.querySelectorAll('input'), ...story.other.querySelectorAll('input')]) cb.checked = !sh.lockedTypes.has(cb.dataset.type);
     const n = storyRuleCount();
     story.summary.textContent = `${n ? `${n} gate${n === 1 ? ' or unlock is' : 's or unlocks are'} unticked.` : 'Everything is ticked.'} ${refusedSummary()}`;
   }
@@ -3980,11 +3987,20 @@
     const g = e.target.dataset.gate;
     if (g) setShip(s => { if (e.target.checked) s.lockedGates.delete(g); else s.lockedGates.add(g); });
   });
-  story.unlocks.addEventListener('change', e => {
-    const t = e.target.dataset.type;
-    if (t) setShip(s => { if (e.target.checked) s.lockedTypes.delete(t); else s.lockedTypes.add(t); });
-  });
-  document.getElementById('story-unlock-all').addEventListener('click', () => setShip(s => { s.lockedTypes.clear(); }));
+  for (const list of [story.unlocks, story.other]) {
+    list.addEventListener('change', e => {
+      const t = e.target.dataset.type;
+      if (t) setShip(s => { if (e.target.checked) s.lockedTypes.delete(t); else s.lockedTypes.add(t); });
+    });
+  }
+  // Tick all / Untick all act on their own section only.
+  document.getElementById('story-gate-all').addEventListener('click', () => setShip(s => { s.lockedGates.clear(); }));
+  document.getElementById('story-gate-none').addEventListener('click', () => setShip(s => {
+    for (const cb of story.gates.querySelectorAll('input')) s.lockedGates.add(cb.dataset.gate);
+  }));
+  document.getElementById('story-unlock-all').addEventListener('click', () => setShip(s => {
+    for (const cb of story.unlocks.querySelectorAll('input')) s.lockedTypes.delete(cb.dataset.type);
+  }));
   document.getElementById('story-unlock-none').addEventListener('click', () => setShip(s => {
     for (const cb of story.unlocks.querySelectorAll('input')) s.lockedTypes.add(cb.dataset.type);
   }));

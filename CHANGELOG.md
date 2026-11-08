@@ -170,6 +170,7 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - Settings for what the planner can't see, saved with the build and its share link:
   - **Ship rules,** on the summary panel's Ship tab (the toolbar button opens it): shield type, base armor, civilian hull, system charges, station modules, built-in wings, hull mods on the ship (picked by in-game name) and extra logistics slots. Anything left unset isn't checked.
   - **Story rules,** a separate dialog: story gates reached and blueprint unlocks. Everything starts ticked.
+  - Later: the Wormhole unlock (`$playerCanUseGates`, the only one that isn't a blueprint) moved into its own **Wormholes** section at the top. Story gates got **Tick all** / **Untick all**. "Unlocked skill types" became **Unlocked hullmods**, listing names only (the blueprint is in the hover title), and its buttons only change that list.
 - How refusals show up:
   - Paths avoid refused nodes, or name the node that blocks the way.
   - The picker greys out refused options and gives the reason.

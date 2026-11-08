@@ -185,8 +185,9 @@ Two kinds of setting cover what the planner can't see. Both are saved with the b
 - **Extra logistics slots** from items.
 
 **Story rules** (toolbar button, a dialog) cover what your campaign has reached. Everything starts ticked:
-- **Story gates reached:** untick a gate you haven't reached yet.
-- **Unlocked skill types:** untick nodes whose blueprint or other unlock you don't have.
+- **Wormholes** (at the top): untick the Wormhole if your campaign can't use gates yet.
+- **Story gates reached:** untick a gate you haven't reached yet. **Tick all** and **Untick all** set every gate at once.
+- **Unlocked hullmods:** untick the hull mods whose blueprint you don't have. They're listed by name; hover one to see which blueprint it needs (Shield Arc Multiplier needs the Shield Conversion - Omni blueprint, for example). **Tick all** and **Untick all** only change this list.
 
 Each part has its own Clear button. The toolbar buttons show how many settings are in use, for example "Ship rules (2)".
 
