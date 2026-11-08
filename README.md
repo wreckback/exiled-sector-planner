@@ -28,6 +28,7 @@ powershell -ExecutionPolicy Bypass -File tools\serve.ps1     # then open http://
 - `web\index.html` also works opened straight from disk, with the differences listed under Caveats.
 - To share the planner with others, upload the `web\` folder to any static host, such as GitHub Pages. It holds no art, so visitors choose their own mod folder (see Mod art).
 - `serve.ps1` stops with Ctrl+C. Use `-Port` to change the port.
+- The summary panel's footer shows the mod version the data is from and the planner version, for example "Exiled Sector 0.11.2 · Planner v0.2.0-alpha.3". Through `serve.ps1` that's the latest planner tag, plus "+N" for commits since it and "(edited)" for uncommitted changes. Opened straight from disk it says "dev", and in a release zip it's that zip's tag. Hover it for the full version.
 
 ## Update it after the mod changes
 
@@ -80,7 +81,7 @@ To build the ready-to-use zip for a tag (the site, its data and a README.txt, in
 powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Tag "v0.2.0-rc.1+es0.11.1-alpha"   # or no -Tag for the tag on HEAD
 ```
 
-It writes `dist\exiled-sector-planner-<tag>.zip`. The site files come from the tag itself, so any tag can be packaged. The zip has no art: its README.txt tells users to choose their mod folder under **Show mod art**. Attach the zip to the GitHub release for that tag, marked as a pre-release for an alpha, beta or rc. The zip's README.txt says which stage it is.
+It writes `dist\exiled-sector-planner-<tag>.zip`. The site files come from the tag itself, so any tag can be packaged, and the zip's `version.js` holds the tag, so its footer shows that version. The zip has no art: its README.txt tells users to choose their mod folder under **Show mod art**. Attach the zip to the GitHub release for that tag, marked as a pre-release for an alpha, beta or rc. The zip's README.txt says which stage it is.
 
 ## Theme
 

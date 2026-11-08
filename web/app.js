@@ -2458,7 +2458,20 @@
     const now = rules().problems.size;
     if (now > before) toast(`${now} allocated node${now > 1 ? 's break' : ' breaks'} a node rule now; see the top of the summary. Undo goes back.`);
   }
-  const footText = () => `Exiled Sector ${D.modVersion || ''}`.trim();
+  // The planner's version (version.js): a release tag like v0.2.0-alpha.3+es0.11.1-alpha, `git describe` output when
+  // served locally (that tag plus -<commits>-g<hash>, and -dirty for uncommitted changes), or "dev". The footer shows
+  // the tag without its +es<mod release> part, since the mod's version is right beside it.
+  const PLANNER_VERSION = typeof window.PLANNER_VERSION === 'string' && window.PLANNER_VERSION ? window.PLANNER_VERSION : 'dev';
+  const plannerVersionShort = (() => {
+    let v = PLANNER_VERSION;
+    const dirty = v.endsWith('-dirty');
+    if (dirty) v = v.slice(0, -'-dirty'.length);
+    const ahead = /-(\d+)-g[0-9a-f]+$/.exec(v);
+    if (ahead) v = v.slice(0, ahead.index);
+    v = v.replace(/\+es.*$/, '');
+    return `${v}${ahead ? ` +${ahead[1]}` : ''}${dirty ? ' (edited)' : ''}`;
+  })();
+  const footText = () => `Exiled Sector ${D.modVersion || '?'} · Planner ${plannerVersionShort}`;
 
   // ------------------------------------------------------------------ tooltip
   let lastMouse = { x: 0, y: 0 };
@@ -5257,6 +5270,7 @@
   resize();
   frameCore();
   cachedTotals = totals();
+  els.panelFoot.title = `Mod data: Exiled Sector ${D.modVersion || 'unknown'}. Planner: ${PLANNER_VERSION}.`;
   renderChrome();
   renderPanel();
   requestDraw();

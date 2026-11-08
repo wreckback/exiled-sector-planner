@@ -13,7 +13,7 @@ A static web planner for the ship skill tree of the Exiled Sector Starsector mod
   - The generated `planner-data.js` is committed, so each mod sync shows up as one diff.
   - History was rewritten once to drop the art, before the first push. Don't re-add `web/assets`.
 - `tools/extract.ps1` builds `web/data/planner-data.js` from the mod. It's generated, so don't hand-edit it.
-- `web/` is the whole site: `index.html`, `style.css` and `app.js`.
+- `web/` is the whole site: `index.html`, `style.css` and `app.js`, plus `version.js` (the planner version for the footer, `'dev'` in git; see below).
 
 ## Commands (Windows; no Node or Python on this machine)
 
@@ -25,6 +25,7 @@ powershell -ExecutionPolicy Bypass -File tools\release.ps1   # tag vX.Y.Z[-alpha
 ```
 
 - `package.ps1 [-Tag <tag>]` builds `dist\exiled-sector-planner-<tag>.zip` from `git archive` of the tag plus a README.txt. It holds no art. `dist/` is excluded in `.git/info/exclude`.
+- The planner version in the summary panel's footer comes from `web/version.js` (`window.PLANNER_VERSION`). The committed file says `'dev'`. `package.ps1` writes the tag into the zip's copy, and `serve.ps1` answers `/version.js` with `git describe --tags --match 'v*' --dirty`. `app.js` (`plannerVersionShort`) shows the tag without `+es...`, with `+N` for commits since and "(edited)" for `-dirty`; the full string is the footer's title.
 - `release.ps1` takes the mod release from `tools/mod-sync.json` and refuses on a dirty tree or stale data. With neither `-Version` nor `-Bump`, it continues the newest open pre-release (`-Pre alpha|beta|rc`) or releases it (no `-Pre`). Stages only move forward (alpha, beta, rc). The user chose alpha for internal test builds. Only create or push real tags when the user asks.
 
 - `extract.ps1` prints how many effects have no wording, plus any image the data refers to that the mod doesn't ship. A jump in either usually means the mod's Java or CSV layout changed and a regex in the extractor needs updating.

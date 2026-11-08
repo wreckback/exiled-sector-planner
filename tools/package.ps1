@@ -54,6 +54,12 @@ Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::ExtractToDirectory($archive, (Join-Path $stage 'site'))
 Get-ChildItem (Join-Path $stage 'site\web') | Move-Item -Destination $dir
 Remove-Item $archive, (Join-Path $stage 'site') -Recurse -Force
+# The planner's version for the footer: the tag itself (the repository's web\version.js says "dev").
+$versionJs = @(
+    '// The planner version this zip was built from (tools\package.ps1).'
+    "window.PLANNER_VERSION = '$Tag';"
+) -join "`n"
+[IO.File]::WriteAllText((Join-Path $dir 'version.js'), $versionJs + "`n", $utf8)
 $title = "Exiled Sector Skill Tree Planner $Tag"
 $readme = @(
     $title

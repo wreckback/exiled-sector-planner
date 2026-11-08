@@ -81,6 +81,9 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
   - When the hulls differ, saving asks first: keep the existing hull, change it, or save as a new template under a free name.
   - The summary line warns ahead of time.
 
+**Planner version in the footer**
+- The summary panel's footer shows the planner version next to the mod's: "Exiled Sector 0.11.2 · Planner v0.2.0-alpha.3". It comes from `web/version.js`, which is "dev" in git. `package.ps1` writes the tag into each zip's copy, and `serve.ps1` answers it with `git describe`, so a local copy shows the latest tag with "+N" commits since and "(edited)" for uncommitted changes. The footer's hover title has the full version.
+
 **List view**
 - A **List** button (or `L`) switches the map area to a list of every non-affinity, non-structural node (479 in mod 0.11.1) with icon, tier, tree, themes, an "allocated" tag and effects. Unallocated choice nodes list each option's effects.
 - The top bar's search box and Filter drive it, so search matches exactly as on the map. Enter steps through it. While it's showing, the panel's Search tab stays away, since the list already shows the matches.
