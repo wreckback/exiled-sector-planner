@@ -184,6 +184,19 @@ if ($badPair.Count) { Flag "wormhole pairs that don't point back: $(Join-Short $
 $badExit = @($new.wormholeAnchors | Where-Object { -not $nodeIds.ContainsKey($_.exit) } | ForEach-Object { "$($_.id)->$($_.exit)" })
 if ($badExit.Count) { Flag "wormhole anchors whose exit node doesn't exist: $(Join-Short $badExit)" }
 
+# Effects that refuse some ships: app.js words each one in EFFECT_BLOCKS (node rules). A new one needs a line there.
+$blockBlock = [regex]::Match($appJs, 'const EFFECT_BLOCKS\s*=\s*\{(.*?)\n  \};', 'Singleline').Groups[1].Value
+$knownBlocks = @([regex]::Matches($blockBlock, '(?m)^\s{4}([A-Z][A-Z0-9_]+)\s*:') | ForEach-Object { $_.Groups[1].Value })
+$newBlocks = @($new.effects.PSObject.Properties | Where-Object { $_.Value.blocks -and $_.Name -notin $knownBlocks } | ForEach-Object { $_.Name })
+if (-not $knownBlocks.Count) { Flag "couldn't read EFFECT_BLOCKS from app.js" }
+elseif ($newBlocks.Count) { Flag "effects that refuse some ships but app.js doesn't check (add them to EFFECT_BLOCKS): $($newBlocks -join ', ')" }
+else { Ok "every effect that refuses some ships is checked ($($knownBlocks.Count) known)" }
+
+# In-game hull mod names come from a mod test resource; without it, other mods' hull mods show by id.
+if (-not (Test-Path (Join-Path $ModRoot 'exiledsector-core\src\test\resources\i18n\hullmod_names.csv'))) {
+    Flag "hullmod_names.csv is gone from exiledsector-core/src/test/resources/i18n; find where it moved and update extract.ps1"
+} else { Ok 'in-game hull mod names found' }
+
 # Template format and node cap, which app.js hard-codes.
 $codec = Get-JavaText 'TemplateCodec'; $store = Get-JavaText 'SkillTreeTemplateStore'; $levels = Get-JavaText 'ShipLevelConfig'
 $tv = if ($codec) { [regex]::Match($codec, '\bVERSION\s*=\s*(\d+)') } else { $null }
@@ -261,9 +274,13 @@ Section "Mod code changed since $baselineName"
 # Files whose logic app.js or extract.ps1 reimplements. A change here is the only reason to open planner code.
 $rulePattern = '/src/main/java/.*/(AllocationCheck|TemplateCapture|TemplateCodec|TemplateNames|TemplateFilter|SkillTreeTemplateStore|' +
                'AffinitySteps|AffinityOptions|AffinityScaling|SkillTier|NodeReplacements|ShipLevelConfig|SkillTreeNodeConnectorRenderer|' +
-               'WormholeAnchorLinks|WormholeAnchorDefinitions|ScopedWeaponEffect|WeaponStatFamily|HullSizeTable|StatMode)\.java$'
+               'WormholeAnchorLinks|WormholeAnchorDefinitions|ScopedWeaponEffect|WeaponStatFamily|HullSizeTable|StatMode|' +
+               'NodeEligibility|AllocatedNode|SkillType|HullModConflicts|LogisticsNodes|NodeRequirements|LowBaseArmorBonus|' +
+               'SkillTypeUnlockStatus|NodeGates|ShieldSkillEffect|' +
+               'Subroutine|SubroutineKind|SubroutineDefinitions|SubroutineRadius|SubroutineSocketLimits|NodeRadii|NodeRadiusCache|ExoshipNodes|' +
+               'RootConduits|EmptyShells|GatedSubroutines|SkillTreeEffectSource|ModspecCaches|NodeAllocator|DoctrineOverrides|DoctrineArchive|StatTarget)\.java$'
 $wordingPattern = '/src/main/java/.*SkillEffect\.java$'
-$inputPattern = '^(data/skilltrees/|data/strings/exiledSector/(core|skillTree)/|data/config/exiledSector/(wormhole_anchors|node_replacements|node_id_renames|type_id_renames)\.csv|docs/analysis/balance\.csv|mod_info\.json)'
+$inputPattern = '^(data/skilltrees/|data/strings/exiledSector/(core|skillTree)/|data/config/exiledSector/(wormhole_anchors|node_replacements|node_id_renames|type_id_renames|hullmod_conflicts)\.csv|data/config/exiledSector/node_gates\.json|data/config/exiledSector/(subroutines|doctrine_archives|item_modifiers)\.csv|data/config/exiledSector/node_radii\.json|data/hullmods/hull_mods\.csv|exiledsector-core/src/test/resources/i18n/hullmod_names\.csv|docs/analysis/balance\.csv|mod_info\.json)'
 $changedRules = @()
 if ($baseline -eq $after) { Write-Host '  None: the mod is at the same commit as last time.' }
 else {

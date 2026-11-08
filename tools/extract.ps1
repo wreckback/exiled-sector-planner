@@ -230,6 +230,18 @@ foreach ($f in $enumFiles) {
             $variant = [regex]::Match($dbody, 'EffectText\.(signed)\(')
             if ($variant.Success) { $info.signed = $true }
         }
+        # Effects that refuse allocation on some ships (shield type, phase hull, base armor, wings). app.js words each one.
+        if ($body -match '\bblockAllocationReason\s*\(\s*ShipFacts') { $info.blocks = $true }
+        # Read live in combat (StatTarget.liveStat/liveBonus): only these survive a gating subroutine (supportsTemporaryGating).
+        if ($body -notmatch '\b(ConditionalStatEffect|DerivedStatEffect|listener|flag)\s*\(') {
+            if ($body -match '\blive(Stat|Bonus)\(') { $info.live = $true }
+            else {
+                # A helper as the target (statEffect(MODE, Maneuverability.target(), ...)): live if that class only builds live targets.
+                $helper = [regex]::Match($body, 'statEffect\(\s*(?:StatMode\.)?\w+\s*,\s*([A-Z]\w+)\.\w+')
+                $src = if ($helper.Success) { $classText[$helper.Groups[1].Value] } else { $null }
+                if ($src -and $src -match '\blive(Stat|Bonus)\(' -and $src -notmatch '\b(stat|bonus|dynamicStat|dynamicMod)\(') { $info.live = $true }
+            }
+        }
         if ($args.Count) { $info.args = $args }
         $effects[$name] = $info
     }
@@ -238,8 +250,15 @@ foreach ($f in $enumFiles) {
 # Weapon stat families declared with qualifiedByScope = false don't prefix the scope.
 $weaponUnqualified = @()
 $wsf = $javaFiles | Where-Object { $_.Name -eq 'WeaponStatFamily.java' } | Select-Object -First 1
+$weaponLive = @()
 if ($wsf) {
-    foreach ($m in [regex]::Matches([IO.File]::ReadAllText($wsf.FullName), '(?m)^    ([A-Z_]+)\(\s*false\b')) { $weaponUnqualified += $m.Groups[1].Value }
+    $wtext = [IO.File]::ReadAllText($wsf.FullName) -replace "`r", ''
+    foreach ($m in [regex]::Matches($wtext, '(?m)^    ([A-Z_]+)\(\s*false\b')) { $weaponUnqualified += $m.Groups[1].Value }
+    $wstarts = [regex]::Matches($wtext, '(?m)^    ([A-Z][A-Z0-9_]+)\(')
+    for ($i = 0; $i -lt $wstarts.Count; $i++) {
+        $to = if ($i + 1 -lt $wstarts.Count) { $wstarts[$i + 1].Index } else { $wtext.Length }
+        if ($wtext.Substring($wstarts[$i].Index, $to - $wstarts[$i].Index) -match '\blive(Stat|Bonus)\(') { $weaponLive += $wstarts[$i].Groups[1].Value }
+    }
 }
 
 # Effects actually used by skill types, plus the string templates they need.
@@ -247,6 +266,69 @@ $usedEffects = @{}
 foreach ($t in $types) {
     foreach ($e in @($t.effects) + @($t.hullSizeEffects)) { if ($e -and $e.effect) { $usedEffects[$e.effect] = $true } }
 }
+
+# ---------------------------------------------------------------- subroutines (socket items besides anchors)
+# subroutines.csv (+ doctrine_archives.csv for doctrines), the doctrine modifier ranges (item_modifiers.csv), radius sizes
+# (node_radii.json) and per-ship limits per kind (SubroutineKind).
+function Read-Lines([string]$s) {
+    # "EFFECT:min:max; EFFECT:min:max" -> list of { effect, min, max }
+    @(($s -split ';') | ForEach-Object { $_.Trim() } | Where-Object { $_ } | ForEach-Object {
+        $p = $_ -split ':'
+        if ($p.Count -ge 3) { [ordered]@{ effect = $p[0].Trim(); min = [double]$p[1]; max = [double]$p[2] } }
+    })
+}
+$subroutines = @()
+$subroutineModifiers = [ordered]@{}
+$subCsv = "$ModRoot\data\config\exiledSector\subroutines.csv"
+if (Test-Path $subCsv) {
+    $doctrines = @{}
+    $docCsv = "$ModRoot\data\config\exiledSector\doctrine_archives.csv"
+    if (Test-Path $docCsv) { foreach ($row in (Import-Csv $docCsv)) { $doctrines[$row.id] = $row } }
+    $modRows = @{}
+    $modCsv = "$ModRoot\data\config\exiledSector\item_modifiers.csv"
+    if (Test-Path $modCsv) { foreach ($row in (Import-Csv $modCsv)) { $modRows[$row.id] = $row } }
+    $split = { param($s) @(($s -split ';') | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+    foreach ($row in (Import-Csv $subCsv)) {
+        if (-not $row.id) { continue }
+        $o = [ordered]@{ id = $row.id; name = $row.name; icon = $row.icon; kind = $row.kind; description = $row.description }
+        $lines = @(Read-Lines $row.lines)
+        if ($lines.Count) { $o.lines = $lines; foreach ($l in $lines) { $usedEffects[$l.effect] = $true } }
+        if ($row.radius) { $o.radius = $row.radius }
+        if ($row.socket_limit -and [int]$row.socket_limit -gt 0) { $o.socketLimit = [int]$row.socket_limit }
+        if ($row.node_count_chances) { $o.nodeCountChances = @(& $split $row.node_count_chances | ForEach-Object { [double]$_ }) }
+        $doc = $doctrines[$row.id]
+        if ($doc) {
+            $o.behaviour = $doc.behaviour
+            if ($doc.radius) { $o.radius = $doc.radius }
+            foreach ($k in 'notables', 'keystones', 'small_nodes') { $v = @(& $split $doc.$k); if ($v.Count) { $o[$k] = $v } }
+            $mods = @(& $split $doc.modifiers | ForEach-Object { $_.TrimStart('@') })
+            if ($mods.Count) {
+                $o.modifiers = $mods
+                foreach ($m in $mods) {
+                    if ($modRows[$m]) {
+                        $ml = @(Read-Lines $modRows[$m].lines)
+                        $subroutineModifiers[$m] = @($ml)
+                        foreach ($l in $ml) { $usedEffects[$l.effect] = $true }
+                    }
+                }
+            }
+            if ($doc.min_lines) { $o.minLines = [int]$doc.min_lines; $o.maxLines = [int]$doc.max_lines }
+        }
+        $subroutines += $o
+    }
+}
+$nodeRadii = [ordered]@{}
+$radiiJson = "$ModRoot\data\config\exiledSector\node_radii.json"
+if (Test-Path $radiiJson) { foreach ($p in (Read-Json $radiiJson).PSObject.Properties) { $nodeRadii[$p.Name] = [double]$p.Value } }
+$subroutineKinds = [ordered]@{}
+$skf = $javaFiles | Where-Object { $_.Name -eq 'SubroutineKind.java' } | Select-Object -First 1
+if ($skf) {
+    foreach ($m in [regex]::Matches([IO.File]::ReadAllText($skf.FullName), '(?m)^\s+([A-Z_]+)\(\s*(true|false)\s*,\s*(true|false)\s*,\s*([A-Za-z0-9_.]+)\s*,')) {
+        $limit = if ($m.Groups[4].Value -match '^\d+$') { [int]$m.Groups[4].Value } else { $null }
+        $subroutineKinds[$m.Groups[1].Value] = [ordered]@{ perShip = $limit }
+    }
+}
+Write-Host ("Subroutines: {0} items, {1} doctrine modifiers, {2} kinds" -f $subroutines.Count, $subroutineModifiers.Count, $subroutineKinds.Count)
 $effectOut = [ordered]@{}
 $neededStrings = @{}
 foreach ($k in $strings.Keys) { if ($k -like 'desc.*' -or $k -like 'stat.*' -or $k -like 'weapon.*') { $neededStrings[$k] = $strings[$k] } }
@@ -260,6 +342,7 @@ foreach ($name in ($usedEffects.Keys | Sort-Object)) {
         $info = [ordered]@{ mode = $w.Groups[3].Value.ToLower(); weaponFamily = $family }
         if ($w.Groups[1].Success) { $info.weaponScope = $w.Groups[1].Value.TrimEnd('_') }
         if ($weaponUnqualified -contains $family) { $info.unqualified = $true }
+        if ($weaponLive -contains $family) { $info.live = $true }
         if ($family -in 'FLUX_COST', 'RECOIL') { $info.lowerIsBetter = $true }
     }
     foreach ($k in $strings.Keys) {
@@ -289,15 +372,46 @@ if ($asf) {
     }
 }
 
-# Hull mod display names (phantom / vanilla hull mod nodes) from the balance sheet.
+# Hull mod display names. First the in-game names the mod's tests render text with (vanilla and other mods' hull mods),
+# then the balance sheet. The first file is a test resource, so tools\update.ps1 warns if it moves.
 $hullModNames = [ordered]@{}
+$gameNames = "$ModRoot\exiledsector-core\src\test\resources\i18n\hullmod_names.csv"
+if (Test-Path $gameNames) {
+    foreach ($row in (Import-Csv $gameNames)) { if ($row.id -and $row.name) { $hullModNames[$row.id] = $row.name } }
+} else { Write-Host "  hullmod_names.csv not found; hull mods from other mods will show by id" }
 $balance = "$ModRoot\docs\analysis\balance.csv"
 if (Test-Path $balance) {
-    foreach ($row in (Import-Csv $balance)) { if ($row.hullmod_id -and $row.hullmod_name) { $hullModNames[$row.hullmod_id] = $row.hullmod_name } }
+    foreach ($row in (Import-Csv $balance)) { if ($row.hullmod_id -and $row.hullmod_name -and -not $hullModNames.Contains($row.hullmod_id)) { $hullModNames[$row.hullmod_id] = $row.hullmod_name } }
 }
 foreach ($name in @($usedEffects.Keys)) {
     if (-not $effectOut.Contains($name) -and $effects.ContainsKey($name)) { $effectOut[$name] = $effects[$name] }
 }
+# The mod's own hull mods (phantoms and markers), for names balance.csv doesn't give.
+$modHullMods = "$ModRoot\data\hullmods\hull_mods.csv"
+if (Test-Path $modHullMods) {
+    foreach ($row in (Import-Csv $modHullMods)) { if ($row.id -and $row.name -and -not $hullModNames.Contains($row.id)) { $hullModNames[$row.id] = $row.name } }
+}
+
+# Hull mods that can't share a ship (HullModConflicts): symmetric partner lists. SkillType turns these into node conflicts.
+$hullModConflicts = [ordered]@{}
+$conflictCsv = "$ModRoot\data\config\exiledSector\hullmod_conflicts.csv"
+if (Test-Path $conflictCsv) {
+    $pairs = @{}
+    foreach ($row in (Import-Csv $conflictCsv)) {
+        if (-not $row.hullmod) { continue }
+        foreach ($c in ($row.conflicts -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -ne $row.hullmod })) {
+            foreach ($pair in @(@($row.hullmod, $c), @($c, $row.hullmod))) {
+                if (-not $pairs.ContainsKey($pair[0])) { $pairs[$pair[0]] = New-Object System.Collections.Generic.List[string] }
+                if (-not $pairs[$pair[0]].Contains($pair[1])) { $pairs[$pair[0]].Add($pair[1]) }
+            }
+        }
+    }
+    foreach ($k in ($pairs.Keys | Sort-Object)) { $hullModConflicts[$k] = @($pairs[$k]) }
+}
+
+# Logistics node limit per ship (LogisticsNodes.DEFAULT_CAP; items can add slots in game).
+$logisticsCap = $constants['LogisticsNodes.DEFAULT_CAP']
+if ($null -eq $logisticsCap) { $logisticsCap = 2 }
 
 # Wormhole anchor items: templates store socket -> anchor item id, the planner links socket -> exit node.
 $wormholeAnchors = @()
@@ -327,7 +441,12 @@ if ($aof) {
 }
 
 # UI strings the planner reuses.
-foreach ($k in $strings.Keys) { if ($k -like 'ui.node.*' -or $k -like 'tier.*') { $neededStrings[$k] = $strings[$k] } }
+foreach ($k in $strings.Keys) {
+    if ($k -like 'ui.node.*' -or $k -like 'tier.*' -or $k -like 'node.block.*' -or $k -like 'node.requires.*' -or $k -like 'socketable.anchor.gate.*' -or
+        $k -like 'socketable.doctrine.*' -or $k -like 'socketable.radius*' -or $k -like 'socketable.rootConduit.*' -or $k -like 'subroutine.grant.*') {
+        $neededStrings[$k] = $strings[$k]
+    }
+}
 
 # ---------------------------------------------------------------- tree + types
 $typeOut = foreach ($t in $types) {
@@ -359,6 +478,12 @@ $data = [ordered]@{
     effects          = $effectOut
     affinitySteps    = $affinitySteps
     hullModNames     = $hullModNames
+    hullModConflicts = $hullModConflicts
+    logisticsCap     = $logisticsCap
+    subroutines      = @($subroutines)
+    subroutineModifiers = $subroutineModifiers
+    subroutineKinds  = $subroutineKinds
+    nodeRadii        = $nodeRadii
     wormholeAnchors  = @($wormholeAnchors)
     nodeRenames      = $nodeRenames
     typeRenames      = $typeRenames
@@ -382,6 +507,7 @@ Write-Host ("Wrote data\planner-data.js ({0:N0} KB)" -f ((Get-Item "$WebRoot\dat
 # ---------------------------------------------------------------- images
 $images = New-Object 'System.Collections.Generic.HashSet[string]'
 foreach ($t in $types) { if ($t.icon) { [void]$images.Add($t.icon) } }
+foreach ($s in $subroutines) { if ($s.icon) { [void]$images.Add($s.icon) } }
 foreach ($n in $tree.nodes) { if ($n.ringBeltPath) { [void]$images.Add($n.ringBeltPath) } }
 foreach ($d in $tree.decorations) {
     foreach ($k in 'imagePath', 'ringArtPath', 'overlayPath') { if ($d.$k) { [void]$images.Add($d.$k) } }
