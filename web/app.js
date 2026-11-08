@@ -713,6 +713,16 @@
     return null;
   }
   const affinityName = k => AFFINITY_NAMES[k] || humanize(k);
+  // A node's icon for the HTML lists and tooltips. Sockets have no icon in the data (the tree draws them as octagons),
+  // so they show the socketed subroutine's icon, or a drawn octagon when empty.
+  const SOCKET_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="7.5,2 16.5,2 22,7.5 22,16.5 16.5,22 7.5,22 2,16.5 2,7.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>';
+  function nodeIconHtml(n, t = effectiveType(n)) {
+    if (n.tier === 'SOCKET') {
+      const e = state.subs.get(n.id), d = e && SUBS.get(e.id);
+      return d && d.icon ? `<img src="assets/${esc(d.icon)}" alt="">` : `<span class="icon-svg">${SOCKET_SVG}</span>`;
+    }
+    return t && t.icon ? `<img src="assets/${esc(t.icon)}" alt="">` : '<span class="icon-svg"></span>';
+  }
   function unlockText(t) {
     const parts = (t.unlockConditions || []).map(c => {
       if (c.type === 'blueprint') return `the ${hullModName(c.id || c.key)} blueprint`;
@@ -1982,9 +1992,12 @@
       els.panelBody.innerHTML = list.length ? list.map(n => {
         const t2 = effectiveType(n);
         let sub = TIER_LABEL[n.tier];
-        if (n.tier === 'SOCKET') { const e = state.links.get(n.id); sub += e ? ` · ${volumeName(byId.get(e).volume)} anchor` : ' · empty'; }
+        if (n.tier === 'SOCKET') {
+          const e = state.links.get(n.id), s = state.subs.get(n.id), d = s && SUBS.get(s.id);
+          sub += d ? ` · ${d.name}` : e ? ` · ${volumeName(byId.get(e).volume)} anchor` : ' · empty';
+        }
         if (n.volume !== 'core') sub += ` · ${volumeName(n.volume)}`;
-        return `<div class="node-row ${n.tier.toLowerCase()}" data-node="${esc(n.id)}"><img src="assets/${esc(t2.icon)}" alt=""><div><div class="nm">${esc(t2.name)}</div><div class="tr">${esc(sub)}</div></div></div>`;
+        return `<div class="node-row ${n.tier.toLowerCase()}" data-node="${esc(n.id)}">${nodeIconHtml(n, t2)}<div><div class="nm">${esc(t2.name)}</div><div class="tr">${esc(sub)}</div></div></div>`;
       }).join('') : '<div class="empty">No notables or keystones allocated yet.</div>';
     }
     els.panelBody.insertAdjacentHTML('afterbegin', problemsHtml());
@@ -1996,7 +2009,7 @@
     if (!problems.size) return '';
     const rows = [...problems].map(([id, b]) => {
       const n = byId.get(id), t2 = effectiveType(n);
-      return `<div class="node-row" data-node="${esc(id)}"><img src="assets/${esc(t2.icon)}" alt=""><div><div class="nm">${esc(t2.name)}</div><div class="tr bad">${esc(b.text)}</div></div></div>`;
+      return `<div class="node-row" data-node="${esc(id)}">${nodeIconHtml(n, t2)}<div><div class="nm">${esc(t2.name)}</div><div class="tr bad">${esc(b.text)}</div></div></div>`;
     }).join('');
     const many = problems.size > 1;
     return `<div class="rule-problems"><h3>${problems.size} node${many ? 's break' : ' breaks'} a node rule</h3>` +
@@ -2060,7 +2073,7 @@
     const t = effectiveType(n);
     const allocated = sat(n.id);
     const tierClass = n.tier.toLowerCase();
-    let html = `<div class="tt-head">${t.icon ? `<img src="assets/${esc(t.icon)}" alt="">` : ''}<div><div class="tt-title">${esc(t.name)}</div><div class="tt-tier ${tierClass}">${esc(TIER_LABEL[n.tier] || n.tier)}${n.volume !== 'core' ? ' · ' + esc(volumeName(n.volume)) : ''}</div></div></div>`;
+    let html = `<div class="tt-head">${nodeIconHtml(n, t)}<div><div class="tt-title">${esc(t.name)}</div><div class="tt-tier ${tierClass}">${esc(TIER_LABEL[n.tier] || n.tier)}${n.volume !== 'core' ? ' · ' + esc(volumeName(n.volume)) : ''}</div></div></div>`;
 
     if (isChoice(n)) {
       const cur = state.choice.get(n.id);
@@ -2670,7 +2683,7 @@
       const t = effectiveType(n);
       const snippet = matchSnippet(n);
       html += `<div class="node-row ${n.tier.toLowerCase()}${i === searchCursor ? ' current' : ''}" data-node="${esc(n.id)}">` +
-        (t.icon ? `<img src="assets/${esc(t.icon)}" alt="">` : '') +
+        nodeIconHtml(n, t) +
         `<div><div class="nm">${esc(t.name)}${sat(n.id) ? '<span class="have">allocated</span>' : ''}</div>` +
         `<div class="tr">${esc(TIER_LABEL[n.tier] || n.tier)} · ${esc(shortPlace(n))}</div>` +
         (snippet ? `<div class="match">${esc(snippet)}</div>` : '') + '</div></div>';
