@@ -294,6 +294,8 @@ if (Test-Path $subCsv) {
         $lines = @(Read-Lines $row.lines)
         if ($lines.Count) { $o.lines = $lines; foreach ($l in $lines) { $usedEffects[$l.effect] = $true } }
         if ($row.radius) { $o.radius = $row.radius }
+        # Rarity 0 keeps an item out of every drop pool (ItemDrops.isDroppable), so it can't be found in game.
+        if ($row.rarity -ne $null -and $row.rarity -ne '' -and [double]$row.rarity -le 0) { $o.unobtainable = $true }
         if ($row.socket_limit -and [int]$row.socket_limit -gt 0) { $o.socketLimit = [int]$row.socket_limit }
         if ($row.node_count_chances) { $o.nodeCountChances = @(& $split $row.node_count_chances | ForEach-Object { [double]$_ }) }
         $doc = $doctrines[$row.id]

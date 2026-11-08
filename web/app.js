@@ -607,6 +607,8 @@
   // ModspecCaches/NodeAllocator.grantSocketedNodes (granted notables), DoctrineOverrides (shown, not simulated: its rolls
   // come from a hidden per-item seed).
   const SUBS = new Map((D.subroutines || []).map(s => [s.id, s]));
+  // Rarity 0 in subroutines.csv: no drop pool picks it (ItemDrops.isDroppable). Still socketable here, for copies already owned.
+  const UNOBTAINABLE_TEXT = 'Unobtainable: it doesn\'t drop in this mod version.';
   const AFFINITY_KEYS = ['LOW_TECH_AFFINITY_FLAT', 'MIDLINE_AFFINITY_FLAT', 'HIGH_TECH_AFFINITY_FLAT'];
   const GATE_LINES = { GATES_RADIUS_WHILE_PHASED: 'While phased', GATES_RADIUS_BELOW_HALF_HULL: 'Below 50% hull', GATES_RADIUS_WHILE_SYSTEM_ACTIVE: 'While the ship system is active' };
   const subRadius = def => (def && def.radius && D.nodeRadii ? D.nodeRadii[def.radius] || 0 : 0);
@@ -1976,7 +1978,7 @@
           (lines.length ? lines.map(s => `<div class="stat-line">${describe(s.effect, s.magnitude)}</div>`).join('') : '<div class="stat-line muted">Nothing: none of their effects are read live in combat.</div>') +
           `<div class="stat-line muted">${g.nodes} allocated node${g.nodes === 1 ? '' : 's'} in its radius give these instead of their usual effects.</div></div>`;
       }
-      const subLines = subState().active.map(a => `<div class="stat-line"><span class="hl">${esc(a.def.name)}</span> <span class="src">${esc(subSummary(a.def, a.entry, a.socket))}</span></div>`);
+      const subLines = subState().active.map(a => `<div class="stat-line"><span class="hl">${esc(a.def.name)}</span> <span class="src">${esc(subSummary(a.def, a.entry, a.socket))}</span>${a.def.unobtainable ? ` <span class="bad">${UNOBTAINABLE_TEXT}</span>` : ''}</div>`);
       if (subLines.length) html += `<div class="stat-group"><h3>Subroutines</h3>${subLines.join('')}</div>`;
       const reached = t.affBonuses.filter(b => b.reached > 0);
       if (reached.length) {
@@ -1994,7 +1996,7 @@
         let sub = TIER_LABEL[n.tier];
         if (n.tier === 'SOCKET') {
           const e = state.links.get(n.id), s = state.subs.get(n.id), d = s && SUBS.get(s.id);
-          sub += d ? ` · ${d.name}` : e ? ` · ${volumeName(byId.get(e).volume)} anchor` : ' · empty';
+          sub += d ? ` · ${d.name}${d.unobtainable ? ' (unobtainable)' : ''}` : e ? ` · ${volumeName(byId.get(e).volume)} anchor` : ' · empty';
         }
         if (n.volume !== 'core') sub += ` · ${volumeName(n.volume)}`;
         return `<div class="node-row ${n.tier.toLowerCase()}" data-node="${esc(n.id)}">${nodeIconHtml(n, t2)}<div><div class="nm">${esc(t2.name)}</div><div class="tr">${esc(sub)}</div></div></div>`;
@@ -2087,7 +2089,7 @@
     } else if (n.tier === 'SOCKET') {
       const e = state.links.get(n.id);
       const se = state.subs.get(n.id), sd = se && SUBS.get(se.id);
-      if (sd) html += `<div class="tt-effects"><div><span class="hl">${esc(sd.name)}</span></div><div>${esc(subSummary(sd, se, n))}</div></div>${sd.description ? `<div class="tt-flavour">${esc(sd.description)}</div>` : ''}`;
+      if (sd) html += `<div class="tt-effects"><div><span class="hl">${esc(sd.name)}</span></div><div>${esc(subSummary(sd, se, n))}</div>${sd.unobtainable ? `<div class="bad">${UNOBTAINABLE_TEXT}</div>` : ''}</div>${sd.description ? `<div class="tt-flavour">${esc(sd.description)}</div>` : ''}`;
       else html += `<div class="tt-effects"><div>${e ? `Linked to the <span class="hl">${esc(volumeName(byId.get(e).volume))}</span> wormhole exit.` : 'Holds one item: a subroutine, or an anchor that opens a wormhole to a faction volume.'}</div></div>`;
     } else if (n.tier === 'WORMHOLE') {
       const p = partnerOf(n);
@@ -2297,7 +2299,7 @@
     const def = e && SUBS.get(e.id);
     let html = '';
     if (def) {
-      html += `<h4>Socketed subroutine</h4><div class="sub-current"><img src="assets/${esc(def.icon)}" alt=""><div><div>${esc(def.name)}</div><div class="sub">${esc(subSummary(def, e, n))}</div></div></div>`;
+      html += `<h4>Socketed subroutine</h4><div class="sub-current"><img src="assets/${esc(def.icon)}" alt=""><div><div>${esc(def.name)}</div><div class="sub">${esc(subSummary(def, e, n))}</div>${def.unobtainable ? `<div class="sub bad">${UNOBTAINABLE_TEXT}</div>` : ''}</div></div>`;
       if (def.kind === 'ROOT_CONDUIT') {
         html += '<div class="sub">Affinity (rolled per item; pick the one yours shows):</div><div class="pick-row">' +
           AFFINITY_KEYS.map(k => `<button data-aff="${k}" class="${e.aff === k ? 'current' : ''}">${esc(affinityName(k))}</button>`).join('') + '</div>';
@@ -2323,7 +2325,7 @@
       const current = def && s.id === def.id;
       const problem = current ? null : subLimitProblem(s, n.id);
       const sub = current ? 'Socketed. Click to remove.' : problem || subKindText(s);
-      html += `<button data-sub="${esc(s.id)}" class="${current ? 'current' : ''}" ${problem ? 'disabled' : ''} title="${current ? 'Remove from this socket' : 'Socket into this socket'}"><img src="assets/${esc(s.icon)}" alt=""><span><div>${esc(s.name)}</div><div class="sub">${esc(sub)}</div></span></button>`;
+      html += `<button data-sub="${esc(s.id)}" class="${current ? 'current' : ''}" ${problem ? 'disabled' : ''} title="${current ? 'Remove from this socket' : 'Socket into this socket'}"><img src="assets/${esc(s.icon)}" alt=""><span><div>${esc(s.name)}</div><div class="sub">${esc(sub)}</div>${s.unobtainable ? `<div class="sub bad">${UNOBTAINABLE_TEXT}</div>` : ''}</span></button>`;
     }
     return html;
   }

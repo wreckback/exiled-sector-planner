@@ -104,6 +104,7 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
   - Contraband Modspec Cache: picked notables, allocated for free
 - Doctrine archives show their radius and, per node, the lines or replacements they can roll. The roll itself comes from a hidden per-item seed, so it stays out of the totals.
 - The extractor exports subroutines, doctrine pools and modifier ranges, radius sizes and per-kind limits, plus which effects are read live in combat.
+- Subroutines with rarity 0 (no drop pool picks them, as of 0.11.1: Phoenix Ash Archive and P-Space Lattice) are flagged `unobtainable` by the extractor and marked so in the picker, the socket tooltip and the summary. They can still be socketed.
 
 **Affinity nodes in bulk**
 - A block under the affinity totals sets every allocated affinity node to one option, or to a typed Low / Mid / High split that changes as few nodes as possible. Each is one Undo step.

@@ -137,6 +137,7 @@ Click an allocated subroutine socket. The picker shows two headers, **Subroutine
 
 - Radiuses are drawn as dashed circles. Hover a node to see how a subroutine affects it.
 - **Subroutines** in the summary says what each one does right now.
+- Subroutines the mod no longer drops (rarity 0 in its data, currently Phoenix Ash Archive and P-Space Lattice) are marked unobtainable in the picker, the socket tooltip and the summary. You can still socket them, for copies you already own.
 - Subroutines are saved with the build and in links. Templates and codes don't hold them, as in game.
 - **Not modelled:** a granted notable that touches your allocated tree doesn't count as a neighbour for further allocation, though in game it does. Corruption implicits are also not modelled.
 
