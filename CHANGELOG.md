@@ -106,6 +106,12 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - The extractor exports subroutines, doctrine pools and modifier ranges, radius sizes and per-kind limits, plus which effects are read live in combat.
 - Subroutines with rarity 0 (no drop pool picks them, as of 0.11.1: Phoenix Ash Archive and P-Space Lattice) are flagged `unobtainable` by the extractor and marked so in the picker, the socket tooltip and the summary. They can still be socketed.
 
+**Targets**
+- Target mode (toolbar or T): clicking cycles a node through wanted, forbidden and unmarked, then **Allocate** adds the fewest nodes that reach every wanted node without passing a forbidden one. The plan is previewed in green, and the bar explains when it isn't possible.
+- The search treats a node and its partner (wormhole pair, linked socket and exit) as one unit, with directed edges because an exit is entered only through its socket. It's an exact Steiner tree search (Dreyfus-Wagner) for up to 10 wanted nodes, about 120 ms at 10, and a shortest-path heuristic above that.
+- The node rules are replayed on the plan in allocation order. A node that clashes with a wanted one is routed around, and a wanted node that can't be had is reported.
+- "Keep current build" off plans from the root alone and removes what the plan doesn't need.
+
 **Affinity nodes in bulk**
 - A block under the affinity totals sets every allocated affinity node to one option, or to a typed Low / Mid / High split that changes as few nodes as possible. Each is one Undo step.
 

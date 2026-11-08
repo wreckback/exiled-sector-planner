@@ -30,7 +30,7 @@ powershell -ExecutionPolicy Bypass -File tools\serve.ps1     # http://localhost:
 
 ## Verifying changes
 
-There is no test suite. Verify in the browser through the debug hook `window.planner` at the bottom of `app.js`. It exposes `state`, `byId`, `cam`, `pathTo`, `findPath(id, opt)`, `blockOf(id, opt)`, `problems()`, `setShip(fn)`, `typesExclusive(a, b)`, `setAffinitySplit({option: count})`, `removalSet`, `allocate`, `chooseRoot`, `click(id, ctrl)`, `pick`, `load(json)`, `serialize`, `totals`, `describe`, `setWormholeOption`, `templateSteps`, `buildTemplate`, `mergeTemplate`, `importTemplate` and `currentNodeId`. Ship rules can be set in a test build through `load` (the `ship` field of the serialized JSON). `window.plannerTemplatesTest(text)` shows a template file's list without the file picker, which needs a real user click.
+There is no test suite. Verify in the browser through the debug hook `window.planner` at the bottom of `app.js`. It exposes `state`, `byId`, `cam`, `pathTo`, `findPath(id, opt)`, `blockOf(id, opt)`, `problems()`, `setShip(fn)`, `typesExclusive(a, b)`, `setAffinitySplit({option: count})`, `removalSet`, `allocate`, `chooseRoot`, `click(id, ctrl)`, `pick`, `load(json)`, `serialize`, `totals`, `describe`, `setWormholeOption`, `templateSteps`, `buildTemplate`, `mergeTemplate`, `importTemplate`, `currentNodeId`, and for target mode `targets` (`{mode, want, forbid, keep}`), `setTargetMode`, `setTargetKeep`, `cycleTarget(id)`, `plan()` and `applyPlan`. Ship rules can be set in a test build through `load` (the `ship` field of the serialized JSON). `window.plannerTemplatesTest(text)` shows a template file's list without the file picker, which needs a real user click.
 
 The user often has their own build open in the same browser, and it persists in `localStorage`. When testing in their tab:
 - Save `planner.serialize()` first and `planner.load(saved)` afterwards, inside `try/finally`.
@@ -85,7 +85,12 @@ The sections run top to bottom in this order:
    3. A stat plus mode (`desc.<pct|flat|mult>.<up|down>`).
    4. A humanized fallback.
 7. **Canvas rendering:** draws in world space via `ctx.setTransform`, with line widths divided by zoom. A rAF loop runs every frame for the breathing rings and the keyboard camera. A node draws as a dot when it's under 5px on screen. Region labels are drawn last, in screen space.
-8. **DOM wiring:** toolbar, summary panel, tooltip, pickers, shortcuts dialog (`#keys`), Story rules dialog (`#story`, `renderStory`), Templates dialog (`#export`), and keyboard, pointer and touch input. Opening one dialog closes the others.
+8. **Targets** (the section after `primaryAction`/`secondaryAction`): target mode marks nodes wanted or forbidden (`targets`, saved to `localStorage['esp.targets']`, not in the build JSON or undo). While it's on, clicks cycle marks, the tooltip shows `targetTooltipNote`, and `updatePreview` previews the plan instead of the hovered path.
+   - `computePlan` (cached in `planCache`, cleared in `changed()`) builds `planGraph`: units of a node plus its `partnerOf`, with the base (root, plus the allocation when "Keep current build" is on) contracted into unit 0. Edges are directed, since exits are entered only through their partner. Forbidden nodes, nodes refused against the base, and nodes the replay steered around are blocked.
+   - `steinerExact` (node-weighted directed Dreyfus-Wagner) runs for up to `TARGET_EXACT_MAX` wanted units, and `steinerGreedy` (shortest-path heuristic) above that, followed by `pruneTree` and `planOrder` (breadth-first from the base).
+   - The rules are then replayed with `placement`. A refused non-wanted node, or the non-wanted side of a clash, logistics or shield refusal, is avoided and the search reruns, up to `TARGET_RETRIES` times. Anything else is reported as not possible.
+   - `applyPlan` is one undo step.
+9. **DOM wiring:** toolbar, summary panel, tooltip, pickers, shortcuts dialog (`#keys`), Story rules dialog (`#story`, `renderStory`), Templates dialog (`#export`), and keyboard, pointer and touch input. Opening one dialog closes the others.
    - Ship rules are the summary panel's Ship tab. It's `#panel-ship`, a persistent form beside `#panel-body`, so re-renders don't lose typing. `renderPanel` shows it when `panelTab === 'ship'` and calls `renderShipPane`.
    - Every change to ship or story rules goes through `setShip(fn)`, which pushes undo and warns about new problems.
 

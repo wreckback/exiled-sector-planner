@@ -172,6 +172,17 @@ button:disabled { opacity: 0.5; cursor: default; }
   background: var(--panel); border: 1px solid var(--edge);
   padding: 4px 12px; font-size: 16px; font-weight: 600;
 }
+#targets {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  top: calc(var(--bar-h, 44px) + 12px + env(safe-area-inset-top, 0px));
+  z-index: 8; width: min(560px, calc(100vw - 32px));
+  background: var(--panel); border: 1px solid var(--accent);
+  padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; font-size: 13px;
+}
+#targets label { white-space: nowrap; cursor: pointer; align-self: center; }
+#targets-status.bad { color: var(--bad); }
+#btn-targets.on { border-color: var(--accent); color: var(--accent); }
+@media (min-width: 960px) { body.panel-open #targets { left: calc((100vw - 380px) / 2); } }
 #toast {
   position: fixed; left: 50%; bottom: calc(40px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
   z-index: 50; /* above the dialogs (40) so copy confirmations show over them */

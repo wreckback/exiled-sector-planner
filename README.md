@@ -82,12 +82,19 @@ The last line says either "All checks passed, no rule files changed", in which c
    - **Copy code** in the toolbar copies the build as a template code. It's named after the last template name you used, or "<root> plan".
    - **Copy link to this build** in the Templates dialog puts the whole build in a URL, ship and story rules included.
 8. **Templates:** see the section below.
+9. **Targets** (toolbar button, or T): pick the nodes you want, and the planner finds the fewest nodes that reach them.
+   - Click a node to mark it wanted (white ring with ticks), again to forbid it (red ring with a slash), and again to clear it. Right-click clears. The nodes don't have to be connected.
+   - The planned path is drawn in green as you go. The bar says how many nodes it adds, or why it isn't possible: a wanted node the rules refuse, two wanted nodes that clash, a node only reachable through forbidden or refused ones, a faction volume with no anchor linked, or the node cap.
+   - **Allocate** applies the plan as one Undo step and leaves target mode. **Done** or Esc leaves without changing the build. Marks are kept in your browser for next time, and **Clear marks** drops them.
+   - **Keep current build** (on by default) adds to what you have. Turned off, it plans from the root alone and removes allocated nodes the plan doesn't need.
+   - The plan follows the same node rules as clicking: a node that clashes with a wanted one is routed around. With up to 10 wanted nodes it is the fewest possible; with more, the search is approximate and the bar says so. Choice nodes on the way get your root's affinity, as with a plain click.
 
 Press **?** or click **Shortcuts** for every control:
 - Arrows pan.
 - Page Up and Page Down zoom.
 - Home re-centres.
 - X turns the refused-node marks on and off.
+- T turns target mode on and off.
 - Ctrl+Z undoes.
 - Esc closes dialogs.
 

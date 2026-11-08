@@ -56,6 +56,7 @@
     <button id="btn-fit" title="Frame the core tree (Home)">Center</button>
     <button id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
     <button id="btn-reset" title="Clear the build and choose a new root">Reset</button>
+    <button id="btn-targets" title="Mark nodes wanted or forbidden, then allocate the fewest nodes that reach them (T)" aria-pressed="false" aria-controls="targets">Targets</button>
     <button id="btn-code" class="primary" title="Copy a template code for this build, to paste in chat or load with Templates → Load code">Copy code</button>
     <button id="btn-ship" title="The ship's shield, armor and hull mods, in the summary panel" aria-controls="panel-ship">Ship rules</button>
     <button id="btn-story" title="Story gates and unlocks your campaign has reached" aria-haspopup="dialog" aria-controls="story">Story rules</button>
@@ -141,6 +142,16 @@
 </aside>
 
 <div id="banner" hidden></div>
+<div id="targets" role="region" aria-label="Targets" hidden>
+  <div><b>Targets</b> <span class="muted">Click a node to mark it wanted, again to forbid it, again to clear it. Right-click clears.</span></div>
+  <div><span id="targets-counts"></span> <span id="targets-status" role="status"></span></div>
+  <div class="export-actions">
+    <label title="On: add to the nodes you have. Off: plan from the root alone, removing allocated nodes the plan doesn't need."><input id="targets-keep" type="checkbox" checked> Keep current build</label>
+    <button id="targets-apply" class="primary">Allocate</button>
+    <button id="targets-clear">Clear marks</button>
+    <button id="targets-done" title="Leave target mode (Esc or T). The marks are kept.">Done</button>
+  </div>
+</div>
 <div id="tooltip" hidden></div>
 <div id="picker" hidden></div>
 <div id="toast" hidden></div>
@@ -258,9 +269,10 @@
       <tr><td><kbd>Home</kbd></td><td>Re-centre on the core tree</td></tr>
       <tr><td><kbd>S</kbd></td><td>Show or hide the summary panel</td></tr>
       <tr><td><kbd>X</kbd></td><td>Turn the red X on refused nodes on or off (Mark refused)</td></tr>
+      <tr><td><kbd>T</kbd></td><td>Turn target mode on or off</td></tr>
       <tr><td><kbd>/</kbd></td><td>Jump to the search box</td></tr>
       <tr><td><kbd>?</kbd></td><td>Show or hide this list</td></tr>
-      <tr><td><kbd>Esc</kbd></td><td>Close this list or the option/anchor picker</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Close this list or the option/anchor picker, or leave target mode</td></tr>
     </table>
     <p class="muted">Keys don't work while you're typing in the search, cap or hull fields.</p>
 
@@ -281,6 +293,8 @@
       <tr><td>Click a wormhole or linked wormhole exit</td><td>Menu: jump to the other end, or allocate/remove</td></tr>
       <tr><td><kbd>Ctrl</kbd>+click a wormhole, linked socket or linked exit <span class="muted">(<kbd>Cmd</kbd>+click on Mac)</span></td><td>Jump straight to the other end (the view moves; the build doesn't change)</td></tr>
       <tr><td>Click a tree's name (when zoomed out)</td><td>Zoom into that tree</td></tr>
+      <tr><td>In target mode: left-click a node</td><td>Mark it wanted, then forbidden, then clear it (the root can't be marked)</td></tr>
+      <tr><td>In target mode: right-click a node</td><td>Clear its mark</td></tr>
       <tr><td>Drag</td><td>Pan</td></tr>
       <tr><td>Scroll wheel</td><td>Zoom toward the cursor</td></tr>
     </table>
@@ -298,7 +312,7 @@
 
 <div id="help">
   <b>Click</b> allocate (finds the shortest path) · <b>Click</b> an allocated node to remove it and anything cut off ·
-  <b>Right-click</b> your root to reset · <b>X</b> marks refused nodes ·
+  <b>Right-click</b> your root to reset · <b>X</b> marks refused nodes · <b>T</b> target mode ·
   <b>Drag</b>/<b>arrows</b> pan · <b>Wheel</b>/<b>PgUp</b>/<b>PgDn</b> zoom · <b>?</b> all shortcuts
 </div>
 

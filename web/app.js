@@ -1316,6 +1316,7 @@
     drawSubroutines(z);
     for (const n of nodes) if (n.tier !== 'ROOT') drawNode(n, view, z, treeAlpha);
     for (const n of roots) drawRoot(n, view, z, choosing);
+    if (targets.mode) drawTargetMarks(view, z);
     if (flash) {
       const age = time - flash.start;
       if (age > FLASH_SECONDS || age < 0) flash = null;
@@ -1881,10 +1882,12 @@
   function changed() {
     subCache = null;
     ruleCache = null;
+    planCache = null;
     cachedTotals = totals();
     updatePreview();
     renderChrome();
     renderPanel();
+    renderTargets();
     if (hover) showTooltip(hover, lastMouse.x, lastMouse.y);
     persist();
     if (!storyEl.hidden) renderStory();
@@ -1911,7 +1914,7 @@
     const tm = state.root ? state.template : null;
     els.tplGroup.hidden = !tm;
     if (tm) { els.tplCurrent.textContent = tm.name; els.tplEdited.hidden = templateSig() === tm.sig; }
-    els.banner.hidden = !!state.root;
+    els.banner.hidden = !!state.root || targets.mode;
     els.banner.textContent = S['ui.node.startingRootPrompt'] || 'Choose a root';
   }
 
@@ -2115,6 +2118,7 @@
 
     // action hint
     const jt = jumpTarget(n);
+    if (targets.mode && state.root) return html + targetTooltipNote(n) + (jt ? `<div class="tt-note">Ctrl+click to jump to ${esc(placeName(jt))}.</div>` : '');
     if (jt && n.tier === 'SOCKET') html += `<div class="tt-note">Ctrl+click to jump to ${esc(placeName(jt))}.</div>`;
     if (jt && (n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT')) {
       html += `<div class="tt-note">Click for options (jump${state.root && n.id !== state.root ? (allocated ? ', remove' : ', allocate') : ''}). Ctrl+click to jump to ${esc(placeName(jt))}.</div>`;
@@ -2198,6 +2202,12 @@
 
   function updatePreview() {
     preview = null;
+    if (targets.mode) {
+      // Target mode previews the plan instead of the hovered node's path.
+      const p = state.root ? currentPlan() : null;
+      if (p && (p.add.length || p.remove.length)) preview = { add: new Set(p.add.filter(id => !state.alloc.has(id))), remove: new Set(p.remove) };
+      return;
+    }
     if (!hover || !state.root) return;
     if (sat(hover.id)) {
       if (hover.id === state.root || isChoice(hover) || hover.tier === 'SOCKET') return;
@@ -2430,6 +2440,7 @@
     // Wormholes: Ctrl/Cmd+click travels to the other end (as in the mod); a plain click offers jump or allocate/remove.
     const jump = jumpTarget(n);
     if (jump && quick) { jumpTo(jump); return; }
+    if (targets.mode && state.root) { cycleTarget(n); return; }
     if (jump && (n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT')) { openPicker(n, sx, sy); return; }
     if (!state.root) { if (n.tier === 'ROOT') chooseRoot(n); return; }
     if (n.id === state.root) return;
@@ -2461,9 +2472,393 @@
   }
   function secondaryAction(n, sx, sy) {
     if (!state.root) return;
+    if (targets.mode && n.id !== state.root) { clearTarget(n); return; }
     if (n.id === state.root) { openPicker(n, sx, sy); return; }
     if (sat(n.id)) deallocate(n);
   }
+
+  // ------------------------------------------------------------------ targets (mark nodes wanted or forbidden, then allocate them)
+  // In target mode a click cycles a node: wanted, forbidden, unmarked. The plan is the build with the fewest nodes that holds
+  // every wanted node, avoids the forbidden ones and passes the node rules. It's a node-weighted Steiner arborescence over
+  // units (a node plus its partner, since taking one takes the other) grown from the current build, or from the root alone
+  // when "Keep current build" is off. Edges are directed because a wormhole exit is entered only through its partner.
+  // Exact (Dreyfus-Wagner) up to TARGET_EXACT_MAX wanted units; above that the shortest-path heuristic, pruned. The rules
+  // are then replayed in allocation order: a refused node on the way is avoided and the plan redone, and a wanted node
+  // that can't be had makes the plan impossible.
+  const TARGET_EXACT_MAX = 10;
+  const TARGET_RETRIES = 40;
+  const targets = { mode: false, want: new Set(), forbid: new Set(), keep: true };
+  try {
+    const t = JSON.parse(localStorage.getItem('esp.targets') || '{}');
+    for (const id of t.w || []) if (byId.has(id)) targets.want.add(id);
+    for (const id of t.f || []) if (byId.has(id) && !targets.want.has(id)) targets.forbid.add(id);
+    if (t.k === 0) targets.keep = false;
+  } catch { /* storage unavailable */ }
+  function saveTargets() {
+    try { localStorage.setItem('esp.targets', JSON.stringify({ w: [...targets.want], f: [...targets.forbid], k: targets.keep ? 1 : 0 })); } catch { /* storage unavailable */ }
+  }
+  const tgt = {
+    btn: document.getElementById('btn-targets'),
+    bar: document.getElementById('targets'),
+    counts: document.getElementById('targets-counts'),
+    status: document.getElementById('targets-status'),
+    keep: document.getElementById('targets-keep'),
+    apply: document.getElementById('targets-apply'),
+  };
+  let planCache = null;
+  const currentPlan = () => planCache || (planCache = computePlan());
+  function targetsChanged() {
+    planCache = null;
+    saveTargets();
+    updatePreview();
+    renderTargets();
+    if (hover) showTooltip(hover, lastMouse.x, lastMouse.y);
+    requestDraw();
+  }
+  function cycleTarget(n) {
+    if (n.id === state.root) { toast('The starting root is always in the build.'); return; }
+    if (targets.want.has(n.id)) { targets.want.delete(n.id); targets.forbid.add(n.id); }
+    else if (targets.forbid.has(n.id)) targets.forbid.delete(n.id);
+    else targets.want.add(n.id);
+    targetsChanged();
+  }
+  function clearTarget(n) {
+    const a = targets.want.delete(n.id), b = targets.forbid.delete(n.id);
+    if (a || b) targetsChanged();
+  }
+  function setTargetMode(on) {
+    if (targets.mode === on) return;
+    targets.mode = on;
+    closePicker();
+    els.banner.hidden = !!state.root || on;
+    targetsChanged();
+  }
+  function setTargetKeep(on) { targets.keep = on; targetsChanged(); }
+
+  const targetLabel = n => `${effectiveType(n).name}${n.volume !== 'core' ? ` (${volumeName(n.volume)})` : ''}`;
+  const preferredOption = n => (isChoice(n) ? state.choice.get(n.id) || defaultOption(n) : null);
+  const SHIELD_CHANGERS = new Set(['REMOVE_SHIELD', 'CREATE_FRONT_SHIELD_IF_NONE', 'CONVERT_SHIELD_TO_FRONT', 'CONVERT_SHIELD_TO_OMNI']);
+
+  // Units over the nodes outside the base; unit 0 is the base itself (contracted, weight 0). A unit is blocked when one of
+  // its nodes is forbidden, avoided, or refused against the base. A -> B when a node of A neighbours a node of B that
+  // isn't a wormhole exit.
+  function planGraph(base, refused, avoid, ignoreMarks = false) {
+    const unitOf = new Map(), units = [{ members: [...base].map(id => byId.get(id)), w: 0, blocked: false }];
+    for (const id of base) unitOf.set(id, 0);
+    for (const n of nodes) {
+      if (unitOf.has(n.id) || switchedOff(n)) continue;
+      const p = partnerOf(n);
+      if (n.tier === 'WORMHOLE_EXIT' && !p) continue;
+      const members = p && !unitOf.has(p.id) ? [n, p] : [n];
+      const blocked = members.some(m => (!ignoreMarks && targets.forbid.has(m.id)) || avoid.has(m.id) || refused.has(m.id));
+      for (const m of members) unitOf.set(m.id, units.length);
+      units.push({ members, w: members.length, blocked });
+    }
+    const N = units.length, out = Array.from({ length: N }, () => []), inn = Array.from({ length: N }, () => []);
+    for (let a = 0; a < N; a++) {
+      if (units[a].blocked) continue;
+      const seen = new Set();
+      for (const m of units[a].members) {
+        for (const x of m.adj) {
+          if (x.tier === 'WORMHOLE_EXIT') continue;
+          const b = unitOf.get(x.id);
+          if (b === undefined || b === a || seen.has(b) || units[b].blocked) continue;
+          seen.add(b); out[a].push(b); inn[b].push(a);
+        }
+      }
+    }
+    return { units, unitOf, out, inn, N, base };
+  }
+  function heapPush(h, d, v) {
+    h.push([d, v]);
+    for (let i = h.length - 1; i > 0;) { const p = (i - 1) >> 1; if (h[p][0] <= h[i][0]) break; [h[p], h[i]] = [h[i], h[p]]; i = p; }
+  }
+  function heapPop(h) {
+    const top = h[0], last = h.pop();
+    if (h.length) {
+      h[0] = last;
+      for (let i = 0; ;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < h.length && h[l][0] < h[m][0]) m = l;
+        if (r < h.length && h[r][0] < h[m][0]) m = r;
+        if (m === i) break;
+        [h[m], h[i]] = [h[i], h[m]]; i = m;
+      }
+    }
+    return top;
+  }
+  // Dreyfus-Wagner, node-weighted and directed: dp[S][v] is the cheapest tree rooted at v reaching the terminals in S,
+  // counting v. A merge joins two subtrees at v; relaxing moves the root one step to a parent u (edge u -> v).
+  // Returns the chosen units, or null when the terminals can't all be reached.
+  function steinerExact(g, T) {
+    const N = g.N, k = T.length, full = (1 << k) - 1;
+    const w = Float64Array.from(g.units, u => u.w);
+    const dp = [], kind = [], val = []; // kind: 1 terminal leaf, 2 merge (val = sub mask), 3 step to child (val = child)
+    for (let mask = 1; mask <= full; mask++) {
+      const d = new Float64Array(N).fill(Infinity), kd = new Int8Array(N), vl = new Int32Array(N);
+      dp[mask] = d; kind[mask] = kd; val[mask] = vl;
+      if ((mask & (mask - 1)) === 0) {
+        const t = T[31 - Math.clz32(mask)];
+        d[t] = w[t]; kd[t] = 1;
+      } else {
+        const low = mask & -mask;
+        for (let sub = (mask - 1) & mask; sub > 0; sub = (sub - 1) & mask) {
+          if (!(sub & low)) continue;
+          const a = dp[sub], b = dp[mask ^ sub];
+          for (let v = 0; v < N; v++) {
+            const c = a[v] + b[v] - w[v];
+            if (c < d[v]) { d[v] = c; kd[v] = 2; vl[v] = sub; }
+          }
+        }
+      }
+      const h = [];
+      for (let v = 0; v < N; v++) if (d[v] < Infinity) heapPush(h, d[v], v);
+      while (h.length) {
+        const [dv, v] = heapPop(h);
+        if (dv > d[v]) continue;
+        for (const u of g.inn[v]) {
+          const c = dv + w[u];
+          if (c < d[u]) { d[u] = c; kd[u] = 3; vl[u] = v; heapPush(h, c, u); }
+        }
+      }
+    }
+    if (!(dp[full][0] < Infinity)) return null;
+    const chosen = new Set();
+    const stack = [[full, 0]];
+    while (stack.length) {
+      const [mask, v] = stack.pop();
+      chosen.add(v);
+      const kd = kind[mask][v], x = val[mask][v];
+      if (kd === 2) stack.push([x, v], [mask ^ x, v]);
+      else if (kd === 3) stack.push([mask, x]);
+    }
+    return chosen;
+  }
+  // Shortest-path heuristic: from the tree, repeatedly add the cheapest path to the nearest terminal not yet reached.
+  function steinerGreedy(g, T) {
+    const N = g.N, inTree = new Uint8Array(N), left = new Set(T);
+    inTree[0] = 1;
+    while (left.size) {
+      const d = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), h = [];
+      for (let v = 0; v < N; v++) if (inTree[v]) { d[v] = 0; heapPush(h, 0, v); }
+      while (h.length) {
+        const [dv, v] = heapPop(h);
+        if (dv > d[v]) continue;
+        for (const b of g.out[v]) {
+          const c = dv + (inTree[b] ? 0 : g.units[b].w);
+          if (c < d[b]) { d[b] = c; prev[b] = v; heapPush(h, c, b); }
+        }
+      }
+      let best = -1;
+      for (const t of left) if (best < 0 || d[t] < d[best]) best = t;
+      if (!(d[best] < Infinity)) return null;
+      for (let v = best; v >= 0 && !inTree[v]; v = prev[v]) inTree[v] = 1;
+      for (const t of [...left]) if (inTree[t]) left.delete(t);
+    }
+    const chosen = new Set();
+    for (let v = 0; v < N; v++) if (inTree[v]) chosen.add(v);
+    return chosen;
+  }
+  // Drops chosen units that no terminal needs (leaves of the breadth-first tree from the base), until none are left.
+  function pruneTree(g, chosen, T) {
+    const term = new Set(T);
+    for (;;) {
+      const parent = new Map([[0, -1]]), q = [0];
+      for (let i = 0; i < q.length; i++) for (const b of g.out[q[i]]) if (chosen.has(b) && !parent.has(b)) { parent.set(b, q[i]); q.push(b); }
+      const kids = new Set([...parent.values()]);
+      let removed = false;
+      for (const b of [...chosen]) if (b !== 0 && !term.has(b) && (!parent.has(b) || !kids.has(b))) { chosen.delete(b); removed = true; }
+      if (!removed) return chosen;
+    }
+  }
+  // Allocation order: breadth-first from the base through the chosen units; in a unit, the node it's entered by first.
+  function planOrder(g, chosen) {
+    const order = [], seen = new Set([0]), q = [0];
+    for (let i = 0; i < q.length; i++) {
+      const from = new Set(g.units[q[i]].members.map(m => m.id));
+      for (const b of g.out[q[i]]) {
+        if (!chosen.has(b) || seen.has(b)) continue;
+        seen.add(b); q.push(b);
+        const mem = g.units[b].members;
+        const entry = mem.find(m => m.tier !== 'WORMHOLE_EXIT' && m.adj.some(x => from.has(x.id))) || mem[0];
+        order.push(entry, ...mem.filter(m => m !== entry));
+      }
+    }
+    return order;
+  }
+
+  // { ok, text, add (node ids in allocation order), remove, options, total, exact } or { ok: false, text, ... }.
+  function computePlan() {
+    const fail = (text, extra) => ({ ok: false, text, add: [], remove: [], ...extra });
+    if (!state.root) return fail('Choose a root first.');
+    const keep = targets.keep;
+    const granted = subState().granted;
+    const isGranted = id => granted.get(id)?.status === 'active';
+    const base = new Set([state.root, ...(keep ? state.alloc : [])]);
+    const baseList = keep ? rules().list.slice()
+      : [entryFor(byId.get(state.root), null), ...[...granted].filter(([, g]) => g.status === 'active').map(([id]) => entryFor(byId.get(id), null))];
+    const notes = [];
+    if (keep) {
+      const bad = [...targets.forbid].filter(id => base.has(id));
+      if (bad.length) notes.push(`${bad.length} forbidden node${bad.length > 1 ? 's are' : ' is'} already in the build and stay${bad.length > 1 ? '' : 's'}. Untick "Keep current build" to plan without ${bad.length > 1 ? 'them' : 'it'}.`);
+    }
+    if (!targets.want.size) return { ok: true, text: 'Click nodes to mark them wanted.', add: [], remove: [], options: new Map(), notes };
+    const wanted = [...targets.want].map(id => byId.get(id)).filter(n => n.id !== state.root && !base.has(n.id) && !isGranted(n.id));
+    for (const n of wanted) {
+      if (switchedOff(n)) return fail(`${targetLabel(n)} needs ${n.tier === 'WORMHOLE' ? 'core wormholes' : 'faction volumes'} on.`);
+      if (n.tier === 'WORMHOLE_EXIT' && !partnerOf(n)) return fail(`${targetLabel(n)} opens only through an anchor linked in a subroutine socket. Link one first.`);
+    }
+    // Nodes the rules refuse against the base, whatever else the plan adds.
+    const refused = new Map();
+    for (const n of nodes) {
+      if (base.has(n.id) || switchedOff(n)) continue;
+      const b = placement(n, baseList, preferredOption(n)).block;
+      if (b) refused.set(n.id, b);
+    }
+    const avoid = new Map(); // node id -> why the plan steers around it
+    for (let attempt = 0; attempt <= TARGET_RETRIES; attempt++) {
+      const g = planGraph(base, refused, avoid);
+      const T = [...new Set(wanted.map(n => g.unitOf.get(n.id)))];
+      for (const n of wanted) {
+        const u = g.units[g.unitOf.get(n.id)];
+        if (!u.blocked) continue;
+        const m = u.members.find(x => targets.forbid.has(x.id) || avoid.has(x.id) || refused.has(x.id));
+        const why = targets.forbid.has(m.id) ? 'you forbade it' : (refused.get(m.id) || avoid.get(m.id)).text;
+        return fail(m === n ? `${targetLabel(n)} can't be allocated: ${why}` : `${targetLabel(n)} takes ${targetLabel(m)} with it, and ${why.replace(/\.$/, '')}.`);
+      }
+      if (!T.length) return { ok: true, text: 'Every wanted node is already in the build.', add: [], remove: [], options: new Map(), notes };
+      const exact = T.length <= TARGET_EXACT_MAX;
+      const found = exact ? steinerExact(g, T) : steinerGreedy(g, T);
+      if (!found) {
+        // Name a wanted node nothing legal leads to.
+        const reach = new Set([0]), q = [0];
+        for (let i = 0; i < q.length; i++) for (const b of g.out[q[i]]) if (!reach.has(b)) { reach.add(b); q.push(b); }
+        const lost = wanted.find(n => !reach.has(g.unitOf.get(n.id))) || wanted[0];
+        // Unreachable even with nothing blocked: a faction volume with no anchor linked to it.
+        const open = planGraph(base, new Map(), new Map(), true);
+        const all = new Set([0]), q2 = [0];
+        for (let i = 0; i < q2.length; i++) for (const b of open.out[q2[i]]) if (!all.has(b)) { all.add(b); q2.push(b); }
+        if (!all.has(open.unitOf.get(lost.id))) {
+          return fail(lost.volume !== 'core' && state.volumes ? `${targetLabel(lost)} is in a faction volume with no anchor linked to it. Link one to its exit in a subroutine socket first.`
+            : `${targetLabel(lost)} can't be reached from the root.`);
+        }
+        const steered = [...avoid].map(([id, a]) => `${targetLabel(byId.get(id))} (${a.text.replace(/\.$/, '')})`);
+        return fail(`No legal way to reach ${targetLabel(lost)}: every way there passes a node you forbade or one the rules refuse` +
+          (steered.length ? `, here ${steered.slice(0, 2).join(' and ')}${steered.length > 2 ? ` and ${steered.length - 2} more` : ''}.` : '.'));
+      }
+      const chosen = pruneTree(g, found, T);
+      const order = planOrder(g, chosen);
+      // Replay the rules in allocation order.
+      const list = baseList.slice(), options = new Map(), added = new Set(order.map(n => n.id));
+      let culprit = null, stop = null;
+      for (const n of order) {
+        const p = placement(n, list, preferredOption(n));
+        if (p.block) {
+          const own = !targets.want.has(n.id);
+          const mine = e => added.has(e.node.id) && !targets.want.has(e.node.id);
+          if (own) culprit = n;
+          else if (p.block.with && added.has(p.block.with.id) && !targets.want.has(p.block.with.id)) culprit = p.block.with;
+          else if (p.block.kind === 'logistics') culprit = list.find(e => mine(e) && isLogistics(e.effective))?.node || null;
+          else if (p.block.kind === 'ship') culprit = [...list].reverse().find(e => mine(e) && typeEffectNames(e.effective).some(x => SHIELD_CHANGERS.has(x)))?.node || null;
+          if (culprit) avoid.set(culprit.id, { text: culprit === n ? p.block.text : `it can't be taken with ${targetLabel(n)}` });
+          else stop = `${targetLabel(n)} can't be allocated with the rest: ${p.block.text}`;
+          break;
+        }
+        options.set(n.id, p.option);
+        list.push(entryFor(n, p.option));
+      }
+      if (stop) return fail(stop);
+      if (culprit) continue;
+      const add = order.map(n => n.id);
+      const remove = keep ? [] : [...state.alloc].filter(id => !added.has(id));
+      const total = (keep ? used() : 1) + add.length;
+      const plan = { add, remove, options, total, exact: exact && !avoid.size, notes };
+      if (total > state.cap) return { ...plan, ok: false, text: `It needs ${total} nodes and the cap is ${state.cap}.` };
+      return { ...plan, ok: true, text: '' };
+    }
+    return fail(`No legal plan found after steering around ${TARGET_RETRIES} refused nodes.`);
+  }
+  function applyPlan() {
+    const p = currentPlan();
+    if (!p.ok) { toast(p.text); return; }
+    const before = new Set(state.alloc);
+    const gained = p.add.filter(id => !before.has(id)).length;
+    if (!gained && !p.remove.length) { toast(p.text || 'Nothing to change.'); return; }
+    pushUndo();
+    if (targets.keep) for (const id of p.add) state.alloc.add(id);
+    else state.alloc = new Set(p.add);
+    for (const id of p.add) {
+      const n = byId.get(id), o = p.options.get(id);
+      if (isChoice(n) && o) state.choice.set(id, o);
+    }
+    for (const id of [...state.choice.keys()]) if (!state.alloc.has(id)) state.choice.delete(id);
+    for (const [s, e] of [...state.links]) if (!state.alloc.has(s) || !state.alloc.has(e)) { state.links.delete(s); state.alloc.delete(e); }
+    dropOrphanSubs();
+    targets.mode = false;
+    planCache = null;
+    changed();
+    toast(`Allocated ${gained} node${gained === 1 ? '' : 's'}${p.remove.length ? ` and removed ${p.remove.length}` : ''}. Undo takes it back.`);
+  }
+  function renderTargets() {
+    tgt.bar.hidden = !targets.mode;
+    tgt.btn.classList.toggle('on', targets.mode);
+    tgt.btn.setAttribute('aria-pressed', String(targets.mode));
+    if (!targets.mode) return;
+    tgt.keep.checked = targets.keep;
+    tgt.counts.textContent = `${targets.want.size} wanted · ${targets.forbid.size} forbidden.`;
+    const p = currentPlan();
+    const gained = p.add.filter(id => !state.alloc.has(id)).length;
+    let text;
+    if (!p.ok) text = `Not possible. ${p.text}`;
+    else if (!gained && !p.remove.length) text = p.text || 'Nothing to change.';
+    else text = `Plan: ${gained} more node${gained === 1 ? '' : 's'}${p.remove.length ? `, ${p.remove.length} removed` : ''}, ${p.total} of ${state.cap} in all. ` +
+      (p.exact ? 'That is the fewest possible.' : `It may not be the fewest${targets.want.size > TARGET_EXACT_MAX ? ` (over ${TARGET_EXACT_MAX} wanted nodes the search is approximate)` : ' (it had to steer around refused nodes)'}.`);
+    if (p.notes && p.notes.length) text += ' ' + p.notes.join(' ');
+    tgt.status.textContent = text;
+    tgt.status.classList.toggle('bad', !p.ok);
+    tgt.apply.disabled = !p.ok || (!gained && !p.remove.length);
+  }
+  // Wanted: a white ring with four ticks. Forbidden: a red ring with a slash. Drawn over the nodes in target mode.
+  function drawTargetMarks(view, z) {
+    const px = 1 / z;
+    for (const set of [targets.want, targets.forbid]) {
+      for (const id of set) {
+        const n = byId.get(id), want = set === targets.want;
+        if (!inView(view, n.x, n.y, n.fp * 2)) continue;
+        const dot = n.fp * z < 5;
+        const inner = n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT' ? n.fp * 0.42 : n.tier === 'SOCKET' ? n.fp * 0.52 : n.tier === 'ROOT' ? n.fp * 0.3 : n.fp * ICON_INSET / 2;
+        const r = dot ? Math.max(6 * px, n.fp * 0.6) : inner * 1.3;
+        const lw = dot ? 2 * px : Math.max(2 * px, n.fp * 0.06);
+        ctx.globalAlpha = 1;
+        ctx.lineCap = 'round';
+        for (const [col, extra] of [['rgba(0,0,0,0.8)', lw * 1.2], [want ? 'rgba(255,255,255,0.95)' : rgba(RULE_PROBLEM, 0.95), 0]]) {
+          ctx.strokeStyle = col;
+          ctx.lineWidth = lw + extra;
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+          if (want && !dot) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { ctx.moveTo(n.x + dx * r * 0.8, n.y + dy * r * 0.8); ctx.lineTo(n.x + dx * r * 1.3, n.y + dy * r * 1.3); }
+          if (!want) { const d = r * Math.SQRT1_2; ctx.moveTo(n.x + d, n.y - d); ctx.lineTo(n.x - d, n.y + d); }
+          ctx.stroke();
+        }
+        ctx.lineCap = 'butt';
+      }
+    }
+  }
+  function targetTooltipNote(n) {
+    if (n.id === state.root) return '<div class="tt-note">Starting root: always in the build.</div>';
+    const st = targets.want.has(n.id) ? 'Wanted' : targets.forbid.has(n.id) ? 'Forbidden' : '';
+    const next = st === 'Wanted' ? 'forbid it' : st === 'Forbidden' ? 'clear it' : 'mark it wanted';
+    const p = currentPlan();
+    const onPath = !st && !sat(n.id) && p.add.includes(n.id);
+    return `<div class="tt-note">${st ? `<b>${st}.</b> ` : ''}Click to ${next}.${st === 'Wanted' ? ' Right-click to clear.' : ''}</div>` +
+      (onPath ? '<div class="tt-note">On the planned path.</div>' : '');
+  }
+  tgt.btn.addEventListener('click', () => setTargetMode(!targets.mode));
+  tgt.keep.addEventListener('change', () => { setTargetKeep(tgt.keep.checked); tgt.keep.blur(); });
+  tgt.apply.addEventListener('click', applyPlan);
+  document.getElementById('targets-clear').addEventListener('click', () => { targets.want.clear(); targets.forbid.clear(); targetsChanged(); });
+  document.getElementById('targets-done').addEventListener('click', () => setTargetMode(false));
 
   let toastTimer = 0;
   function toast(msg, html) {
@@ -3453,7 +3848,8 @@
     else if (e.key === 'Home') frameCore();
     else if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey) togglePanel();
     else if (e.key.toLowerCase() === 'x' && !e.ctrlKey && !e.metaKey && !e.altKey) { setMarkRefused(!markRefused); toast(markRefused ? 'Refused nodes marked with an X.' : 'Refused nodes no longer marked.'); }
-    else if (e.key === 'Escape') closePicker();
+    else if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey && !e.altKey) setTargetMode(!targets.mode);
+    else if (e.key === 'Escape') { if (!els.picker.hidden) closePicker(); else if (targets.mode) setTargetMode(false); }
     else if (e.key === '/') { e.preventDefault(); els.search.focus(); }
   });
   window.addEventListener('resize', resize);
@@ -3491,5 +3887,6 @@
     templateToCode, codeToTemplate, pathTo, removalSet, allocate: id => allocate(byId.get(id)), chooseRoot: id => chooseRoot(byId.get(id)), totals, describe, serialize,
     findPath: (id, opt) => findPath(byId.get(id), opt), blockOf: (id, opt) => blockOf(byId.get(id), opt || null, rules().list),
     problems: () => [...rules().problems].map(([id, b]) => ({ id, text: b.text })), setShip, setAffinitySplit,
+    targets, setTargetMode, setTargetKeep, cycleTarget: id => cycleTarget(byId.get(id)), plan: () => currentPlan(), applyPlan,
     socketSub: (socket, id, extra) => socketSub(byId.get(socket), id, extra), setGrants: (socket, ids) => setGrants(byId.get(socket), ids), subState: () => subState(), typesExclusive: (a, b) => typesExclusive(types.get(a), types.get(b)) };
 })();
