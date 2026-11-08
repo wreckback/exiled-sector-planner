@@ -90,8 +90,13 @@ $readme += @(
     ''
     'Credits'
     '-------'
-    'Exiled Sector and its art belong to the mod''s authors and to the authors'
-    'its CREDITS.md names. This planner is a free, non-commercial fan tool.'
+    'Exiled Sector is by Portals. Its art belongs to the mod and to the authors'
+    'of the other mods and games its art comes from; the CREDITS.md in the mod'
+    'folder lists who made what and under which terms. This planner contains'
+    'none of that art: it only shows the images from your own installed copy of'
+    'the mod. Its tree data (node layout, names and effect wording) is'
+    'extracted from the mod''s data files. Starsector is by Fractal Softworks.'
+    'The planner is a free, non-commercial fan tool for Exiled Sector players.'
 )
 [IO.File]::WriteAllText((Join-Path $dir 'README.txt'), (($readme -join "`r`n") + "`r`n"), $utf8)
 

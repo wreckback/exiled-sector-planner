@@ -26,7 +26,7 @@ powershell -ExecutionPolicy Bypass -File tools\serve.ps1     # then open http://
 ```
 
 - `web\index.html` also works opened straight from disk, with the differences listed under Caveats.
-- To share the planner with others, upload the `web\` folder to any static host, such as GitHub Pages.
+- To share the planner with others, upload the `web\` folder to any static host, such as GitHub Pages. It holds no art, so visitors choose their own mod folder (see Mod art).
 - `serve.ps1` stops with Ctrl+C. Use `-Port` to change the port.
 
 ## Update it after the mod changes
@@ -283,3 +283,12 @@ The settings are kept in your browser, and the dialog says which method is runni
   - What a doctrine archive actually rolls (see Subroutines), and subroutine corruption implicits.
 - **Placeholder magnitudes:** the mod marks its magnitudes as placeholders pending balance.
 - **Simplified art:** stars, wormholes, sockets, roots, keystone belts and notable rings are drawn in code as simple versions of the mod's effects. The mod uses vanilla sprites and custom OpenGL for these.
+
+## Credits
+
+- **Exiled Sector** is by Portals. Its source code is licensed under the GNU GPL v3.0.
+- **The art** the planner shows belongs to Exiled Sector and to the authors of the other mods and games its art comes from (Random Assortment of Things, Nightcross Armory, Navarchy of Tania, LOST_SECTOR, Ashes of the Domain and others). The mod's own `CREDITS.md` lists who made what and under which terms. It's in the mod folder and in the Exiled Sector repository.
+  - The planner contains none of this art and doesn't redistribute it, not in this repository and not in the release zip. It only displays the images from the copy of the mod that each user already has installed, read locally in their browser (see Mod art).
+- **The tree data** in `web/data/planner-data.js` is extracted from the mod's data and string files: the node layout, skill type names and effect wording. It's what lets the planner match the game.
+- **Starsector** is by Fractal Softworks.
+- The planner is a free, non-commercial fan tool for Exiled Sector players.
