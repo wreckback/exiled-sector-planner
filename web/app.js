@@ -1325,7 +1325,7 @@
     const none = '<span class="muted">—</span>';
     const rows = integrationRows(t).map(r => `<div class="ic-row ic-${r.kind}">` +
       cell('Normal', r.normal ?? none) +
-      cell('Integrated', r.kind === 'dropped' ? '<span class="builtin" title="Integrating drops this line">— no longer</span>'
+      cell('Integrated', r.kind === 'dropped' ? '<span class="builtin">—</span>'
         : r.kind === 'same' ? r.integ : `<span class="builtin" aria-hidden="true">▲ </span>${r.integ}`) + '</div>').join('');
     // The column the build doesn't use is drawn lighter (style.css: .ic-on-normal / .ic-on-integ).
     return `<div class="ic${active ? ` ic-on-${active}` : ''}"><div class="ic-row ic-head"><div>Normal${tag('normal')}</div><div><span class="builtin">Integrated</span>${cost}${tag('integ')}</div></div>${rows}</div>`;
@@ -1356,8 +1356,8 @@
       if (r.kind === 'changed') return `<div>${integOn ? withOther(r.integ, r.normal) : withOther(r.normal, r.integ)}</div>`;
       if (r.kind === 'added') return integOn ? `<div><span class="builtin" aria-hidden="true">▲ </span>${r.integ}</div>`
         : `<div class="ic-off"><span class="builtin">▲ When integrated:</span> ${r.integ}</div>`;
-      return integOn ? `<div class="ic-off"><span class="builtin">No longer:</span> ${r.normal}</div>`
-        : `<div>${r.normal} <span class="ic-alt">(not when integrated)</span></div>`;
+      return integOn ? `<div class="ic-off"><span class="builtin">-</span> ${r.normal}</div>`
+        : `<div>${r.normal} <span class="ic-alt">(removed when integrated)</span></div>`;
     }).join('');
     return `<div class="ic-inl">${head}${rows}</div>`;
   }
@@ -1470,7 +1470,7 @@
   }
   // Totals the preview takes away entirely (an integration that drops a line), as entries of the base map.
   const previewGone = (baseSums, sums) => (baseSums ? [...baseSums.values()].filter(b => Math.abs(b.magnitude) > 1e-9 && Math.abs(sums.get(b.effect)?.magnitude || 0) < 1e-9) : []);
-  const goneHtml = (b, describeIt = x => describe(x.effect, x.magnitude)) => `<span class="builtin">No longer when integrated:</span> <span class="muted">${plain(describeIt(b))}</span>`;
+  const goneHtml = (b, describeIt = x => describe(x.effect, x.magnitude)) => `<span class="builtin">-</span> <span class="muted">${plain(describeIt(b))}</span>`;
 
   // ------------------------------------------------------------------ images
   // The planner ships none of the mod's art. It's read from the Exiled Sector folder the user picks (the Mod art
@@ -2643,7 +2643,7 @@
         }
         if (n.volume !== 'core') sub += ` · ${volumeName(n.volume)}`;
         const ig = isIntegrated(n) ? ' <span class="builtin">Integrated</span>' : integPreview && canIntegrate(n) ? ' <span class="builtin">Integrated (preview)</span>' : '';
-        return `<div class="node-row ${n.tier.toLowerCase()}" data-node="${esc(n.id)}" title="${integrable(t2) ? 'Alt+click to integrate or remove the integration' : ''}">${nodeIconHtml(n, t2)}<div><div class="nm${isIntegrated(n) ? ' builtin' : ''}">${esc(t2.name)}</div><div class="tr">${esc(sub)}${ig}</div></div></div>`;
+        return `<div class="node-row ${n.tier.toLowerCase()}" data-node="${esc(n.id)}" title="${integrable(t2) ? 'Alt+click to integrate or remove' : ''}">${nodeIconHtml(n, t2)}<div><div class="nm${isIntegrated(n) ? ' builtin' : ''}">${esc(t2.name)}</div><div class="tr">${esc(sub)}${ig}</div></div></div>`;
       }).join('') : '<div class="empty">No notables or keystones allocated yet.</div>';
     }
     els.panelBody.insertAdjacentHTML('afterbegin', problemsHtml());
@@ -2731,11 +2731,11 @@
     integEl.view.value = integView;
     const notes = [];
     if (kept) notes.push(`${kept} kept on removed node${kept === 1 ? '' : 's'}.`);
-    if (integPreview) notes.push(`Preview: all ${able.length} integrated, ${pointsText(storyPointCost(able.length))}. Totals and the stat sheet show it; the build is unchanged.`);
+    if (integPreview) notes.push(`Preview: all ${able.length} integrated, ${pointsText(storyPointCost(able.length))}. Totals and the stat sheet show changes; build unchanged.`);
     integEl.note.textContent = notes.join(' ');
   }
-  integEl.all.addEventListener('click', () => { const c = setAllIntegrated(true); if (c) toast(`Integrated ${c} node${c === 1 ? '' : 's'}. Undo goes back.`); });
-  integEl.none.addEventListener('click', () => { const c = setAllIntegrated(false); if (c) toast(`Removed ${c} integration${c === 1 ? '' : 's'}. Undo goes back.`); });
+  integEl.all.addEventListener('click', () => { const c = setAllIntegrated(true); if (c) toast(`Integrated ${c} node${c === 1 ? '' : 's'}.`); });
+  integEl.none.addEventListener('click', () => { const c = setAllIntegrated(false); if (c) toast(`Removed ${c} integration${c === 1 ? '' : 's'}.`); });
   integEl.preview.addEventListener('change', () => setIntegPreview(integEl.preview.checked));
   integEl.keep.addEventListener('change', () => setKeepIntegration(integEl.keep.checked));
   integEl.view.addEventListener('change', () => setIntegView(integEl.view.value));
@@ -2844,7 +2844,7 @@
       else html += `<div class="tt-note">Click to allocate${path.length > 1 ? ` (${path.length} nodes${viaText})` : viaText}${isChoice(n) ? ' and pick an option' : ''}.</div>`;
     }
     if (state.root && n.id !== state.root && integrable(t) && !isChoice(n)) {
-      if (state.integrated.has(n.id)) html += `<div class="tt-note">${allocated ? '' : 'Integrated, kept while unallocated. '}Alt+click or I to remove the integration.</div>`;
+      if (state.integrated.has(n.id)) html += `<div class="tt-note">${allocated ? '' : 'Integrated, kept while unallocated. '}Alt+click or I to remove integration.</div>`;
       else if (allocated) html += `<div class="tt-note">Alt+click or I to integrate (+${esc(pointsText(nextIntegrationCost()))}).</div>`;
     }
     if (state.root && n.id !== state.root) {
