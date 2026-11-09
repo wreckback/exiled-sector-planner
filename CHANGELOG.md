@@ -48,6 +48,11 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - `update.mjs --report <file>` saves the report as a plain-text file, with or without `--preview`.
 - `serve.mjs` only answers `version.js` from git for the repo's own `web/`. Other folders (`--root preview`, an unpacked release zip) show their own version, and `git describe` runs at most every 2 seconds instead of on every request.
 
+## Extractor: the mod's newer description code (2026-11-09)
+
+- Fills every wording value on the mod's `Dev` work (11 effects showed "?"): descriptions that hand over to a form taking a `DescribeContext`, values computed by small helper methods (`maxReserve(...)`, `range(...)`, `ParameterBonus.plusFlat`/`increasedBy`), values in local variables, and effects whose wording, mode and stat moved into a backing class (`DamageTakenWhile`). Damage taken near a held objective had also lost its mode, stat and lower-is-better flag on `Dev`; those are back.
+- Constants are looked up in the class that uses them first. This fixes Rift Strike (and Strikecraft Rift Strike) showing 10% and 100 for the damage share and maximum instead of 50% and 500. The 0.11.2-alpha release has the same bug, so the committed `planner-data.js` is wrong there until it's regenerated.
+
 ## Planner (`web/`)
 
 **Tree view**
