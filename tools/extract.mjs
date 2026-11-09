@@ -235,6 +235,11 @@ function getDescriptionArgs(body, cls, params, depth) {
         const r = resolveExpression(substituteParams(a[2], locals), cls);
         if (r && !out.has(a[1])) out.set(a[1], r);
     }
+    // .count(n) fills {count} (and picks the message's .one/.other form in game).
+    for (const c of allMatches(body, /\.count\(\s*((?:[^()]|\((?:[^()]|\([^()]*\))*\))+)\)/g)) {
+        const r = resolveExpression(substituteParams(c[1], locals), cls);
+        if (r && !out.has('count')) out.set('count', r);
+    }
     for (const m of allMatches(body, /\b(?:(\w+)\.)?(\w+)\.withShipSizeArgs\(/g)) {
         const key = m[1] !== undefined ? `${m[1]}.${m[2]}` : m[2];
         const t = hullTables.has(key) ? hullTables.get(key) : hullTables.get(m[2]);
@@ -439,10 +444,12 @@ if (wsf) {
     }
 }
 
-// Effects actually used by skill types, plus the string templates they need.
+// Effects actually used by skill types, plus the string templates they need. A type's `integrated` block (the effects
+// an integrated node uses instead, like an s-mod) counts too, so its effects get their wording.
 const usedEffects = new Set();
 for (const t of types) {
-    for (const e of [...asList(t.effects), ...asList(t.hullSizeEffects)]) if (e && e.effect) usedEffects.add(e.effect);
+    for (const e of [...asList(t.effects), ...asList(t.hullSizeEffects), ...asList(t.integrated?.effects),
+        ...asList(t.integrated?.hullSizeEffects)]) if (e && e.effect) usedEffects.add(e.effect);
 }
 
 // ---------------------------------------------------------------- subroutines (socket items besides anchors)
@@ -649,8 +656,10 @@ for (const [k, v] of strings) {
 const present = (v) => v !== null && v !== undefined;
 const typeOut = types.map((t) => {
     const o = { id: t.id ?? null, name: t.name ?? null, icon: t.icon ?? null, tier: truthy(t.tier) ? t.tier : 'SMALL' };
+    // integrated: the effects (and effectText) an integrated node uses instead of its normal ones. app.js doesn't read it yet.
     for (const k of ['effects', 'hullSizeEffects', 'options', 'tags', 'flavour', 'effectText', 'phantomHullMods', 'exclusiveHullMods',
-        'exclusiveSkillTypes', 'vanillaHullMod', 'requiredHullSizes', 'itemCost', 'unlockConditions', 'todo', 'temporaryAfterDeploymentSeconds']) {
+        'exclusiveSkillTypes', 'vanillaHullMod', 'requiredHullSizes', 'itemCost', 'unlockConditions', 'todo', 'temporaryAfterDeploymentSeconds',
+        'integrated']) {
         if (present(t[k])) o[k] = t[k];
     }
     return o;

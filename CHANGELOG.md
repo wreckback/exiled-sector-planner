@@ -54,6 +54,12 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - Constants are looked up in the class that uses them first. This fixes Rift Strike (and Strikecraft Rift Strike) showing 10% and 100 for the damage share and maximum instead of 50% and 500. The 0.11.2-alpha release has the same bug, so the committed `planner-data.js` is wrong there until it's regenerated.
 - `update.mjs` flags effects whose mode, stat, lower-is-better or live flag changed from the previous data. Held objective's lost fields would have been caught this way; on `Dev` it flags `BALLISTIC_WEAPON_LARGE_OP_COST_FLAT`, which the mod rewrote as a plain flat stat effect.
 
+## Integrated effects in the data (2026-11-09)
+
+- The extractor copies each skill type's `integrated` block (the mod's integrated nodes, upgraded with story points like an s-mod; 178 types on `Dev`) into the data and extracts the wording of the effects only they use. The planner doesn't apply them yet.
+- `update.mjs` compares `integrated` blocks under skill type changes and prints how many types have one.
+- `.count(n)` in a description fills `{count}` (the integrated Cheap Shots wording needed it).
+
 ## Planner (`web/`)
 
 **Tree view**

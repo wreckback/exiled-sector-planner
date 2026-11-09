@@ -330,7 +330,7 @@ else {
         const what = [];
         if (o.name !== n.name) what.push(`renamed '${o.name}' -> '${n.name}'`);
         if (o.tier !== n.tier) what.push(`tier ${o.tier} -> ${n.tier}`);
-        for (const k of ['effects', 'hullSizeEffects', 'options', 'effectText', 'phantomHullMods', 'requiredHullSizes']) {
+        for (const k of ['effects', 'hullSizeEffects', 'options', 'effectText', 'phantomHullMods', 'requiredHullSizes', 'integrated']) {
             if (canon(o[k]) !== canon(n[k])) what.push(k);
         }
         if (what.length) changedT.push(`${id} (${what.join(', ')})`);
@@ -354,6 +354,12 @@ else {
         for (const c of changedT.slice(0, 25)) say(`    ${c}`);
         if (changedT.length > 25) say(`    ... (+${changedT.length - 25} more)`);
         summary.push(`${changedT.length} skill types changed`);
+    }
+    // Integrated effects (an integrated node's replacement effects, like an s-mod): app.js doesn't use them yet.
+    const integ = (d) => list(d.types).filter((t) => t.integrated).length;
+    if (integ(old) !== integ(neu)) {
+        say(`  Skill types with integrated effects: ${integ(old)} -> ${integ(neu)} (the planner doesn't apply them yet)`);
+        summary.push(`${integ(neu)} with integrated effects`);
     }
     if (wording) say(`  Wording strings changed or added: ${wording}`);
     if (!summary.length && !wording) say('  No changes to the tree.');
