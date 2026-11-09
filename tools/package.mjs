@@ -9,9 +9,11 @@
 // (git archive), so any tag can be packaged whatever is checked out. git writes the zip, so this needs git 2.39 or
 // newer (--add-virtual-file) and no zip library.
 //
+// The zip also holds the planner's LICENSE (GPL-3.0, the same as the mod), as the GPL asks for a copy of it with each copy.
+//
 // The zip holds none of the mod's art: it belongs to Exiled Sector and the authors its CREDITS.md names. The page reads
 // it from the mod folder each user chooses (the Mod art dialog), and draws placeholders without one.
-import { mkdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fail, git, good, repoRoot, say } from './lib/common.mjs';
@@ -109,17 +111,30 @@ const readme = [
 // - Archiving the web/ subtree leaves the repo's .gitattributes (eol=lf) behind, so core.autocrlf is turned off
 //   for this call: otherwise a Windows git would write the files with CRLF. They go in as stored, with LF.
 // - --prefix doesn't apply to --add-virtual-file, so those paths name the top folder themselves.
+// - LICENSE is too long for --add-virtual-file on a Windows command line, so it goes in with --add-file, which takes a
+//   file from disk under the --prefix: the tag's own LICENSE, or the current one for tags made before it was added.
 const name = `exiled-sector-planner-${tag}`;
 const dist = join(repoRoot, 'dist');
 mkdirSync(dist, { recursive: true });
 const zipPath = join(dist, `${name}.zip`);
 rmSync(zipPath, { force: true });
-git(repoRoot, [
-    '-c', 'core.autocrlf=false',
-    'archive', '--format=zip', '-o', zipPath, `--prefix=${name}/`,
-    `--add-virtual-file=${name}/version.js:${versionJs}`,
-    `--add-virtual-file=${name}/README.txt:${readme}`,
-    `refs/tags/${tag}:web`, 'index.html', 'style.css', 'app.js', 'data/planner-data.js',
-]);
+const licenseDir = join(dist, `.license-${name}`);
+const tagLicense = git(repoRoot, ['show', `refs/tags/${tag}:LICENSE`], { allowFail: true, keepIndent: true });
+const licenseText = tagLicense !== null ? tagLicense + '\n' : existsSync(join(repoRoot, 'LICENSE')) ? readFileSync(join(repoRoot, 'LICENSE'), 'utf8') : null;
+if (licenseText === null) fail('package', 'no LICENSE in the tag or the planner folder.');
+mkdirSync(licenseDir, { recursive: true });
+writeFileSync(join(licenseDir, 'LICENSE'), licenseText);
+try {
+    git(repoRoot, [
+        '-c', 'core.autocrlf=false',
+        'archive', '--format=zip', '-o', zipPath, `--prefix=${name}/`,
+        `--add-virtual-file=${name}/version.js:${versionJs}`,
+        `--add-virtual-file=${name}/README.txt:${readme}`,
+        `--add-file=${join(licenseDir, 'LICENSE')}`,
+        `refs/tags/${tag}:web`, 'index.html', 'style.css', 'app.js', 'data/planner-data.js',
+    ]);
+} finally {
+    rmSync(licenseDir, { recursive: true, force: true });
+}
 
 good(`Wrote dist/${name}.zip (${(statSync(zipPath).size / 1024 / 1024).toFixed(1)} MB).`);
