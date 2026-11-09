@@ -299,6 +299,11 @@ button:disabled { opacity: 0.5; cursor: default; }
 .ic-same > div, .ic-same span { color: var(--muted); }
 .ic-active { font-size: 11px; color: var(--text); border: 1px solid var(--edge); padding: 0 4px; margin-left: 4px; }
 .ic-was { font-size: 12px; margin-left: 8px; }
+/* inline view: one line each, the other set's values in brackets, lines only the other set has faded */
+.ic-inl { font-size: 13px; }
+.ic-inl-head { font-size: 12px; margin-bottom: 2px; }
+.ic-alt { color: var(--builtin); font-size: 12px; }
+.ic-off { opacity: 0.45; }
 /* the column the build doesn't use, lighter (no marking while the node isn't allocated) */
 .ic-on-integ .ic-row:not(.ic-head) > div:first-child,
 .ic-on-normal .ic-row:not(.ic-head) > div:last-child { opacity: 0.45; }

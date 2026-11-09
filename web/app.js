@@ -1281,8 +1281,12 @@
   // ---- a type's integrated effects beside its normal ones (tooltip and list view)
   // Rows pair each normal line with its integrated counterpart the way the game's IntegrationLines does: the same text is
   // an unchanged row, the same wording with other numbers a changed row, and the rest are lines integrating adds or drops.
-  // DESIGN NOTE: the two-column layout was chosen 2026-11-09 to compare both sets at a glance; if it reads badly in use,
-  // change it (see TODO.md). In narrow windows style.css stacks the two cells of each row.
+  // Two views, chosen with the summary panel's "Integrated effects" setting (integView, localStorage['esp.integView']):
+  // 'columns' puts Normal and Integrated side by side (style.css stacks them in narrow windows), 'inline' lists each line
+  // once with the other set's numbers in brackets, which is shorter for most nodes. DESIGN NOTE: both are a first try
+  // (2026-11-09); if one reads badly in use, change it (see TODO.md).
+  let integView = 'inline'; // the default: shorter for most nodes
+  try { if (localStorage.getItem('esp.integView') === 'columns') integView = 'columns'; } catch { /* storage unavailable */ }
   const wordingKey = html => plain(html).replace(/[+-]?\d+(?:[.,]\d+)*/g, '#');
   function integrationRows(t) {
     const normal = typeLines(t, false), integ = typeLines(t, true);
@@ -1299,7 +1303,8 @@
     integ.forEach((m, k) => { if (!used.has(k)) rows.push({ kind: 'added', normal: null, integ: m }); });
     return rows;
   }
-  function integrationCompareHtml(n, t) {
+  const integrationCompareHtml = (n, t) => (integView === 'inline' ? integrationInlineHtml(n, t) : integrationColumnsHtml(n, t));
+  function integrationColumnsHtml(n, t) {
     const marked = state.integrated.has(n.id);
     // Which column the build uses now (none while the node isn't allocated).
     const active = !state.alloc.has(n.id) ? null : integratedOn(n) ? 'integ' : 'normal';
@@ -1313,6 +1318,43 @@
         : r.kind === 'same' ? r.integ : `<span class="builtin" aria-hidden="true">▲ </span>${r.integ}`) + '</div>').join('');
     // The column the build doesn't use is drawn lighter (style.css: .ic-on-normal / .ic-on-integ).
     return `<div class="ic${active ? ` ic-on-${active}` : ''}"><div class="ic-row ic-head"><div>Normal${tag('normal')}</div><div><span class="builtin">Integrated</span>${cost}${tag('integ')}</div></div>${rows}</div>`;
+  }
+  // The inline view: the set the build uses (normal while the node isn't allocated) line by line. A changed number gets the
+  // other set's value in brackets, a line only the other set has is shown faded, and a dropped line says so.
+  const NUMBER = /[+-]?\d+(?:[.,]\d+)*%?/g;
+  function integrationInlineHtml(n, t) {
+    const marked = state.integrated.has(n.id);
+    const integOn = state.alloc.has(n.id) && integratedOn(n);
+    const other = integOn ? 'normal' : 'integrated';
+    const cost = marked ? '' : ` <span class="muted">(+${esc(pointsText(nextIntegrationCost()))})</span>`;
+    const head = integOn
+      ? '<div class="ic-inl-head"><span class="builtin">Integrated</span> <span class="ic-active">active</span> <span class="muted">· normal values in brackets</span></div>'
+      : `<div class="ic-inl-head"><span class="muted">Integrated values in brackets</span>${cost}</div>`;
+    // Puts the other line's numbers, where they differ, in brackets after this line's numbers (tags hold no digits).
+    const withOther = (html, otherHtml) => {
+      const nums = plain(otherHtml).match(NUMBER) || [];
+      let i = 0;
+      return html.replace(/(<[^>]*>)|([+-]?\d+(?:[.,]\d+)*%?)/g, (m, tag, num) => {
+        if (tag) return tag;
+        const o = nums[i++];
+        return o != null && o !== num ? `${num} <span class="ic-alt">(${other} ${esc(o)})</span>` : num;
+      });
+    };
+    const rows = integrationRows(t).map(r => {
+      if (r.kind === 'same') return `<div>${r.normal}</div>`;
+      if (r.kind === 'changed') return `<div>${integOn ? withOther(r.integ, r.normal) : withOther(r.normal, r.integ)}</div>`;
+      if (r.kind === 'added') return integOn ? `<div><span class="builtin" aria-hidden="true">▲ </span>${r.integ}</div>`
+        : `<div class="ic-off"><span class="builtin">▲ When integrated:</span> ${r.integ}</div>`;
+      return integOn ? `<div class="ic-off"><span class="builtin">No longer:</span> ${r.normal}</div>`
+        : `<div>${r.normal} <span class="ic-alt">(not when integrated)</span></div>`;
+    }).join('');
+    return `<div class="ic-inl">${head}${rows}</div>`;
+  }
+  function setIntegView(v) {
+    integView = v === 'columns' ? 'columns' : 'inline';
+    try { localStorage.setItem('esp.integView', integView); } catch { /* storage unavailable */ }
+    renderPanel();
+    if (hover) showTooltip(hover, lastMouse.x, lastMouse.y);
   }
   const grantedHullMods = t => [...new Set([t.vanillaHullMod, ...(t.phantomHullMods || [])].filter(Boolean))];
   // Names for hull mods: the extracted table, then the skill type that grants the hull mod, then the id itself.
@@ -2662,11 +2704,12 @@
     preview: document.getElementById('integ-preview'),
     keep: document.getElementById('integ-keep'),
     note: document.getElementById('integ-note'),
+    view: document.getElementById('integ-view'),
   };
   function renderInteg() {
     const able = state.root ? integrableAllocated() : [];
     const k = state.integrated.size;
-    integEl.box.hidden = !state.root || (!able.length && !k);
+    integEl.box.hidden = !state.root;
     if (integEl.box.hidden) return;
     const kept = [...state.integrated].filter(id => !state.alloc.has(id)).length;
     integEl.summary.innerHTML = `<span class="muted">Integrated:</span> <b class="builtin">${k}</b> of ${able.length + kept} · <b>${storyPointCost(k)}</b> story point${storyPointCost(k) === 1 ? '' : 's'}`;
@@ -2674,6 +2717,7 @@
     integEl.none.disabled = !k;
     integEl.preview.checked = integPreview;
     integEl.keep.checked = keepIntegration;
+    integEl.view.value = integView;
     const notes = [];
     if (kept) notes.push(`${kept} kept on removed node${kept === 1 ? '' : 's'}.`);
     if (integPreview) notes.push(`Preview: all ${able.length} integrated, ${pointsText(storyPointCost(able.length))}. Totals and the stat sheet show it; the build is unchanged.`);
@@ -2683,6 +2727,7 @@
   integEl.none.addEventListener('click', () => { const c = setAllIntegrated(false); if (c) toast(`Removed ${c} integration${c === 1 ? '' : 's'}. Undo goes back.`); });
   integEl.preview.addEventListener('change', () => setIntegPreview(integEl.preview.checked));
   integEl.keep.addEventListener('change', () => setKeepIntegration(integEl.keep.checked));
+  integEl.view.addEventListener('change', () => setIntegView(integEl.view.value));
 
   // After a hull or ship rules change: say so when allocated nodes newly break a rule.
   function warnNewProblems(before) {
@@ -5612,6 +5657,6 @@
     problems: () => [...rules().problems].map(([id, b]) => ({ id, text: b.text })), setShip, setAffinitySplit,
     waypoints: () => waypoints.map(n => n.id), toggleWaypoint: id => toggleWaypoint(byId.get(id)), clearWaypoints, routeTo: (id, opt) => routeTo(byId.get(id), opt),
     statSheet, toggleSheet, targets, setTargetMode, setTargetKeep, cycleTarget: id => cycleTarget(byId.get(id)), plan: () => currentPlan(), applyPlan,
-    toggleIntegration: id => toggleIntegration(byId.get(id)), setAllIntegrated, setIntegPreview, setKeepIntegration, integrationRows: id => integrationRows(effectiveType(byId.get(id))),
+    toggleIntegration: id => toggleIntegration(byId.get(id)), setAllIntegrated, setIntegView, setIntegPreview, setKeepIntegration, integrationRows: id => integrationRows(effectiveType(byId.get(id))),
     socketSub: (socket, id, extra) => socketSub(byId.get(socket), id, extra), setGrants: (socket, ids) => setGrants(byId.get(socket), ids), subState: () => subState(), typesExclusive: (a, b) => typesExclusive(types.get(a), types.get(b)) };
 })();

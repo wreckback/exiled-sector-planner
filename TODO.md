@@ -35,7 +35,7 @@ From the code review of PR #1 (2026-11-09). Already fixed in `4fe0eaa`: `/dist/`
 
 Ideas noted for a future pass. Not built yet.
 
-- **Integrated nodes: check the design** (built 2026-11-09). The tooltip and list view compare normal and integrated effects in two columns (`integrationCompareHtml`); if that reads badly in use, change it. Other ideas from the design talk: only the lines that differ, or a key to flip the tooltip to the other set. Also check `STORY_GREEN`/`--builtin` against the game's real story point colour (`Misc.getStoryOptionColor()`), which isn't in the mod's sources.
+- **Integrated nodes: check the design** (built 2026-11-09). The tooltip and list view compare normal and integrated effects either side by side or inline with values in brackets (the panel's Integrated effects setting; inline is the default since 2026-11-09, measured over 156 types as about a third shorter). If either reads badly in use, change it. A third view copying the game (green changed lines, "No longer:", a muted "When integrated" list) was offered and not built. Other ideas from the design talk: only the lines that differ, or a key to flip the tooltip to the other set. Also check `STORY_GREEN`/`--builtin` against the game's real story point colour (`Misc.getStoryOptionColor()`), which isn't in the mod's sources.
 
 - **Wormhole travel is right-click in the mod now** (released in 0.12.0; mod `Dev` `1e0a37d4`): right-click jumps through a wormhole or boards the exoship, and Ctrl+click on a wormhole allocates it (on a socket with an open anchor, it opens Socket Items). The planner jumps with Ctrl+click and removes nodes with right-click. Decide whether to match.
 
