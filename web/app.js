@@ -1252,9 +1252,14 @@
     } else if (e.stat) stat = S[e.stat];
     else if (/_AFFINITY_FLAT$/.test(name)) stat = AFFINITY_NAMES[name] ? AFFINITY_NAMES[name].toLowerCase() + ' affinity' : null;
     if (stat && mode) {
-      const t = S[`desc.${mode}.${mag >= 0 ? 'up' : 'down'}`];
+      // As the mod's describeStat: `negate` words -magnitude (the survey cost reductions are stored as positive amounts),
+      // and `subject` puts "Your fleet has" first (desc.<mode>.<up|down>.subject).
+      const shown = e.negate ? -mag : mag;
+      const dir = shown >= 0 ? 'up' : 'down';
+      const subject = e.subject && S[e.subject];
+      const t = (subject && S[`desc.${mode}.${dir}.subject`]) || S[`desc.${mode}.${dir}`];
       if (t) {
-        const out = fill(t, { stat, value: fmt(Math.abs(mag)) });
+        const out = fill(t, { stat, value: fmt(Math.abs(shown)), subject: subject || '' });
         return e.lowerIsBetter ? swapGoodBad(out) : out;
       }
     }

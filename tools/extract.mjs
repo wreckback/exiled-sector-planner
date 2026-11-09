@@ -111,7 +111,7 @@ for (const f of javaFiles) {
         constants.set(`${cls}.${m[1]}`, v);
         if (!constants.has(m[1])) constants.set(m[1], v);
     }
-    for (const m of allMatches(text, /\bstatic\s+final\s+String\s+([A-Z][A-Z0-9_]*)\s*=\s*"(stat\.[A-Za-z0-9_.]+)"\s*;/gm)) {
+    for (const m of allMatches(text, /\bstatic\s+final\s+String\s+([A-Z][A-Z0-9_]*)\s*=\s*"((?:stat|subject)\.[A-Za-z0-9_.]+)"\s*;/gm)) {
         stringConstants.set(`${cls}.${m[1]}`, m[2]);
         stringConstants.set(m[1], m[2]);
     }
@@ -412,6 +412,20 @@ for (const f of javaFiles.filter((x) => lower(x.name).endsWith('skilleffect.java
                 info.hullArgs = hullArgs;
             }
             if (/EffectText\.(signed)\(/.test(dbody)) info.signed = true;
+            // StatMode.describeStat(±magnitude, [subject,] "stat.x"): the game words the effect with that mode and stat,
+            // with the magnitude's sign flipped when it's passed as -magnitude (the survey cost reductions, stored as
+            // positive amounts), and with a subject first ("Your fleet has", desc.<mode>.<up|down>.subject).
+            const ds = /\b(PERCENT|FLAT|MULT)\.describeStat\(\s*(-)?\s*magnitude\s*,\s*(?:("subject\.[\w.]+"|[A-Z][A-Z0-9_]*)\s*,\s*)?"(stat\.[\w.]+)"\s*\)/.exec(dbody);
+            if (ds) {
+                info.mode = lower(ds[1]);
+                info.stat = ds[4];
+                if (ds[2]) info.negate = true;
+                if (ds[3]) {
+                    const subj = ds[3].startsWith('"') ? ds[3].slice(1, -1) : stringConstants.get(`${descCls}.${ds[3]}`) ?? stringConstants.get(ds[3]);
+                    if (subj && subj.startsWith('subject.')) info.subject = subj;
+                    else warn(`  ! ${name}: describeStat subject ${ds[3]} not resolved; worded without it`);
+                }
+            }
         }
         // Effects that refuse allocation on some ships (shield type, phase hull, base armor, wings). app.js words each one.
         if (/\bblockAllocationReason\s*\(\s*ShipFacts/i.test(body)) info.blocks = true;
@@ -512,7 +526,7 @@ say(`Subroutines: ${subroutines.length} items, ${subroutineModifiers.size} doctr
 
 const effectOut = new Map();
 const neededStrings = new Map();
-for (const [k, v] of strings) if (startsCaseless(k, 'desc.') || startsCaseless(k, 'stat.') || startsCaseless(k, 'weapon.')) neededStrings.set(k, v);
+for (const [k, v] of strings) if (startsCaseless(k, 'desc.') || startsCaseless(k, 'stat.') || startsCaseless(k, 'weapon.') || startsCaseless(k, 'subject.')) neededStrings.set(k, v);
 const missing = [];
 for (const name of sorted(usedEffects)) {
     let info = effects.has(name) ? effects.get(name) : {};

@@ -93,7 +93,7 @@ The sections run top to bottom in this order:
 6. **Text:** `describeRaw(effect, magnitude)` produces game markup (`<good>`, `<bad>`, `<hl>`) and `styled()` turns it into HTML. Lookup order:
    1. An `effect.NAME` string, with `.one`/`.other`/`.more`/`.less` variants and extra args evaluated from extractor expressions.
    2. A weapon family (`weapon.stat.*`).
-   3. A stat plus mode (`desc.<pct|flat|mult>.<up|down>`).
+   3. A stat plus mode (`desc.<pct|flat|mult>.<up|down>`). An effect whose description calls `describeStat` carries that call's mode and stat, `negate` (worded as -magnitude) and `subject` ("Your fleet has", using `desc.<mode>.<up|down>.subject`).
    4. A humanized fallback.
 7. **Canvas rendering:** draws in world space via `ctx.setTransform`, with line widths divided by zoom.
    - **Theme:** `theme` is `dark` or `light` (`themeSetting` may be `auto`, following `prefers-color-scheme`), set by `applyTheme`/`setTheme` and the `#btn-theme` button, saved to `localStorage['esp.theme']`. `<html data-theme>` switches the CSS variables in `style.css`.
