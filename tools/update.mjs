@@ -6,6 +6,7 @@
 //   node tools/update.mjs --no-checkout        # use the mod checkout as it is
 //   node tools/update.mjs --commit             # also commit the two synced files to the planner repo
 //   node tools/update.mjs --preview            # try the checkout as it is (e.g. unreleased Dev) in preview/
+//   node tools/update.mjs --report <file>      # also save the report (plain text), e.g. preview/report.txt
 // The mod checkout is --mod-root, else ESP_MOD_ROOT, else ExiledSector/ in the planner folder.
 //
 // --preview builds into the git-ignored preview/ folder (a copy of the site plus the new data) instead of web/, and
@@ -22,8 +23,8 @@
 //   6. Record the synced release in tools/mod-sync.json.
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, extname, join, relative, sep } from 'node:path';
-import { parseArgs, styleText } from 'node:util';
+import { basename, dirname, extname, join, relative, sep } from 'node:path';
+import { parseArgs, stripVTControlCharacters, styleText } from 'node:util';
 import { existsCaseless, fail, fromRepo, git, good, heading, modRootFrom, readJson, readText, repoRoot, say, toolsDir, warn } from './lib/common.mjs';
 
 // Template format versions the planner reads and writes (app.js: buildTemplate, mergeTemplate, templateToCode).
@@ -37,16 +38,33 @@ const { values: opt } = parseArgs({
         'no-fetch': { type: 'boolean' },
         commit: { type: 'boolean' },
         preview: { type: 'boolean' },
+        report: { type: 'string' },
         'mod-root': { type: 'string' },
         help: { type: 'boolean', short: 'h' },
     },
 });
 if (opt.help) {
-    say('Usage: node tools/update.mjs [--tag <tag>] [--no-checkout] [--no-fetch] [--commit] [--preview] [--mod-root <path>]');
+    say('Usage: node tools/update.mjs [--tag <tag>] [--no-checkout] [--no-fetch] [--commit] [--preview] [--report <file>] [--mod-root <path>]');
     say('Checks out a mod release (default: the newest tag), extracts the data, checks it, compares it with the');
     say('previous data, lists changed mod rule files and records the sync in tools/mod-sync.json.');
     say('--preview uses the mod checkout as it is (e.g. unreleased work on Dev), builds into preview/ and records nothing.');
+    say('--report <file> also saves everything printed, as plain text (relative paths are from the planner folder).');
     process.exit(0);
+}
+
+// --report: copy everything this run prints (and extract.mjs's output) into a file, written on exit so a run that
+// stops early still leaves its report.
+const ReportFile = opt.report ? fromRepo(opt.report) : null;
+if (ReportFile) {
+    const report = [`update.mjs ${process.argv.slice(2).join(' ')}  (${new Date().toISOString()})\n`];
+    for (const stream of [process.stdout, process.stderr]) {
+        const write = stream.write.bind(stream);
+        stream.write = (chunk, ...rest) => { report.push(String(chunk)); return write(chunk, ...rest); };
+    }
+    process.on('exit', () => {
+        mkdirSync(dirname(ReportFile), { recursive: true });
+        writeFileSync(ReportFile, stripVTControlCharacters(report.join('')), 'utf8');
+    });
 }
 if (opt.preview && opt.commit) fail('update', "--preview records nothing, so it can't --commit");
 if (opt.preview && opt.tag) fail('update', '--preview uses the mod checkout as it is; check out the tag yourself, or drop --preview');
@@ -170,7 +188,13 @@ if (opt.preview) {
     writeFileSync(join(PreviewDir, 'version.js'), `window.PLANNER_VERSION = 'preview (mod ${release.replace(/'/g, '')})';\n`, 'utf8');
     say(`  Building a preview in ${PreviewDir}`);
 }
-const run = spawnSync(process.execPath, [join(toolsDir, 'extract.mjs'), '--mod-root', ModRoot, '--web-root', OutWeb], { stdio: 'inherit' });
+// With --report, extract.mjs's output is piped through this process so the report has it too.
+const run = spawnSync(process.execPath, [join(toolsDir, 'extract.mjs'), '--mod-root', ModRoot, '--web-root', OutWeb],
+    ReportFile ? { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 } : { stdio: 'inherit' });
+if (ReportFile) {
+    if (run.stdout) process.stdout.write(run.stdout);
+    if (run.stderr) process.stderr.write(run.stderr);
+}
 if (run.status !== 0) fail('update', `extract.mjs failed (${run.status ?? run.error?.message})`);
 const neu = readPlannerData(OutDataFile);
 
@@ -397,6 +421,7 @@ if (opt.preview) {
     say('  Preview only: web/ and tools/mod-sync.json are unchanged, still on the last synced release.');
     say('  See it with: node tools/serve.mjs --root preview --port 8766');
 } else say('  Reload the planner to see the new data.');
+if (ReportFile) say(`  Report saved to ${ReportFile}`);
 
 if (!opt.preview && existsSync(join(repoRoot, '.git'))) {
     const pending = lines(git(repoRoot, ['status', '--porcelain', '--', ...SyncFiles]));

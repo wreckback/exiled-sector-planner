@@ -59,6 +59,7 @@ The last line says either "All checks passed, no rule files changed", in which c
 
 - `--tag 0.11.1-alpha` picks a specific release. `--no-checkout` uses the mod checkout as it is (for example, unreleased work on `Dev`). `--no-fetch` skips the network.
 - `--preview` is for trying unreleased mod work without changing the planner: it uses the mod checkout as it is, builds into a separate `preview/` folder and records nothing, so the planner's own data stays on the last release. Open it with `node tools/serve.mjs --root preview --port 8766`; its footer says "preview (mod …)".
+- `--report <file>` also saves the report to a text file, for example `--preview --report preview/report.txt` (the `preview/` folder isn't committed).
 - It refuses to switch the mod if the mod checkout has uncommitted changes.
 - To go back to the mod's branch, run `git switch main` inside the mod checkout.
 - `node tools/extract.mjs` alone still just rebuilds the data from whatever is checked out.
