@@ -5596,6 +5596,19 @@
     status: () => ({ access: artAccess, info: artInfo, error: artError, images: artUrls.size }),
   };
 
+  // Letter shortcuts: the typed letter when it's a Latin one (so other layouts keep their own letters), else the physical
+  // key, so they also work with a non-Latin input mode on (Korean, for example, types ㅑ on the I key).
+  const keyIs = (e, letter) => {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : '';
+    return /^[a-z]$/.test(k) ? k === letter : e.code === 'Key' + letter.toUpperCase();
+  };
+  // Shortcuts stay off while typing: text boxes, and dropdowns (a letter there picks an option). Checkboxes and buttons
+  // don't take letters, so the shortcuts work while one has focus.
+  const NO_TEXT = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file']);
+  const typingIn = el => el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement || !!(el && el.isContentEditable)
+    || (el instanceof HTMLInputElement && !NO_TEXT.has(el.type));
+  // These dropdowns hand focus back to the page once an option is picked, so the shortcuts work again straight away.
+  for (const id of ['hull', 'integ-view', 'listview-sort']) document.getElementById(id)?.addEventListener('change', e => e.target.blur());
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !themeEl.hidden) { toggleThemeFilter(false); return; }
     if (e.key === 'Escape' && !sheetEl.hidden) { toggleSheet(false); return; }
@@ -5603,20 +5616,23 @@
     if (e.key === 'Escape' && !keysEl.hidden) { toggleKeys(false); return; }
     if (e.key === 'Escape' && !storyEl.hidden) { toggleStory(false); return; }
     if (e.key === 'Escape' && !artEl.hidden) { toggleArt(false); return; }
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+    if (typingIn(e.target)) return;
     if (CAM_KEYS.includes(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (!keysEl.hidden || !exportEl.hidden || !storyEl.hidden || !artEl.hidden || !sheetEl.hidden || !listEl.hidden || !els.picker.hidden) return; // open lists keep the keys for scrolling
       e.preventDefault();
       camKeys.add(e.key);
       return;
     }
+    if ((e.ctrlKey || e.metaKey) && keyIs(e, 'z')) { e.preventDefault(); undo(); return; } // repeats while held, like other apps
+    // The toggles below act once per press: a held key's repeats are ignored.
+    const plainKey = !e.ctrlKey && !e.metaKey && !e.altKey;
+    if (e.repeat && (e.key === '?' || (plainKey && ['s', 't', 'l', 'i'].some(k => keyIs(e, k))))) return;
     if (e.key === '?') { e.preventDefault(); toggleKeys(); }
-    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
     else if (e.key === 'Home') frameCore();
-    else if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey) togglePanel();
-    else if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey && !e.altKey) setTargetMode(!targets.mode);
-    else if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey) setView(listEl.hidden);
-    else if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey) { if (hover && state.root && listEl.hidden) toggleIntegration(hover); }
+    else if (keyIs(e, 's') && !e.ctrlKey && !e.metaKey) togglePanel();
+    else if (keyIs(e, 't') && plainKey) setTargetMode(!targets.mode);
+    else if (keyIs(e, 'l') && plainKey) setView(listEl.hidden);
+    else if (keyIs(e, 'i') && plainKey) { if (hover && state.root && listEl.hidden) toggleIntegration(hover); }
     else if (e.key === 'Escape') { if (!els.picker.hidden) closePicker(); else if (waypoints.length) clearWaypoints(); else if (targets.mode) setTargetMode(false); }
     else if (e.key === '/') { e.preventDefault(); els.search.focus(); }
   });

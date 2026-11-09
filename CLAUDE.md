@@ -113,6 +113,7 @@ The sections run top to bottom in this order:
 9. **DOM wiring:** toolbar, summary panel, tooltip, pickers, shortcuts dialog (`#keys`), Optional rules dialog (`#story`, `renderStory`), Templates dialog (`#export`), Mod art dialog (`#art`, `renderArt`), and keyboard, pointer and touch input. Opening one dialog closes the others.
    - Ship rules are the summary panel's Ship tab. It's `#panel-ship`, a persistent form beside `#panel-body`, so re-renders don't lose typing. `renderPanel` shows it when `panelTab === 'ship'` and calls `renderShipPane`.
    - Every change to ship or optional rules goes through `setShip(fn)`, which pushes undo and warns about new problems.
+   - Keyboard shortcuts (the window `keydown` handler near the end): letters go through `keyIs(e, letter)` (the typed letter when it's Latin, else the physical key `e.code`, so they work with a Korean input mode on); the toggles (?, S, T, L, I) ignore `e.repeat`; `typingIn` blocks shortcuts only in text boxes and dropdowns, not checkboxes or buttons; the Hull Size, Integrated effects and list Sort dropdowns blur after a change.
 
 ## Mod facts the code depends on
 
