@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A static web planner for the ship skill tree of the Exiled Sector Starsector mod. It's plain HTML, CSS and JS on a canvas: no framework, no build step, no npm dependencies, no tests or linters. The dev tools in `tools/` are Node scripts (see `TOOLS.md`); the site itself needs neither Node nor a server. `README.md` is the user guide and `CHANGELOG.md` lists what has been built.
+A static web planner for the ship skill tree of the Exiled Sector Starsector mod. It's plain HTML, CSS and JS on a canvas: no framework, no build step, no npm dependencies, no tests or linters. The dev tools in `tools/` are Node scripts (see `TOOLS.md`); the site itself needs neither Node nor a server. `README.md` is the short guide for players (written by the user), `README-TECHNICAL.md` the full guide with every feature, setup and the tools and `CHANGELOG.md` lists what has been built.
 
 - `ExiledSector/` is the mod's own git checkout. It is the data source only: read it, never edit it. It has its own `CLAUDE.md`, which applies when working inside it. `tools/update.mjs` is the only thing that moves it, by checking out a release tag.
 - Every machine should have a `CLAUDE.local.md` here (git-ignored) about its local environment. Read it first: where the mod checkout actually lives can differ from the `ExiledSector/` layout described here.
