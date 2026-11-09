@@ -38,7 +38,7 @@ node tools/serve.mjs     # then open http://localhost:8765/
 - `web/index.html` also works opened straight from disk, with the differences listed under Caveats.
 - To share the planner with others, upload the `web/` folder to any static host, such as GitHub Pages. It holds no art, so visitors choose their own mod folder (see Mod art).
 - `serve.mjs` stops with Ctrl+C. Use `--port` to change the port.
-- The summary panel's footer shows the mod version the data is from and the planner version, for example "Exiled Sector 0.11.2 · Planner v0.2.0-alpha.3". Through `serve.mjs` that's the latest planner tag, plus "+N" for commits since it and "(edited)" for uncommitted changes. Opened straight from disk it says "dev", and in a release zip it's that zip's tag. Hover it for the full version.
+- The summary panel's footer shows the mod version the data is from and the planner version, for example "Exiled Sector 0.11.2 · Planner v0.2.0-alpha.3". Data built from unreleased mod work shows the nearest mod release with the branch and commit instead, for example "Exiled Sector 0.11.2-alpha + Dev 93ceafe2". Through `serve.mjs` that's the latest planner tag, plus "+N" for commits since it and "(edited)" for uncommitted changes. Opened straight from disk it says "dev", and in a release zip it's that zip's tag. Hover it for the full version.
 
 ## Update it after the mod changes
 
@@ -58,7 +58,7 @@ It fetches the mod's tags, checks out the newest release (detached HEAD), rebuil
 The last line says either "All checks passed, no rule files changed", in which case reload the page and you're done, or lists what needs a look.
 
 - `--tag 0.11.1-alpha` picks a specific release. `--no-checkout` uses the mod checkout as it is (for example, unreleased work on `Dev`). `--no-fetch` skips the network.
-- `--preview` is for trying unreleased mod work without changing the planner: it uses the mod checkout as it is, builds into a separate `preview/` folder and records nothing, so the planner's own data stays on the last release. Open it with `node tools/serve.mjs --root preview --port 8766`; its footer says "preview (mod …)".
+- `--preview` is for trying unreleased mod work without changing the planner: it uses the mod checkout as it is, builds into a separate `preview/` folder and records nothing, so the planner's own data stays on the last release. Open it with `node tools/serve.mjs --root preview --port 8766`; its footer shows the mod's nearest release plus the branch and commit, for example "Exiled Sector 0.11.2-alpha + Dev 93ceafe2 · Planner preview".
 - `--report <file>` also saves the report to a text file, for example `--preview --report preview/report.txt` (the `preview/` folder isn't committed).
 - It refuses to switch the mod if the mod checkout has uncommitted changes.
 - To go back to the mod's branch, run `git switch main` inside the mod checkout.

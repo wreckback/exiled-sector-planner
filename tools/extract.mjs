@@ -10,10 +10,10 @@
 // Run again whenever the mod's tree or skill types change:
 //   node tools/extract.mjs [--mod-root <path>] [--web-root <path>]
 // The mod checkout is --mod-root, else ESP_MOD_ROOT, else ExiledSector/ in the planner folder.
-import { mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { parseArgs } from 'node:util';
-import { existsCaseless, fromRepo, modRootFrom, readCsv, readJson, readText, say, warn } from './lib/common.mjs';
+import { existsCaseless, fromRepo, git, modRootFrom, readCsv, readJson, readText, say, warn } from './lib/common.mjs';
 
 const { values: opt } = parseArgs({
     options: {
@@ -678,6 +678,7 @@ const now = new Date();
 const data = {
     generated: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`,
     modVersion: null,
+    modGit: undefined,   // set below when the mod checkout is a git repo
     nodes: nodeOut,
     curves: asList(tree.connectorCurves),
     hiddenConnectors: asList(tree.hiddenConnectors),
@@ -710,6 +711,22 @@ if (exists(modInfo)) {
     const mo = /"version"\s*:\s*\{\s*"major"\s*:\s*(\d+)\s*,\s*"minor"\s*:\s*(\d+)\s*,\s*"patch"\s*:\s*(\d+)/.exec(infoText);
     if (mv) data.modVersion = mv[1];
     else if (mo) data.modVersion = `${mo[1]}.${mo[2]}.${mo[3]}`;
+}
+// Where the mod checkout stands in git, for the planner's footer: the nearest release tag and how many commits past it,
+// the commit, the branch (none when detached, as update.mjs leaves a release) and uncommitted changes. mod_info.json
+// keeps the last release's version on a branch like Dev, so this is what tells unreleased data apart.
+if (existsSync(join(ModRoot, '.git'))) {
+    const desc = git(ModRoot, ['describe', '--tags', '--long', '--dirty', '--always'], { allowFail: true });
+    if (desc) {
+        const dirty = desc.endsWith('-dirty');
+        const d = dirty ? desc.slice(0, -'-dirty'.length) : desc;
+        const m = /^(.+)-(\d+)-g([0-9a-f]+)$/.exec(d);
+        const modGit = m ? { release: m[1], ahead: Number(m[2]), commit: m[3] } : { commit: d };
+        const branch = git(ModRoot, ['rev-parse', '--abbrev-ref', 'HEAD'], { allowFail: true });
+        if (branch && branch !== 'HEAD') modGit.branch = branch;
+        if (dirty) modGit.dirty = true;
+        data.modGit = modGit;
+    }
 }
 
 const outFile = join(WebRoot, 'data', 'planner-data.js');

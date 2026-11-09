@@ -184,8 +184,8 @@ if (opt.preview) {
         if (['data', 'assets', 'version.js'].includes(d.name)) continue;
         cpSync(join(Web, d.name), join(PreviewDir, d.name), { recursive: true });
     }
-    // The closing ")" keeps app.js's footer from reading the describe suffix as "+N commits".
-    writeFileSync(join(PreviewDir, 'version.js'), `window.PLANNER_VERSION = 'preview (mod ${release.replace(/'/g, '')})';\n`, 'utf8');
+    // The footer shows the mod's release, branch and commit beside it (modGit in the data), so this just says preview.
+    writeFileSync(join(PreviewDir, 'version.js'), "window.PLANNER_VERSION = 'preview';\n", 'utf8');
     say(`  Building a preview in ${PreviewDir}`);
 }
 // With --report, extract.mjs's output is piped through this process so the report has it too.

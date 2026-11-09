@@ -2497,7 +2497,17 @@
     v = v.replace(/\+es.*$/, '');
     return `${v}${ahead ? ` +${ahead[1]}` : ''}${dirty ? ' (edited)' : ''}`;
   })();
-  const footText = () => `Exiled Sector ${D.modVersion || '?'} · Planner ${plannerVersionShort}`;
+  // The mod data's version: mod_info.json's (D.modVersion), or, for data extracted past a release (unreleased work on
+  // a branch like Dev; D.modGit from extract.mjs), the nearest release tag with the branch and commit.
+  const MOD_GIT = D.modGit && typeof D.modGit === 'object' ? D.modGit : null;
+  const modPastRelease = !!MOD_GIT && (!MOD_GIT.release || MOD_GIT.ahead > 0 || !!MOD_GIT.dirty);
+  const modVersionShort = modPastRelease
+    ? `${MOD_GIT.release || D.modVersion || '?'} + ${MOD_GIT.branch || 'commit'} ${MOD_GIT.commit}${MOD_GIT.dirty ? ' (edited)' : ''}`
+    : (D.modVersion || '?');
+  const modVersionLong = modPastRelease
+    ? `Exiled Sector ${D.modVersion || 'unknown'} (mod_info.json), ${MOD_GIT.release ? `${MOD_GIT.ahead} commit${MOD_GIT.ahead === 1 ? '' : 's'} after release ${MOD_GIT.release}` : 'no release tag'}, ${MOD_GIT.branch ? `branch ${MOD_GIT.branch} at` : 'commit'} ${MOD_GIT.commit}${MOD_GIT.dirty ? ', with uncommitted changes' : ''}`
+    : `Exiled Sector ${D.modVersion || 'unknown'}`;
+  const footText = () => `Exiled Sector ${modVersionShort} · Planner ${plannerVersionShort}`;
 
   // ------------------------------------------------------------------ tooltip
   let lastMouse = { x: 0, y: 0 };
@@ -5347,7 +5357,7 @@
   resize();
   frameCore();
   cachedTotals = totals();
-  els.panelFoot.title = `Mod data: Exiled Sector ${D.modVersion || 'unknown'}. Planner: ${PLANNER_VERSION}.`;
+  els.panelFoot.title = `Mod data: ${modVersionLong}. Planner: ${PLANNER_VERSION}.`;
   renderChrome();
   renderPanel();
   requestDraw();

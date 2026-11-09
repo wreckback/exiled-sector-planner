@@ -44,7 +44,7 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 
 ## Previews of unreleased mod work (2026-11-09)
 
-- `update.mjs --preview` runs the full update against the mod checkout as it is (for example `Dev`) and builds into a git-ignored `preview/` folder, leaving the planner's data and `mod-sync.json` on the last release. The footer of a preview says "preview (mod …)".
+- `update.mjs --preview` runs the full update against the mod checkout as it is (for example `Dev`) and builds into a git-ignored `preview/` folder, leaving the planner's data and `mod-sync.json` on the last release. The footer of a preview says "Planner preview", and the mod side shows the nearest release with the branch and commit ("Exiled Sector 0.11.2-alpha + Dev 93ceafe2"), from a new `modGit` field the extractor records for a git mod checkout. On a release the footer is as before.
 - `update.mjs --report <file>` saves the report as a plain-text file, with or without `--preview`.
 - `serve.mjs` only answers `version.js` from git for the repo's own `web/`. Other folders (`--root preview`, an unpacked release zip) show their own version, and `git describe` runs at most every 2 seconds instead of on every request.
 
