@@ -13,13 +13,16 @@ Open index.html and get building!
 If you want to load in the mod assets into the planner, click 'Show mod assets' and select the Exiled Sector mod folder.
 
 ## Templates: import and export with the game
-Click 'Templates' to create, link, or paste a build code. If you linked your template file to the template file (exiledSector_skillTreeTemplates.json.data) in Starsector/saves/common, you can see changes made in the planner in the game, and vice versa! Just simply make sure to see the changes in-game you reload the same template after making changes in the planner. 
+Click 'Templates' to create, link, or paste a build code. If you link the planner to your templates file (exiledSector_skillTreeTemplates.json.data) in Starsector/saves/common, you can see changes made in the planner in the game, and vice versa! To see the changes in game, reload the template after changing it in the planner.
 
 Note: due to Browser limitations, this planner works best with Chrome and Edge.
 
-You can also create a share code of your build by clicking Copy code. Load the in the Templates -> Templates code
+You can also create a share code of your build by clicking Copy code. Click Templates -> Templates code and paste the share code there and load it.
 
 ## Credits
 - **Exiled Sector** is created by Portals. Thank you for creating such a fun mod and implementing the template feature so the planner could easily use it. The skill trees were extracted from the mod itself.
 - No modded assets are used directly in this planner. Load them from the Exiled Sector mod.
-- Thank you to Fractal Softworks for creating Starsector. This is one of my all time favorite game!
+- Thank you to Fractal Softworks for creating Starsector!
+
+## License
+This planner is licensed under the [GNU General Public License v3.0](LICENSE)
