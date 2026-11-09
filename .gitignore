@@ -1,12 +1,18 @@
 # The mod is its own git checkout (the data source).
 /ExiledSector/
 
+# Release zips built by tools/package.mjs.
+/dist/
+
 # Personal skill tree template files copied from the game's saves/common folder.
 *.json.data
 
 # Templates files made by the planner's "Create templates file".
 /savedTemplates/
 
-# Art extracted from the mod. It belongs to the mod and the authors it credits, so it isn't republished here;
-# tools/extract.ps1 copies it from the mod checkout.
+# An old local copy of the mod's art (nothing writes it now). It belongs to the mod and the authors it credits,
+# so it isn't republished here.
 /web/assets/
+
+# Machine-specific notes for Claude Code (this computer's tools and setup).
+/CLAUDE.local.md

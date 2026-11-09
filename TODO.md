@@ -1,3 +1,61 @@
+# Now: decide where the mod checkout lives
+
+Inside the planner folder or beside it. Check how the other work environment has it laid out first. Then make the tools' default `--mod-root`, the README and `CLAUDE.md` match.
+
+# Now: finish the Node port of tools/ (branch `node-tools`)
+
+Decided 2026-11-09: one Node toolset for Windows and Linux (Node >=26, no npm dependencies); the `.ps1` files get deleted at the end. Remove this section once the port is merged.
+
+Done and committed (`8ae1cd1` on `node-tools`, not pushed): `package.json`, `.nvmrc`, `tools/lib/common.mjs`, `tools/extract.mjs`, `tools/serve.mjs`.
+- `extract.mjs` matches `extract.ps1` with 0 value differences (on Windows and on Linux); only the key order of `effects` and `strings` differs, which `app.js` doesn't depend on (it looks both up by name).
+- `serve.mjs` passed the same checks as `serve.ps1`: file types, 404, path escapes, bad encoding, `version.js` = `git describe`.
+
+To do, in this order:
+1. ~~Commit the two tools~~ (done, `8ae1cd1`).
+2. ~~Port `update.ps1`~~ (done, `tools/update.mjs`, `ece9990`). Same report and same `mod-sync.json` values as `update.ps1` over 8 scenarios: as is, an older sync baseline, a baseline 78 commits back (rule file list), no previous data or sync, made-up tree changes, `--tag`, newest tag with fetch, a dirty mod checkout, and `--commit` (on scratch clones). Differences on purpose, for the CHANGELOG:
+   - It flags newly missing images even when the last sync had none. The PowerShell version couldn't: an `if` that returns an empty list gives `$null` there, so an empty `absentImages` (or `noWording`) counted as "no record".
+   - Messages name `extract.mjs`, `getDescriptionArgs` and `--no-checkout`/`--commit`, and show the mod checkout's real path instead of `ExiledSector\`.
+   - Name, tier and wording changes are compared with case (PowerShell's `-ne` ignores it), and type fields are compared with sorted keys, so the PowerShell and Node extractors' key order doesn't show up as a change.
+   - `mod-sync.json` is written with 4-space `JSON.stringify` indentation (a one-time formatting diff).
+3. ~~Port `package.ps1`~~ (done, `tools/package.mjs`, `0e75f5a`). One `git archive` call writes the zip (git >=2.39 for `--add-virtual-file`), no zip package and no temp folder. For all 6 planner tags the unpacked zip matches the `.ps1` one byte for byte, except the `version.js` comment naming the tool. Also checked: the three refusals (no tag on HEAD, a bad tag name, a missing tag), a tag without `+es` (mod release from that tag's `mod-sync.json`, beta wording; in a scratch clone), and the zip's footer in headless Edge. Notes:
+   - It archives `<tag>:web` (the four site files), which leaves the repo's `.gitattributes` behind, so it runs git with `core.autocrlf=false`: otherwise a Windows git writes the files with CRLF.
+   - `--prefix` doesn't apply to `--add-virtual-file`, so `version.js` and `README.txt` are given the top folder in their path.
+   - Differences on purpose: the zip also has folder entries; a tag's `mod-sync.json` is only read when the tag has no `+es` part (the `.ps1` read it always, and failed without one); messages name `--tag` and `release.mjs`.
+   - Zip file dates are the build time, as before. `--mtime` (git >=2.42) could make rebuilds identical; not done.
+4. ~~Port `release.ps1`~~ (done, `tools/release.mjs`). Tested against `release.ps1` in a scratch clone with a scratch bare repo as `origin`: the same tag name and message over 11 dry runs (continue to a release, each `--pre` stage, `--rc`, each `--bump`, `--version`, `--plain`), the same refusals (bad `--version`, `--rc` with another `--pre`, not newer than the last release, dirty tree, mod at another commit, data vs `mod-sync.json`, a stage after a later one), identical annotated tag messages from a real tag, and `--push`. Differences on purpose:
+   - `--pre` and `--bump` take any case and lowercase it: `-Pre Beta` made `v0.2.0-Beta.1` in the PowerShell version. A bad value gets the tool's own message instead of PowerShell's ValidateSet error.
+   - Without a mod checkout at the mod root it prints a note that the data isn't checked against it (the `.ps1` skipped that check silently, which on a machine with the mod beside the planner is every time without `-ModRoot`). It also reads `ESP_MOD_ROOT`.
+   - Messages name the `.mjs` tools, the `--` options and "the mod checkout" instead of `ExiledSector`.
+5. ~~Regenerate `web/data/planner-data.js` with `extract.mjs`~~ (done, `abfffd9`: values unchanged, checked by value and in headless Edge).
+6. ~~Update README, `TOOLS.md`, `CLAUDE.md` and `CHANGELOG.md`~~ (done; also the `app.js` missing-data message and comments, `version.js`, `.gitignore`, `package.json`). Then delete the `.ps1` files in a final commit.
+
+Testing notes:
+- Compare data by value with a script that parses both `planner-data.js` files, drops `generated` and deep-compares (the last one was in a session scratchpad; rewrite it if gone). Build the PowerShell baseline into a scratch folder with `extract.ps1 -ModRoot ... -WebRoot <scratch>`.
+- PowerShell habits to port carefully: `-match`/`-like`/`-in`/`-contains` ignore case (use the `i` flag), `@($null)` is `[null]`, numbers as text use 15 significant digits.
+- Test on Linux as well as Windows, from a case-sensitive copy of both repos. How to do that on a given machine (WSL, nvm) is in its `CLAUDE.local.md`.
+
+# Next: follow-ups from the PR #1 review (`node-tools`)
+
+From the code review of PR #1 (2026-11-09). Already fixed in `4fe0eaa`: `/dist/` in `.gitignore`, `update.mjs --commit` commits only `SyncFiles`, and `git()` allows 64 MB of output. The rest, with the suggested fix for each. Suggested order: 1, 2 and 5 in one commit (behaviour and docs), then 3, 4 and 6. After each, check that `extract.mjs` output is byte-identical apart from `generated` and that `update.mjs` gives the same report, on Windows and under WSL (item 2 is a Linux problem).
+
+1. **Error messages can be lost on exit** (`common.mjs` `fail()`, `update.mjs` dirty mod checkout list). They print and then call `process.exit()` straight away, and Node can drop output that hasn't been written yet where stdout/stderr are asynchronous (Windows terminals, macOS pipes). Fix in `common.mjs`:
+   - `fail()` throws a small `ToolExit` error with the message, and a `process.on('uncaughtException')` handler prints a `ToolExit` (no stack trace), sets `process.exitCode = 1` and returns, so Node ends on its own once output is written. Other errors still crash as now.
+   - Route the dirty mod checkout list in `update.mjs` through `fail()`. Restructure the `--help` exits and `release.mjs`'s `--dry-run` exit as if/else (or a `ToolExit` with code 0).
+   - Not synchronous writes: a synchronous write to a full pipe can fail on Linux and macOS.
+2. **`update.mjs` searches Java files in a different order from `extract.mjs`.** Its `javaText` walk keeps the first match in raw `readdirSync` order, which isn't sorted on Linux, so with two same-named files (two `SkillTier.java` or `TemplateCodec.java` in different modules) the two tools, and the two OSes, can read different files. The folder-skip rules differ too (`.git`/`node_modules` vs dot-folders). Fix:
+   - Move `extract.mjs`'s `javaFilesUnder` (sorted, files before subfolders, dot-folders skipped) into `common.mjs`, with the mod root as a parameter, and build `javaText` on it, keeping the first match per lowercased name.
+   - Optionally flag a name found in two modules in the update report, instead of picking one silently.
+3. **The planner tag pattern is written twice and differs:** `package.mjs` is case-sensitive and wants `+es…`, while `release.mjs` uses `/i` and accepts any `+…`. All tags so far are lowercase `+es…`, so nothing breaks today. Fix: export one `PlannerTag` pattern and a `parseTag(name)` from `common.mjs` (case-insensitive, stage lowercased, returning `{major, minor, patch, stage, n, build}`), and let `package.mjs` check `build?.startsWith('es')` itself.
+4. **`serve.mjs` and `version.js`:**
+   - With `--root` pointing at another folder (such as an unpacked release zip in `dist/`), it still answers `/version.js` from the planner repo's `git describe`, so the zip's footer shows the working tree's version. Answer from git only when the served folder is the repo's own `web/`; otherwise serve the folder's `version.js` from disk.
+   - Every `/version.js` request runs `git describe --dirty` synchronously and blocks other requests. Keep the result for about 2 seconds (short, so `-dirty` still follows edits).
+5. **Stale `.ps1` references here in TODO.md:** the Node port section above (its line 7 says to remove it once the port is merged, and its testing note names `extract.ps1`), and the "art" vs "assets" item, which names "the release README.txt from `package.ps1`" (now `package.mjs`).
+6. **Cleanups:**
+   - Copied helpers: move `lines` (`release.mjs`, `update.mjs`), `collator`/`sorted` (`extract.mjs`, `update.mjs`) and the `pad`/`now` timestamp (both) into `common.mjs`.
+   - `extract.mjs`'s own `exists` duplicates `existsSync`; delete it.
+   - The effect wording loop in `extract.mjs` scans every string for every used effect, lowercasing both each time. Index the strings once (lowercased effect name to its `effect.NAME…` keys, in string-table order) so each effect is one lookup. Key order stays the same, so the output should stay byte-identical; check it.
+   - Also from the review, not covered above: `release.mjs` works out the mod root itself instead of using `modRootFrom` (give it a non-failing option such as `{ required: false }`), and `update.mjs` reports a killed `extract.mjs` as "failed (undefined)" (add `run.signal` to the message).
+
 # Later
 
 Ideas noted for a future pass. Not built yet.
