@@ -34,6 +34,28 @@ Testing notes:
 - PowerShell habits to port carefully: `-match`/`-like`/`-in`/`-contains` ignore case (use the `i` flag), `@($null)` is `[null]`, numbers as text use 15 significant digits.
 - Test on Linux as well as Windows, from a case-sensitive copy of both repos. How to do that on a given machine (WSL, nvm) is in its `CLAUDE.local.md`.
 
+# Next: follow-ups from the PR #1 review (`node-tools`)
+
+From the code review of PR #1 (2026-11-09). Already fixed in `4fe0eaa`: `/dist/` in `.gitignore`, `update.mjs --commit` commits only `SyncFiles`, and `git()` allows 64 MB of output. The rest, with the suggested fix for each. Suggested order: 1, 2 and 5 in one commit (behaviour and docs), then 3, 4 and 6. After each, check that `extract.mjs` output is byte-identical apart from `generated` and that `update.mjs` gives the same report, on Windows and under WSL (item 2 is a Linux problem).
+
+1. **Error messages can be lost on exit** (`common.mjs` `fail()`, `update.mjs` dirty mod checkout list). They print and then call `process.exit()` straight away, and Node can drop output that hasn't been written yet where stdout/stderr are asynchronous (Windows terminals, macOS pipes). Fix in `common.mjs`:
+   - `fail()` throws a small `ToolExit` error with the message, and a `process.on('uncaughtException')` handler prints a `ToolExit` (no stack trace), sets `process.exitCode = 1` and returns, so Node ends on its own once output is written. Other errors still crash as now.
+   - Route the dirty mod checkout list in `update.mjs` through `fail()`. Restructure the `--help` exits and `release.mjs`'s `--dry-run` exit as if/else (or a `ToolExit` with code 0).
+   - Not synchronous writes: a synchronous write to a full pipe can fail on Linux and macOS.
+2. **`update.mjs` searches Java files in a different order from `extract.mjs`.** Its `javaText` walk keeps the first match in raw `readdirSync` order, which isn't sorted on Linux, so with two same-named files (two `SkillTier.java` or `TemplateCodec.java` in different modules) the two tools, and the two OSes, can read different files. The folder-skip rules differ too (`.git`/`node_modules` vs dot-folders). Fix:
+   - Move `extract.mjs`'s `javaFilesUnder` (sorted, files before subfolders, dot-folders skipped) into `common.mjs`, with the mod root as a parameter, and build `javaText` on it, keeping the first match per lowercased name.
+   - Optionally flag a name found in two modules in the update report, instead of picking one silently.
+3. **The planner tag pattern is written twice and differs:** `package.mjs` is case-sensitive and wants `+es…`, while `release.mjs` uses `/i` and accepts any `+…`. All tags so far are lowercase `+es…`, so nothing breaks today. Fix: export one `PlannerTag` pattern and a `parseTag(name)` from `common.mjs` (case-insensitive, stage lowercased, returning `{major, minor, patch, stage, n, build}`), and let `package.mjs` check `build?.startsWith('es')` itself.
+4. **`serve.mjs` and `version.js`:**
+   - With `--root` pointing at another folder (such as an unpacked release zip in `dist/`), it still answers `/version.js` from the planner repo's `git describe`, so the zip's footer shows the working tree's version. Answer from git only when the served folder is the repo's own `web/`; otherwise serve the folder's `version.js` from disk.
+   - Every `/version.js` request runs `git describe --dirty` synchronously and blocks other requests. Keep the result for about 2 seconds (short, so `-dirty` still follows edits).
+5. **Stale `.ps1` references here in TODO.md:** the Node port section above (its line 7 says to remove it once the port is merged, and its testing note names `extract.ps1`), and the "art" vs "assets" item, which names "the release README.txt from `package.ps1`" (now `package.mjs`).
+6. **Cleanups:**
+   - Copied helpers: move `lines` (`release.mjs`, `update.mjs`), `collator`/`sorted` (`extract.mjs`, `update.mjs`) and the `pad`/`now` timestamp (both) into `common.mjs`.
+   - `extract.mjs`'s own `exists` duplicates `existsSync`; delete it.
+   - The effect wording loop in `extract.mjs` scans every string for every used effect, lowercasing both each time. Index the strings once (lowercased effect name to its `effect.NAME…` keys, in string-table order) so each effect is one lookup. Key order stays the same, so the output should stay byte-identical; check it.
+   - Also from the review, not covered above: `release.mjs` works out the mod root itself instead of using `modRootFrom` (give it a non-failing option such as `{ required: false }`), and `update.mjs` reports a killed `extract.mjs` as "failed (undefined)" (add `run.signal` to the message).
+
 # Later
 
 Ideas noted for a future pass. Not built yet.
