@@ -1,3 +1,7 @@
+# Now: decide where the mod checkout lives
+
+Inside the planner folder or beside it. Check how the other work environment has it laid out first. Then make the tools' default `--mod-root`, the README and `CLAUDE.md` match.
+
 # Now: finish the Node port of tools/ (branch `node-tools`)
 
 Decided 2026-11-09: one Node toolset for Windows and Linux (Node >=26, no npm dependencies); the `.ps1` files get deleted at the end. Remove this section once the port is merged.
