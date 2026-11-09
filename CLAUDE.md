@@ -7,7 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A static web planner for the ship skill tree of the Exiled Sector Starsector mod. It's plain HTML, CSS and JS on a canvas: no framework, no build step, no npm dependencies, no tests or linters. The dev tools in `tools/` are Node scripts (see `TOOLS.md`); the site itself needs neither Node nor a server. `README.md` is the user guide and `CHANGELOG.md` lists what has been built.
 
 - `ExiledSector/` is the mod's own git checkout. It is the data source only: read it, never edit it. It has its own `CLAUDE.md`, which applies when working inside it. `tools/update.mjs` is the only thing that moves it, by checking out a release tag.
-- Some machines have a `CLAUDE.local.md` here (git-ignored) with that machine's tools and paths. Check it first: where the mod checkout actually lives can differ from the `ExiledSector/` layout described here.
+- Every machine should have a `CLAUDE.local.md` here (git-ignored) about its local environment. Read it first: where the mod checkout actually lives can differ from the `ExiledSector/` layout described here.
+  - If there isn't one, tell the user and ask whether to create it, offering a draft from what can be checked on the machine. Don't create it without asking.
+  - It should cover: the OS and shells, and which shell finds `node`; the Node, npm and git versions and how they're installed (nvm or other); what isn't installed (Python, for example); where the mod checkout lives and whether `--mod-root` or `ESP_MOD_ROOT` is needed; the git identity this repo commits and pushes as; how to test on Linux (WSL or other) and with which browser; and anything undecided about the setup, with its date.
 - The planner folder is its own git repo (branch `main`, pushed to a private GitHub repo).
   - Ignored: `ExiledSector/`, personal template files, and `web/assets/` (an old local art copy, no longer read or written).
   - The art belongs to the mod and the authors it credits, so it's never republished: not in git, not in the release zip. The page reads it from the mod folder each user chooses (see Mod art below).
