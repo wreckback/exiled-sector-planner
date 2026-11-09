@@ -97,7 +97,7 @@ export function readCsv(path) {
 // `status --porcelain`). Throws with git's message on failure.
 export function git(dir, args, { allowFail = false, keepIndent = false } = {}) {
     try {
-        const out = execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+        const out = execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
         return keepIndent ? out.trimEnd() : out.trim();
     } catch (e) {
         if (allowFail) return null;

@@ -4,7 +4,7 @@
 //   node tools/update.mjs                      # newest release tag
 //   node tools/update.mjs --tag 0.11.1-alpha
 //   node tools/update.mjs --no-checkout        # use the mod checkout as it is
-//   node tools/update.mjs --commit             # also commit the result to the planner repo
+//   node tools/update.mjs --commit             # also commit the two synced files to the planner repo
 // The mod checkout is --mod-root, else ESP_MOD_ROOT, else ExiledSector/ in the planner folder.
 //
 // Steps:
@@ -17,7 +17,7 @@
 //   6. Record the synced release in tools/mod-sync.json.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, writeFileSync } from 'node:fs';
-import { basename, extname, join, sep } from 'node:path';
+import { basename, extname, join, relative, sep } from 'node:path';
 import { parseArgs, styleText } from 'node:util';
 import { existsCaseless, fail, fromRepo, git, good, heading, modRootFrom, readJson, readText, repoRoot, say, toolsDir, warn } from './lib/common.mjs';
 
@@ -46,6 +46,8 @@ const ModRoot = modRootFrom(opt['mod-root'], 'update');
 const Web = fromRepo('web');
 const DataFile = join(Web, 'data', 'planner-data.js');
 const StateFile = join(toolsDir, 'mod-sync.json');
+// The only planner files a sync writes. --commit stages and commits just these, never other work in the repo.
+const SyncFiles = [DataFile, StateFile].map((f) => relative(repoRoot, f).split(sep).join('/'));
 
 const attention = [];
 const flag = (msg) => { attention.push(msg); warn(`  ! ${msg}`); };
@@ -369,13 +371,13 @@ if (attention.length) {
 say('  Reload the planner to see the new data.');
 
 if (existsSync(join(repoRoot, '.git'))) {
-    const pending = lines(git(repoRoot, ['status', '--porcelain']));
+    const pending = lines(git(repoRoot, ['status', '--porcelain', '--', ...SyncFiles]));
     if (!pending.length) say('  Planner repo: nothing to commit.');
     else if (opt.commit) {
-        git(repoRoot, ['add', '-A']);
-        git(repoRoot, ['commit', '--quiet', '-m', `Sync with Exiled Sector ${release}`]);
+        git(repoRoot, ['add', '--', ...SyncFiles]);
+        git(repoRoot, ['commit', '--quiet', '-m', `Sync with Exiled Sector ${release}`, '--', ...SyncFiles]);
         say(`  Committed: Sync with Exiled Sector ${release}`);
     } else {
-        say(`  Planner repo: ${pending.length} changed paths. Review with 'git status', or rerun with --commit.`);
+        say(`  Planner repo: ${pending.length} synced file(s) changed. Review with 'git diff', or rerun with --commit.`);
     }
 }
