@@ -12,7 +12,7 @@ This project was created using Claude's Opus 5.5.
 Open index.html and get building!
 If you want to load in the mod assets into the planner, click 'Show mod assets' and select the Exiled Sector mod folder.
 
-## Templates: import and export with the game
+## Templates
 Click 'Templates' to create, link, or paste a build code. If you link the planner to your templates file (exiledSector_skillTreeTemplates.json.data) in Starsector/saves/common, you can see changes made in the planner in the game, and vice versa! To see the changes in game, reload the template after changing it in the planner.
 
 Note: due to Browser limitations, this planner works best with Chrome and Edge.
