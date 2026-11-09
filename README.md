@@ -9,39 +9,44 @@ The mod itself:
 
 ## Layout
 
-- `ExiledSector/`: the mod checkout, which is the data source. Nothing edits its files; `update.ps1` only switches it to a release tag.
-- `tools/update.ps1`: moves the mod to a release, runs the extractor and reports anything that needs a look
-- `tools/extract.ps1`: copies the tree, skill types, effect wording and rename tables from the mod into `web/data/`
-- `tools/mod-sync.json`: the mod release the data was last built from (written by `update.ps1`)
-- `tools/serve.ps1`: a small local web server (no Node or Python needed)
+- `ExiledSector/`: the mod checkout, which is the data source. Nothing edits its files; `update.mjs` only switches it to a release tag.
+- `tools/update.mjs`: moves the mod to a release, runs the extractor and reports anything that needs a look
+- `tools/extract.mjs`: copies the tree, skill types, effect wording and rename tables from the mod into `web/data/`
+- `tools/mod-sync.json`: the mod release the data was last built from (written by `update.mjs`)
+- `tools/serve.mjs`: a small local web server
+- `tools/release.mjs` and `tools/package.mjs`: tag a release and build its zip
 - `web/`: the site. `data/planner-data.js` is generated. It holds none of the mod's art; see below.
+
+The tools need [Node.js](https://nodejs.org/) 26 or newer (`.nvmrc` names the version) and git 2.39 or newer, on Windows, Linux or macOS. They have no npm dependencies, so there's nothing to install. The site itself needs neither.
 
 ## Set up after cloning
 
 The repository holds the code and the extracted data, but not the art. The art belongs to the mod and the authors it credits (see the mod's `CREDITS.md`), so neither the repository nor the release zip republishes it. Each user points the page at their own copy of the mod instead (see Mod art below).
 
-1. Clone the mod into `ExiledSector\` inside this folder: `git clone https://github.com/ExiledPortals/ExiledSector.git ExiledSector`.
-2. Run `powershell -ExecutionPolicy Bypass -File tools\extract.ps1` to rebuild the data. The data is committed, so this is only needed after a mod change.
-3. Run the planner as below, and choose a mod folder under **Show mod art** (the installed mod, or `ExiledSector\` itself).
+1. Clone the mod into `ExiledSector/` inside this folder: `git clone https://github.com/ExiledPortals/ExiledSector.git ExiledSector`. If it lives somewhere else, pass `--mod-root <path>` to the tools, or set the `ESP_MOD_ROOT` environment variable once. A relative path is taken from this folder.
+2. Run `node tools/extract.mjs` to rebuild the data. The data is committed, so this is only needed after a mod change.
+3. Run the planner as below, and choose a mod folder under **Show mod art** (the installed mod, or `ExiledSector/` itself).
+
+Every tool has `--help`, and `npm run <tool>` works too (`npm run serve`, `npm run update -- --commit`).
 
 ## Run it
 
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\serve.ps1     # then open http://localhost:8765/
+```sh
+node tools/serve.mjs     # then open http://localhost:8765/
 ```
 
-- `web\index.html` also works opened straight from disk, with the differences listed under Caveats.
-- To share the planner with others, upload the `web\` folder to any static host, such as GitHub Pages. It holds no art, so visitors choose their own mod folder (see Mod art).
-- `serve.ps1` stops with Ctrl+C. Use `-Port` to change the port.
-- The summary panel's footer shows the mod version the data is from and the planner version, for example "Exiled Sector 0.11.2 · Planner v0.2.0-alpha.3". Through `serve.ps1` that's the latest planner tag, plus "+N" for commits since it and "(edited)" for uncommitted changes. Opened straight from disk it says "dev", and in a release zip it's that zip's tag. Hover it for the full version.
+- `web/index.html` also works opened straight from disk, with the differences listed under Caveats.
+- To share the planner with others, upload the `web/` folder to any static host, such as GitHub Pages. It holds no art, so visitors choose their own mod folder (see Mod art).
+- `serve.mjs` stops with Ctrl+C. Use `--port` to change the port.
+- The summary panel's footer shows the mod version the data is from and the planner version, for example "Exiled Sector 0.11.2 · Planner v0.2.0-alpha.3". Through `serve.mjs` that's the latest planner tag, plus "+N" for commits since it and "(edited)" for uncommitted changes. Opened straight from disk it says "dev", and in a release zip it's that zip's tag. Hover it for the full version.
 
 ## Update it after the mod changes
 
 When the mod releases a new version, run:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\update.ps1            # newest release tag
-powershell -ExecutionPolicy Bypass -File tools\update.ps1 -Commit    # same, and commit the result
+```sh
+node tools/update.mjs             # newest release tag
+node tools/update.mjs --commit    # same, and commit the result
 ```
 
 It fetches the mod's tags, checks out the newest release (detached HEAD), rebuilds the data and prints a report:
@@ -52,41 +57,41 @@ It fetches the mod's tags, checks out the newest release (detached HEAD), rebuil
 
 The last line says either "All checks passed, no rule files changed", in which case reload the page and you're done, or lists what needs a look.
 
-- `-Tag 0.11.1-alpha` picks a specific release. `-NoCheckout` uses the mod checkout as it is (for example, unreleased work on `Dev`). `-NoFetch` skips the network.
-- It refuses to switch the mod if `ExiledSector\` has uncommitted changes.
-- To go back to the mod's branch, run `git switch main` inside `ExiledSector\`.
-- `tools\extract.ps1` alone still just rebuilds the data from whatever is checked out.
+- `--tag 0.11.1-alpha` picks a specific release. `--no-checkout` uses the mod checkout as it is (for example, unreleased work on `Dev`). `--no-fetch` skips the network.
+- It refuses to switch the mod if the mod checkout has uncommitted changes.
+- To go back to the mod's branch, run `git switch main` inside the mod checkout.
+- `node tools/extract.mjs` alone still just rebuilds the data from whatever is checked out.
 
 ## Tag a release
 
 Planner tags carry the planner's own version, with the mod release its data was synced from as build metadata: `v0.4.0-alpha.1+es0.11.1-alpha` for a pre-release, `v0.4.0+es0.11.1-alpha` for the release. (The trailing `-alpha` there is the mod's own release name.)
 
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Version 0.4.0 -Pre alpha   # first alpha:  v0.4.0-alpha.1+es...
-powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Pre alpha                  # next alpha:   v0.4.0-alpha.2+es...
-powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Pre rc                     # candidate:    v0.4.0-rc.1+es...
-powershell -ExecutionPolicy Bypass -File tools\release.ps1                             # release it:   v0.4.0+es...
-powershell -ExecutionPolicy Bypass -File tools\release.ps1 -Bump minor -Pre alpha      # from the last release: v0.5.0-alpha.1+es...
+```sh
+node tools/release.mjs --version 0.4.0 --pre alpha   # first alpha:  v0.4.0-alpha.1+es...
+node tools/release.mjs --pre alpha                   # next alpha:   v0.4.0-alpha.2+es...
+node tools/release.mjs --pre rc                      # candidate:    v0.4.0-rc.1+es...
+node tools/release.mjs                               # release it:   v0.4.0+es...
+node tools/release.mjs --bump minor --pre alpha      # from the last release: v0.5.0-alpha.1+es...
 ```
 
 - Pre-release stages follow the usual order, and sort that way:
   - **alpha:** internal testing; features still changing.
   - **beta:** feature-complete, wider testing.
   - **rc:** a release candidate; fixes only.
-  Stages only move forward for a version: after an rc, the script refuses a new alpha. `-RC` is short for `-Pre rc`.
+  Stages only move forward for a version: after an rc, the script refuses a new alpha. `--rc` is short for `--pre rc`.
 - Which number to raise: **patch** for a mod sync or fixes, **minor** for new features, **major** when old share links or saved builds stop loading.
-- `-Push` pushes the tag, `-DryRun` only shows the tag and its message, and `-Plain` leaves out the `+es…` part.
+- `--push` pushes the tag, `--dry-run` only shows the tag and its message, and `--plain` leaves out the `+es…` part.
 - The tag message names the mod release and commit and lists the commits since the previous tag.
-- It refuses when the working tree has changes, when the version isn't newer than the last release, or when `ExiledSector\` or `planner-data.js` doesn't match `tools\mod-sync.json`. Run `update.ps1` first after a mod release.
+- It refuses when the working tree has changes, when the version isn't newer than the last release, or when the mod checkout or `planner-data.js` doesn't match `tools/mod-sync.json`. Run `update.mjs` first after a mod release. Without a mod checkout it says so and skips that check.
 - Tags that don't look like `vX.Y.Z`, such as the earlier `0.11.1-alpha`, are ignored.
 
 To build the ready-to-use zip for a tag (the site, its data and a README.txt, in one folder that runs from a double-clicked `index.html`):
 
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Tag "v0.2.0-rc.1+es0.11.1-alpha"   # or no -Tag for the tag on HEAD
+```sh
+node tools/package.mjs --tag "v0.2.0-rc.1+es0.11.1-alpha"   # or no --tag for the tag on HEAD
 ```
 
-It writes `dist\exiled-sector-planner-<tag>.zip`. The site files come from the tag itself, so any tag can be packaged, and the zip's `version.js` holds the tag, so its footer shows that version. The zip has no art: its README.txt tells users to choose their mod folder under **Show mod art**. Attach the zip to the GitHub release for that tag, marked as a pre-release for an alpha, beta or rc. The zip's README.txt says which stage it is.
+It writes `dist/exiled-sector-planner-<tag>.zip`. The site files come from the tag itself, so any tag can be packaged, and the zip's `version.js` holds the tag, so its footer shows that version. The zip has no art: its README.txt tells users to choose their mod folder under **Show mod art**. Attach the zip to the GitHub release for that tag, marked as a pre-release for an alpha, beta or rc. The zip's README.txt says which stage it is.
 
 ## Theme
 

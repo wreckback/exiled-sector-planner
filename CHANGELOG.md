@@ -26,6 +26,22 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - A small PowerShell static server, since this machine has no Node or Python.
 - It used to crash when the browser dropped a connection mid-transfer (a reload while images loaded). It now skips that request and keeps serving.
 
+## Node tools (`tools/*.mjs`, 2026-11-09)
+
+- The PowerShell scripts were replaced by Node scripts that run the same way on Windows, Linux and macOS: `extract.mjs`, `serve.mjs`, `update.mjs`, `release.mjs` and `package.mjs`, with shared helpers in `tools/lib/common.mjs`. They need Node 26+ (`.nvmrc`) and git 2.39+, and have no npm dependencies. Options are `--` style (`--tag`, `--no-checkout`, `--dry-run`…), each tool has `--help`, and `npm run <tool>` works too.
+- The mod checkout can live anywhere: `--mod-root <path>` or the `ESP_MOD_ROOT` environment variable, else `ExiledSector/` in the planner folder as before.
+- Each was checked against the script it replaces:
+  - `extract.mjs` writes the same data values (on Windows and Linux). Only the key order of `effects` and `strings` and the JSON escaping differ, so the data was regenerated once in a commit of its own.
+  - `update.mjs` gives the same report and `mod-sync.json` values over 8 scenarios. `mod-sync.json` is now written with plain 4-space JSON indentation.
+  - `package.mjs` builds the same zip for every planner tag, byte for byte apart from the comment in `version.js`. git writes the zip in one `git archive` call, so no zip library or temp folder is needed.
+  - `release.mjs` gives the same tag names, messages and refusals.
+  - `serve.mjs` passed the same checks: file types, 404, path escapes, bad encoding, and `version.js` from `git describe`.
+- Fixed on the way:
+  - `update` now flags newly missing images even when the last sync had none. The PowerShell version treated an empty list from the last sync as no record, so it couldn't.
+  - `update` reports name and wording changes that only differ in case, and ignores key order when comparing skill types.
+  - `release` lowercases `--pre` and `--bump`: `-Pre Beta` would have made a `v0.2.0-Beta.1` tag. Without a mod checkout it now says it can't check the data against it, instead of skipping that check silently.
+  - `package` only reads a tag's `mod-sync.json` when the tag has no `+es` part; the old script needed the file even when it didn't use it.
+
 ## Planner (`web/`)
 
 **Tree view**

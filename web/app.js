@@ -1,5 +1,5 @@
 /* Exiled Sector skill tree planner.
- * Data comes from data/planner-data.js (tools/extract.ps1 builds it from the mod).
+ * Data comes from data/planner-data.js (tools/extract.mjs builds it from the mod).
  * Rules follow the mod's AllocationCheck: a node needs an allocated (or starting root) neighbour,
  * wormhole exits are only reached through their partner, and allocating a wormhole takes its partner too. */
 (() => {
@@ -7,7 +7,7 @@
 
   const D = window.PLANNER_DATA;
   if (!D) {
-    document.body.innerHTML = '<p style="padding:24px;color:#fc6300">Missing data/planner-data.js. Run tools/extract.ps1 first.</p>';
+    document.body.innerHTML = '<p style="padding:24px;color:#fc6300">Missing data/planner-data.js. Run node tools/extract.mjs first.</p>';
     return;
   }
 
@@ -583,7 +583,7 @@
   const blockText = (key, fallback, args) => fill(S[key] || fallback, args || {});
   const nonPhaseText = () => blockText('node.requires.req_non_phase_hull', "Can't be allocated on phase ships.");
   // Effects that refuse some ships (each SkillEffect's blockAllocationReason). The extractor marks them with `blocks`;
-  // tools/update.ps1 flags any it marks that this table doesn't know.
+  // tools/update.mjs flags any it marks that this table doesn't know.
   const EFFECT_BLOCKS = {
     REMOVE_SHIELD: s => s.shield != null && !hasShields(s.shield) ? blockText('node.block.noShields', 'Ship has no shields.') : null,
     SHIELD_UPKEEP_AT_LOW_SPEED_PERCENT: s => EFFECT_BLOCKS.REMOVE_SHIELD(s),

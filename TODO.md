@@ -26,8 +26,8 @@ To do, in this order:
    - `--pre` and `--bump` take any case and lowercase it: `-Pre Beta` made `v0.2.0-Beta.1` in the PowerShell version. A bad value gets the tool's own message instead of PowerShell's ValidateSet error.
    - Without a mod checkout at the mod root it prints a note that the data isn't checked against it (the `.ps1` skipped that check silently, which on a machine with the mod beside the planner is every time without `-ModRoot`). It also reads `ESP_MOD_ROOT`.
    - Messages name the `.mjs` tools, the `--` options and "the mod checkout" instead of `ExiledSector`.
-5. Regenerate `web/data/planner-data.js` with `extract.mjs` in a commit of its own (one-time formatting diff, values unchanged).
-6. Update README (setup, run, update; the "no Node or Python needed" line), `TOOLS.md` (Commands and Extractor sections; the ASCII-only rule no longer applies), `CLAUDE.md` ("no package manager"; the `serve.ps1` and `extract.ps1` mentions) and `CHANGELOG.md`; then delete the `.ps1` files in a final commit.
+5. ~~Regenerate `web/data/planner-data.js` with `extract.mjs`~~ (done, `abfffd9`: values unchanged, checked by value and in headless Edge).
+6. ~~Update README, `TOOLS.md`, `CLAUDE.md` and `CHANGELOG.md`~~ (done; also the `app.js` missing-data message and comments, `version.js`, `.gitignore`, `package.json`). Then delete the `.ps1` files in a final commit.
 
 Testing notes:
 - Compare data by value with a script that parses both `planner-data.js` files, drops `generated` and deep-compares (the last one was in a session scratchpad; rewrite it if gone). Build the PowerShell baseline into a scratch folder with `extract.ps1 -ModRoot ... -WebRoot <scratch>`.

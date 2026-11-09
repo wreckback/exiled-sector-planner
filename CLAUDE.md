@@ -4,25 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A static web planner for the ship skill tree of the Exiled Sector Starsector mod. It's plain HTML, CSS and JS on a canvas: no framework, no build step, no package manager, no tests or linters. `README.md` is the user guide and `CHANGELOG.md` lists what has been built.
+A static web planner for the ship skill tree of the Exiled Sector Starsector mod. It's plain HTML, CSS and JS on a canvas: no framework, no build step, no npm dependencies, no tests or linters. The dev tools in `tools/` are Node scripts (see `TOOLS.md`); the site itself needs neither Node nor a server. `README.md` is the user guide and `CHANGELOG.md` lists what has been built.
 
-- `ExiledSector/` is the mod's own git checkout. It is the data source only: read it, never edit it. It has its own `CLAUDE.md`, which applies when working inside it. `tools/update.ps1` is the only thing that moves it, by checking out a release tag.
+- `ExiledSector/` is the mod's own git checkout. It is the data source only: read it, never edit it. It has its own `CLAUDE.md`, which applies when working inside it. `tools/update.mjs` is the only thing that moves it, by checking out a release tag.
 - Some machines have a `CLAUDE.local.md` here (git-ignored) with that machine's tools and paths. Check it first: where the mod checkout actually lives can differ from the `ExiledSector/` layout described here.
 - The planner folder is its own git repo (branch `main`, pushed to a private GitHub repo).
   - Ignored: `ExiledSector/`, personal template files, and `web/assets/` (an old local art copy, no longer read or written).
   - The art belongs to the mod and the authors it credits, so it's never republished: not in git, not in the release zip. The page reads it from the mod folder each user chooses (see Mod art below).
   - The generated `planner-data.js` is committed, so each mod sync shows up as one diff.
   - History was rewritten once to drop the art, before the first push. Don't re-add `web/assets`.
-- `tools/extract.ps1` builds `web/data/planner-data.js` from the mod. It's generated, so don't hand-edit it.
+- `tools/extract.mjs` builds `web/data/planner-data.js` from the mod. It's generated, so don't hand-edit it.
 - `web/` is the whole site: `index.html`, `style.css` and `app.js`, plus `version.js` (the planner version for the footer, `'dev'` in git; see `TOOLS.md`).
 
 ## Tools
 
-The scripts in `tools/` (update, extract, serve, release, package) have their own guide: **`TOOLS.md`**. It holds the commands, the release and version rules, and how the extractor reads the mod. Read it before running or changing any of them.
+The Node scripts in `tools/` (update, extract, serve, release, package) have their own guide: **`TOOLS.md`**. It holds the commands, the release and version rules, and how the extractor reads the mod. Read it before running or changing any of them.
 
 ## Verifying changes
 
-The page also runs from `file://`, because data loads as a `<script>`, not via `fetch`. The Claude in Chrome extension refuses `file://`, so test through `serve.ps1`.
+The page also runs from `file://`, because data loads as a `<script>`, not via `fetch`. The Claude in Chrome extension refuses `file://`, so test through `serve.mjs`.
 
 There is no test suite. Verify in the browser through the debug hook `window.planner` at the bottom of `app.js`. It exposes `state`, `byId`, `cam`, `pathTo`, `findPath(id, opt)`, `blockOf(id, opt)`, `problems()`, `setShip(fn)`, `setVolumeShown(id, on)`, `typesExclusive(a, b)`, `setAffinitySplit({option: count})`, `removalSet`, `allocate`, `chooseRoot`, `click(id, ctrl)`, `pick`, `load(json)`, `serialize`, `totals`, `describe`, `templateSteps`, `buildTemplate`, `mergeTemplate`, `importTemplate`, `currentNodeId`, for waypoints `waypoints()`, `toggleWaypoint(id)`, `clearWaypoints` and `routeTo(id, opt)`, and for target mode `targets` (`{mode, want, forbid, keep}`), `setTargetMode`, `setTargetKeep`, `cycleTarget(id)`, `plan()` and `applyPlan`. Ship rules can be set in a test build through `load` (the `ship` field of the serialized JSON). `window.plannerTemplatesTest(text)` shows a template file's list without the file picker, which needs a real user click. `plannerTemplatesTest.link(handle)` links a stand-in handle (an object with `name`, `queryPermission`, `getFile` and `createWritable`) to test the file watcher, and `.poll()` runs one watcher check.
 

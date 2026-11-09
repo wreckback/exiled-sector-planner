@@ -1,7 +1,7 @@
 {
   "name": "exiled-sector-planner",
   "private": true,
-  "description": "Dev tools for the Exiled Sector skill tree planner. The planner itself (web/) needs no build and no install.",
+  "description": "Dev tools for the Exiled Sector skill tree planner (see TOOLS.md). The planner itself (web/) needs no build and no install.",
   "type": "module",
   "engines": {
     "node": ">=26"
