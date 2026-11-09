@@ -1,3 +1,24 @@
+# Now: finish the Node port of tools/ (branch `node-tools`)
+
+Decided 2026-11-09: one Node toolset for Windows and Linux (Node >=26, no npm dependencies); the `.ps1` files get deleted at the end. Remove this section once the port is merged.
+
+Done and committed (`8ae1cd1` on `node-tools`, not pushed): `package.json`, `.nvmrc`, `tools/lib/common.mjs`, `tools/extract.mjs`, `tools/serve.mjs`.
+- `extract.mjs` matches `extract.ps1` with 0 value differences (on Windows and on Linux); only the key order of `effects` and `strings` differs, which `app.js` doesn't depend on (it looks both up by name).
+- `serve.mjs` passed the same checks as `serve.ps1`: file types, 404, path escapes, bad encoding, `version.js` = `git describe`.
+
+To do, in this order:
+1. ~~Commit the two tools~~ (done, `8ae1cd1`).
+2. Port `update.ps1` (338 lines): compare its report with `update.ps1 -NoCheckout -NoFetch`, and that `tools/mod-sync.json` comes out the same. It calls the extractor and reads `planner-data.js`, so point it at `extract.mjs`. Paths it matches (`\src\main\`) must work with `/` too.
+3. Port `package.ps1` (127 lines): build the zip with `git archive refs/tags/<tag>:web ... --add-virtual-file` (git >=2.39), no zip package. Compare file lists and contents with the `.ps1` zip for the same tag.
+4. Port `release.ps1` (158 lines): compare `--dry-run` tag names over the version scenarios (continue a pre-release, `--bump`, `--pre`, `--rc`, `--plain`). Never create or push real tags unless the user asks.
+5. Regenerate `web/data/planner-data.js` with `extract.mjs` in a commit of its own (one-time formatting diff, values unchanged).
+6. Update README (setup, run, update; the "no Node or Python needed" line), `TOOLS.md` (Commands and Extractor sections; the ASCII-only rule no longer applies), `CLAUDE.md` ("no package manager"; the `serve.ps1` and `extract.ps1` mentions) and `CHANGELOG.md`; then delete the `.ps1` files in a final commit.
+
+Testing notes:
+- Compare data by value with a script that parses both `planner-data.js` files, drops `generated` and deep-compares (the last one was in a session scratchpad; rewrite it if gone). Build the PowerShell baseline into a scratch folder with `extract.ps1 -ModRoot ... -WebRoot <scratch>`.
+- PowerShell habits to port carefully: `-match`/`-like`/`-in`/`-contains` ignore case (use the `i` flag), `@($null)` is `[null]`, numbers as text use 15 significant digits.
+- Test on Linux as well as Windows, from a case-sensitive copy of both repos. How to do that on a given machine (WSL, nvm) is in its `CLAUDE.local.md`.
+
 # Later
 
 Ideas noted for a future pass. Not built yet.
