@@ -21,13 +21,24 @@ From the code review of PR #1 (2026-11-09). Already fixed in `4fe0eaa`: `/dist/`
    - `extract.mjs`'s own `exists` duplicates `existsSync`; delete it.
    - The effect wording loop in `extract.mjs` scans every string for every used effect, lowercasing both each time. Index the strings once (lowercased effect name to its `effect.NAME…` keys, in string-table order) so each effect is one lookup. Key order stays the same, so the output should stay byte-identical; check it.
    - Also from the review, not covered above: `release.mjs` works out the mod root itself instead of using `modRootFrom` (give it a non-failing option such as `{ required: false }`), and `update.mjs` reports a killed `extract.mjs` as "failed (undefined)" (add `run.signal` to the message).
+   - `update.mjs --report` starts recording after the `--preview` refusals (`--commit`, `--tag`), so those two leave no report file. Start recording before them.
+
+# Next: from the preview of the mod's `Dev` work (2026-11-09)
+
+1. **Regenerate `web/data/planner-data.js` for the Rift Strike fix.** The extractor used to take a bare constant from whichever class defined it first, so Rift Strike and Strikecraft Rift Strike show a 10% damage share and a 100 maximum instead of the mod's 50% and 500 (wrong since the first data commit, `460d7d0`). The fixed extractor gives the right values. Regenerate from the 0.11.2-alpha source without moving the mod checkout: export it with `git -C <mod> archive 3fe80956 | tar -x -C <scratch>` and run `extract.mjs --mod-root <scratch>`. Only those two effects change (plus two extra values the page doesn't show). `mod-sync.json` stays as it is.
+2. **When the mod releases the `Dev` work and `update.mjs` syncs it,** check:
+   - `BALLISTIC_WEAPON_LARGE_OP_COST_FLAT` became a plain flat stat effect (`mode` flagged by the report): check its tooltip and totals in the planner.
+   - The rule files the report lists were reviewed on 2026-11-09 (mod `93ceafe2`): `AffinityScaling`/`AffinitySteps` now allow a tolerance on "all affinities equal" from a new `AFFINITY_EQUALITY_TOLERANCE_FLAT` effect (the planner doesn't compute those scaled bonuses, and no node grants the effect yet); `ShipStatSheets` adds refining effects to a line's Sources (the Full Sheet's Sources may show less than the game's); `SkillType` is integrated nodes (see Later); `SkillTreeEffectSource`, `SkillTreeSettings` and `NodeAllocator` don't affect the planner. Look again at anything changed after `93ceafe2`.
+   - The two fighter effects newly without wording (see Later).
 
 # Later
 
 Ideas noted for a future pass. Not built yet.
 
 - **Integrated nodes (mod `Dev`, after 0.11.2-alpha; the mod's s-mod equivalent).** A player spends story points to integrate an allocated node on one ship; it then uses its type's `integrated` effects (a full replacement of `effects`/`hullSizeEffects`, sometimes `effectText`) instead of its normal ones. The nth integration on a ship costs n story points; a node stays integrated when unallocated (reallocating is free); the Deintegration Schematic resets them. 178 of 273 types have integrated effects on `Dev`. The extractor already copies the `integrated` block into the data; the planner ignores it. To build: a way to mark nodes integrated (and serialize it in the build JSON and share link; templates don't carry it, the mod keeps it per ship in `ShipSkillData.integratedNodeIds`), totals and the stat sheet using the integrated effects, tooltips like the game's (changed lines in story point green, "No longer:" for dropped ones), and the story point total. Mod references: `docs/plans/completed/integrated_nodes.md` and `integrated_bonuses.md`, `IntegratedEffects`, `IntegratedNodes`, `IntegrationLines`, `NodeIntegration`. Decide the UI first.
+
 - **Wormhole travel is right-click in the mod now** (mod `Dev` `1e0a37d4`): right-click jumps through a wormhole or boards the exoship, and Ctrl+click on a wormhole allocates it (on a socket with an open anchor, it opens Socket Items). The planner jumps with Ctrl+click and removes nodes with right-click. Decide whether to match.
+
 - **Fighter role-stat effects have no wording** (`FIGHTER_TOP_SPEED_PERCENT`, `FIGHTER_WEAPON_RANGE_PERCENT` and others in `mod-sync.json`'s `noWording`; integrated effects on `Dev` add `FIGHTER_DAMAGE_TAKEN_MULT` and `FIGHTER_WEAPON_RANGE_FLAT`). They're built from `RoleStat` in `FighterSkillEffect`, worded somewhere the extractor doesn't read yet.
 
 - **Ship tab: hover explanations for each setting.** Add a tooltip (`title` or a small hover box) per row in `#panel-ship` saying what the setting means and which nodes it affects. For example:
