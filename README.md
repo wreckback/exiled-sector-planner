@@ -52,7 +52,7 @@ node tools/update.mjs --commit    # same, and commit the result
 It fetches the mod's tags, checks out the newest release (detached HEAD), rebuilds the data and prints a report:
 
 - **Checks:** wording placeholders the extractor couldn't fill (they'd show as "?"), effects newly without wording, newly missing art, unknown node types or tiers, broken or one-way links, wormhole pairs, the template format versions and the default node cap.
-- **Tree changes:** nodes and skill types added, removed, renamed, retyped or moved, compared with the previous data.
+- **Tree changes:** nodes and skill types added, removed, renamed, retyped or moved, compared with the previous data. Effects whose mode, stat, lower-is-better or live flag changed are flagged: that more often means the extractor lost track of the mod's code than a real change.
 - **Mod code changed since the last sync:** the rule files the planner reimplements (`AllocationCheck`, the template classes, `AffinitySteps`, `SkillTier` and so on). This is the only part that can mean planner code needs updating.
 
 The last line says either "All checks passed, no rule files changed", in which case reload the page and you're done, or lists what needs a look.

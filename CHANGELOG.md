@@ -52,6 +52,7 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 
 - Fills every wording value on the mod's `Dev` work (11 effects showed "?"): descriptions that hand over to a form taking a `DescribeContext`, values computed by small helper methods (`maxReserve(...)`, `range(...)`, `ParameterBonus.plusFlat`/`increasedBy`), values in local variables, and effects whose wording, mode and stat moved into a backing class (`DamageTakenWhile`). Damage taken near a held objective had also lost its mode, stat and lower-is-better flag on `Dev`; those are back.
 - Constants are looked up in the class that uses them first. This fixes Rift Strike (and Strikecraft Rift Strike) showing 10% and 100 for the damage share and maximum instead of 50% and 500. The 0.11.2-alpha release has the same bug, so the committed `planner-data.js` is wrong there until it's regenerated.
+- `update.mjs` flags effects whose mode, stat, lower-is-better or live flag changed from the previous data. Held objective's lost fields would have been caught this way; on `Dev` it flags `BALLISTIC_WEAPON_LARGE_OP_COST_FLAT`, which the mod rewrote as a plain flat stat effect.
 
 ## Planner (`web/`)
 

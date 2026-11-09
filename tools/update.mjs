@@ -357,6 +357,20 @@ else {
     }
     if (wording) say(`  Wording strings changed or added: ${wording}`);
     if (!summary.length && !wording) say('  No changes to the tree.');
+    // Effect fields app.js computes with: mode, stat, lower-is-better and read-live-in-combat. A change, and above all
+    // one that disappears, more often means the extractor lost track of the mod's code than a real change.
+    const oldEffects = old.effects ?? {};
+    const effectFields = [];
+    for (const [name, e] of entries(neu.effects)) {
+        const o = oldEffects[name];
+        if (!o) continue;
+        const what = ['mode', 'stat', 'lowerIsBetter', 'live'].filter((k) => (o[k] ?? null) !== (e[k] ?? null))
+            .map((k) => `${k} ${o[k] ?? '-'} -> ${e[k] ?? '-'}`);
+        if (what.length) effectFields.push(`${name} (${what.join(', ')})`);
+    }
+    if (effectFields.length) {
+        flag(`effects whose mode, stat, lower-is-better or live flag changed; check the mod code and extract.mjs: ${joinShort(effectFields, 6)}`);
+    }
     if (removedN.length && !renamesNew.length) {
         flag('nodes were removed without a rename entry; saved builds and templates that use them will drop those nodes');
     }
