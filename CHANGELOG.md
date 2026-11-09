@@ -42,6 +42,11 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
   - `release` lowercases `--pre` and `--bump`: `-Pre Beta` would have made a `v0.2.0-Beta.1` tag. Without a mod checkout it now says it can't check the data against it, instead of skipping that check silently.
   - `package` only reads a tag's `mod-sync.json` when the tag has no `+es` part; the old script needed the file even when it didn't use it.
 
+## Previews of unreleased mod work (2026-11-09)
+
+- `update.mjs --preview` runs the full update against the mod checkout as it is (for example `Dev`) and builds into a git-ignored `preview/` folder, leaving the planner's data and `mod-sync.json` on the last release. The footer of a preview says "preview (mod …)".
+- `serve.mjs` only answers `version.js` from git for the repo's own `web/`. Other folders (`--root preview`, an unpacked release zip) show their own version, and `git describe` runs at most every 2 seconds instead of on every request.
+
 ## Planner (`web/`)
 
 **Tree view**

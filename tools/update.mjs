@@ -5,7 +5,12 @@
 //   node tools/update.mjs --tag 0.11.1-alpha
 //   node tools/update.mjs --no-checkout        # use the mod checkout as it is
 //   node tools/update.mjs --commit             # also commit the two synced files to the planner repo
+//   node tools/update.mjs --preview            # try the checkout as it is (e.g. unreleased Dev) in preview/
 // The mod checkout is --mod-root, else ESP_MOD_ROOT, else ExiledSector/ in the planner folder.
+//
+// --preview builds into the git-ignored preview/ folder (a copy of the site plus the new data) instead of web/, and
+// records nothing: web/data/planner-data.js and tools/mod-sync.json stay on the last synced release, so release.mjs
+// never sees preview data. Serve it with: node tools/serve.mjs --root preview --port 8766
 //
 // Steps:
 //   1. Fetch the mod's tags and check out the release (detached HEAD). Refuses if the mod checkout has local changes.
@@ -16,7 +21,7 @@
 //   5. List the mod's rule files that changed since the last synced release. Only these mean app.js may need work.
 //   6. Record the synced release in tools/mod-sync.json.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, extname, join, relative, sep } from 'node:path';
 import { parseArgs, styleText } from 'node:util';
 import { existsCaseless, fail, fromRepo, git, good, heading, modRootFrom, readJson, readText, repoRoot, say, toolsDir, warn } from './lib/common.mjs';
@@ -31,20 +36,28 @@ const { values: opt } = parseArgs({
         'no-checkout': { type: 'boolean' },
         'no-fetch': { type: 'boolean' },
         commit: { type: 'boolean' },
+        preview: { type: 'boolean' },
         'mod-root': { type: 'string' },
         help: { type: 'boolean', short: 'h' },
     },
 });
 if (opt.help) {
-    say('Usage: node tools/update.mjs [--tag <tag>] [--no-checkout] [--no-fetch] [--commit] [--mod-root <path>]');
+    say('Usage: node tools/update.mjs [--tag <tag>] [--no-checkout] [--no-fetch] [--commit] [--preview] [--mod-root <path>]');
     say('Checks out a mod release (default: the newest tag), extracts the data, checks it, compares it with the');
     say('previous data, lists changed mod rule files and records the sync in tools/mod-sync.json.');
+    say('--preview uses the mod checkout as it is (e.g. unreleased work on Dev), builds into preview/ and records nothing.');
     process.exit(0);
 }
+if (opt.preview && opt.commit) fail('update', "--preview records nothing, so it can't --commit");
+if (opt.preview && opt.tag) fail('update', '--preview uses the mod checkout as it is; check out the tag yourself, or drop --preview');
 
 const ModRoot = modRootFrom(opt['mod-root'], 'update');
 const Web = fromRepo('web');
 const DataFile = join(Web, 'data', 'planner-data.js');
+// Where this run writes the site data: web/, or preview/ for --preview.
+const PreviewDir = fromRepo('preview');
+const OutWeb = opt.preview ? PreviewDir : Web;
+const OutDataFile = join(OutWeb, 'data', 'planner-data.js');
 const StateFile = join(toolsDir, 'mod-sync.json');
 // The only planner files a sync writes. --commit stages and commits just these, never other work in the repo.
 const SyncFiles = [DataFile, StateFile].map((f) => relative(repoRoot, f).split(sep).join('/'));
@@ -116,7 +129,7 @@ const state = existsSync(StateFile) ? readJson(StateFile) : null;
 section('Mod release');
 const before = git(ModRoot, ['rev-parse', 'HEAD']);
 let tag = opt.tag;
-if (opt['no-checkout']) {
+if (opt['no-checkout'] || opt.preview) {
     say(`  Using the checkout as it is (${firstLine(git(ModRoot, ['describe', '--tags', '--always']))}).`);
 } else {
     const dirty = lines(git(ModRoot, ['status', '--porcelain', '--untracked-files=no'], { keepIndent: true }));
@@ -145,9 +158,21 @@ const baselineName = state?.release || `previous checkout (${before.slice(0, 8)}
 // ---------------------------------------------------------------- 2. extract
 section('Extract');
 const old = readPlannerData(DataFile);
-const run = spawnSync(process.execPath, [join(toolsDir, 'extract.mjs'), '--mod-root', ModRoot, '--web-root', Web], { stdio: 'inherit' });
+if (opt.preview) {
+    // A fresh copy of the site, without web/'s data (rebuilt below) and version.js (a preview label instead).
+    rmSync(PreviewDir, { recursive: true, force: true });
+    mkdirSync(PreviewDir, { recursive: true });
+    for (const d of readdirSync(Web, { withFileTypes: true })) {
+        if (['data', 'assets', 'version.js'].includes(d.name)) continue;
+        cpSync(join(Web, d.name), join(PreviewDir, d.name), { recursive: true });
+    }
+    // The closing ")" keeps app.js's footer from reading the describe suffix as "+N commits".
+    writeFileSync(join(PreviewDir, 'version.js'), `window.PLANNER_VERSION = 'preview (mod ${release.replace(/'/g, '')})';\n`, 'utf8');
+    say(`  Building a preview in ${PreviewDir}`);
+}
+const run = spawnSync(process.execPath, [join(toolsDir, 'extract.mjs'), '--mod-root', ModRoot, '--web-root', OutWeb], { stdio: 'inherit' });
 if (run.status !== 0) fail('update', `extract.mjs failed (${run.status ?? run.error?.message})`);
-const neu = readPlannerData(DataFile);
+const neu = readPlannerData(OutDataFile);
 
 // ---------------------------------------------------------------- 3. checks
 section('Checks');
@@ -358,7 +383,7 @@ const record = {
     noWording: sorted(noWording),
     absentImages: absent,
 };
-writeFileSync(StateFile, `${JSON.stringify(record, null, 4)}\n`, 'utf8');
+if (!opt.preview) writeFileSync(StateFile, `${JSON.stringify(record, null, 4)}\n`, 'utf8');
 
 section('Result');
 const changes = summary.length ? summary.join(', ') : 'no tree changes';
@@ -368,9 +393,12 @@ if (attention.length) {
 } else {
     good(`  ${release} (${neu.modVersion}): ${changes}. All checks passed, no rule files changed.`);
 }
-say('  Reload the planner to see the new data.');
+if (opt.preview) {
+    say('  Preview only: web/ and tools/mod-sync.json are unchanged, still on the last synced release.');
+    say('  See it with: node tools/serve.mjs --root preview --port 8766');
+} else say('  Reload the planner to see the new data.');
 
-if (existsSync(join(repoRoot, '.git'))) {
+if (!opt.preview && existsSync(join(repoRoot, '.git'))) {
     const pending = lines(git(repoRoot, ['status', '--porcelain', '--', ...SyncFiles]));
     if (!pending.length) say('  Planner repo: nothing to commit.');
     else if (opt.commit) {
