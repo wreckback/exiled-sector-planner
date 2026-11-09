@@ -12,12 +12,16 @@ Done and committed (`8ae1cd1` on `node-tools`, not pushed): `package.json`, `.nv
 
 To do, in this order:
 1. ~~Commit the two tools~~ (done, `8ae1cd1`).
-2. ~~Port `update.ps1`~~ (done, `tools/update.mjs`, not committed yet). Same report and same `mod-sync.json` values as `update.ps1` over 8 scenarios: as is, an older sync baseline, a baseline 78 commits back (rule file list), no previous data or sync, made-up tree changes, `--tag`, newest tag with fetch, a dirty mod checkout, and `--commit` (on scratch clones). Differences on purpose, for the CHANGELOG:
+2. ~~Port `update.ps1`~~ (done, `tools/update.mjs`, `ece9990`). Same report and same `mod-sync.json` values as `update.ps1` over 8 scenarios: as is, an older sync baseline, a baseline 78 commits back (rule file list), no previous data or sync, made-up tree changes, `--tag`, newest tag with fetch, a dirty mod checkout, and `--commit` (on scratch clones). Differences on purpose, for the CHANGELOG:
    - It flags newly missing images even when the last sync had none. The PowerShell version couldn't: an `if` that returns an empty list gives `$null` there, so an empty `absentImages` (or `noWording`) counted as "no record".
    - Messages name `extract.mjs`, `getDescriptionArgs` and `--no-checkout`/`--commit`, and show the mod checkout's real path instead of `ExiledSector\`.
    - Name, tier and wording changes are compared with case (PowerShell's `-ne` ignores it), and type fields are compared with sorted keys, so the PowerShell and Node extractors' key order doesn't show up as a change.
    - `mod-sync.json` is written with 4-space `JSON.stringify` indentation (a one-time formatting diff).
-3. Port `package.ps1` (127 lines): build the zip with `git archive refs/tags/<tag>:web ... --add-virtual-file` (git >=2.39), no zip package. Compare file lists and contents with the `.ps1` zip for the same tag.
+3. ~~Port `package.ps1`~~ (done, `tools/package.mjs`). One `git archive` call writes the zip (git >=2.39 for `--add-virtual-file`), no zip package and no temp folder. For all 6 planner tags the unpacked zip matches the `.ps1` one byte for byte, except the `version.js` comment naming the tool. Also checked: the three refusals (no tag on HEAD, a bad tag name, a missing tag), a tag without `+es` (mod release from that tag's `mod-sync.json`, beta wording; in a scratch clone), and the zip's footer in headless Edge. Notes:
+   - It archives `<tag>:web` (the four site files), which leaves the repo's `.gitattributes` behind, so it runs git with `core.autocrlf=false`: otherwise a Windows git writes the files with CRLF.
+   - `--prefix` doesn't apply to `--add-virtual-file`, so `version.js` and `README.txt` are given the top folder in their path.
+   - Differences on purpose: the zip also has folder entries; a tag's `mod-sync.json` is only read when the tag has no `+es` part (the `.ps1` read it always, and failed without one); messages name `--tag` and `release.mjs`.
+   - Zip file dates are the build time, as before. `--mtime` (git >=2.42) could make rebuilds identical; not done.
 4. Port `release.ps1` (158 lines): compare `--dry-run` tag names over the version scenarios (continue a pre-release, `--bump`, `--pre`, `--rc`, `--plain`). Never create or push real tags unless the user asks.
 5. Regenerate `web/data/planner-data.js` with `extract.mjs` in a commit of its own (one-time formatting diff, values unchanged).
 6. Update README (setup, run, update; the "no Node or Python needed" line), `TOOLS.md` (Commands and Extractor sections; the ASCII-only rule no longer applies), `CLAUDE.md` ("no package manager"; the `serve.ps1` and `extract.ps1` mentions) and `CHANGELOG.md`; then delete the `.ps1` files in a final commit.
