@@ -42,6 +42,34 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
   - `release` lowercases `--pre` and `--bump`: `-Pre Beta` would have made a `v0.2.0-Beta.1` tag. Without a mod checkout it now says it can't check the data against it, instead of skipping that check silently.
   - `package` only reads a tag's `mod-sync.json` when the tag has no `+es` part; the old script needed the file even when it didn't use it.
 
+## Previews of unreleased mod work (2026-11-09)
+
+- `update.mjs --preview` runs the full update against the mod checkout as it is (for example `Dev`) and builds into a git-ignored `preview/` folder, leaving the planner's data and `mod-sync.json` on the last release. The footer of a preview says "Planner preview", and the mod side shows the nearest release with the branch and commit ("Exiled Sector 0.11.2-alpha + Dev 93ceafe2"), from a new `modGit` field the extractor records for a git mod checkout. On a release the footer is as before.
+- `update.mjs --report <file>` saves the report as a plain-text file, with or without `--preview`.
+- `serve.mjs` only answers `version.js` from git for the repo's own `web/`. Other folders (`--root preview`, an unpacked release zip) show their own version, and `git describe` runs at most every 2 seconds instead of on every request.
+
+## Extractor: the mod's newer description code (2026-11-09)
+
+- Fills every wording value on the mod's `Dev` work (11 effects showed "?"): descriptions that hand over to a form taking a `DescribeContext`, values computed by small helper methods (`maxReserve(...)`, `range(...)`, `ParameterBonus.plusFlat`/`increasedBy`), values in local variables, and effects whose wording, mode and stat moved into a backing class (`DamageTakenWhile`). Damage taken near a held objective had also lost its mode, stat and lower-is-better flag on `Dev`; those are back.
+- Constants are looked up in the class that uses them first. This fixes Rift Strike (and Strikecraft Rift Strike) showing 10% and 100 for the damage share and maximum instead of 50% and 500. The 0.11.2-alpha release has the same bug, so the committed `planner-data.js` is wrong there until it's regenerated.
+- `update.mjs` flags effects whose mode, stat, lower-is-better or live flag changed from the previous data. Held objective's lost fields would have been caught this way; on `Dev` it flags `BALLISTIC_WEAPON_LARGE_OP_COST_FLAT`, which the mod rewrote as a plain flat stat effect.
+
+## Integrated effects in the data (2026-11-09)
+
+- The extractor copies each skill type's `integrated` block (the mod's integrated nodes, upgraded with story points like an s-mod; 178 types on `Dev`) into the data and extracts the wording of the effects only they use. The planner doesn't apply them yet.
+- `update.mjs` compares `integrated` blocks under skill type changes and prints how many types have one.
+- `.count(n)` in a description fills `{count}` (the integrated Cheap Shots wording needed it).
+
+## Integrated nodes (mod 0.12.0, 2026-11-09)
+
+- Synced the data to Exiled Sector 0.12.0-alpha, which releases the Dev work (integrated nodes, the Rift Strike values, Flux Coil Adjunct and Flux Distributor, Shield Arc Multiplier removed).
+- Alt+click or the I key integrates an allocated node or takes the integration back; the summary panel has Integrate all, Remove all, a Preview all integrated view (not saved) and Keep when removed (a browser setting; off by default, so removing a node removes its integration).
+- Totals, the stat sheet and its Sources use the integrated effects. Tooltips and the list view show normal and integrated effects side by side, paired line by line like the game's IntegrationLines. Integrated nodes get a green ring on the map.
+- The build saves its integrations (`ig`). Templates and codes carry them as the game's `integrate` marks, which also fixes saving over a template made in game dropping its marks.
+- The extractor keeps the `node.integration.*` strings, and `styled()` understands `<builtIn>`.
+- Fixed: per-hull effects worth 0 for the chosen hull showed as "0%" lines and counted as sources (Inertial Supercharging's damage taken on cruisers, which the integration comparison then marked as dropped). They're left out now, as in game. Nodes the hull rule refuses, such as Dedicated Targeting Core on a frigate, show only their normal effects instead of a comparison.
+- Fixed: Surveying Equipment and the Survey Cost Reduction nodes showed their cost reductions as "+12 to heavy machinery needed" in red. The extractor now reads the mod's `describeStat` calls, so they read "Your fleet has -12 to …" in green as in game, nav rating and post-battle salvage get "Your fleet has", and eight effects take the mod's own mode.
+
 ## Planner (`web/`)
 
 **Tree view**

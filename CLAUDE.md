@@ -4,10 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A static web planner for the ship skill tree of the Exiled Sector Starsector mod. It's plain HTML, CSS and JS on a canvas: no framework, no build step, no npm dependencies, no tests or linters. The dev tools in `tools/` are Node scripts (see `TOOLS.md`); the site itself needs neither Node nor a server. `README.md` is the user guide and `CHANGELOG.md` lists what has been built.
+A static web planner for the ship skill tree of the Exiled Sector Starsector mod. It's plain HTML, CSS and JS on a canvas: no framework, no build step, no npm dependencies, no tests or linters. The dev tools in `tools/` are Node scripts (see `TOOLS.md`); the site itself needs neither Node nor a server. `README.md` is the short guide for players (written by the user), `README-TECHNICAL.md` the full guide with every feature, setup and the tools and `CHANGELOG.md` lists what has been built.
 
 - `ExiledSector/` is the mod's own git checkout. It is the data source only: read it, never edit it. It has its own `CLAUDE.md`, which applies when working inside it. `tools/update.mjs` is the only thing that moves it, by checking out a release tag.
-- Some machines have a `CLAUDE.local.md` here (git-ignored) with that machine's tools and paths. Check it first: where the mod checkout actually lives can differ from the `ExiledSector/` layout described here.
+- Every machine should have a `CLAUDE.local.md` here (git-ignored) about its local environment. Read it first: where the mod checkout actually lives can differ from the `ExiledSector/` layout described here.
+  - If there isn't one, tell the user and ask whether to create it, offering a draft from what can be checked on the machine. Don't create it without asking.
+  - It should cover: the OS and shells, and which shell finds `node`; the Node, npm and git versions and how they're installed (nvm or other); what isn't installed (Python, for example); where the mod checkout lives and whether `--mod-root` or `ESP_MOD_ROOT` is needed; the git identity this repo commits and pushes as; how to test on Linux (WSL or other) and with which browser; and anything undecided about the setup, with its date.
 - The planner folder is its own git repo (branch `main`, pushed to a private GitHub repo).
   - Ignored: `ExiledSector/`, personal template files, and `web/assets/` (an old local art copy, no longer read or written).
   - The art belongs to the mod and the authors it credits, so it's never republished: not in git, not in the release zip. The page reads it from the mod folder each user chooses (see Mod art below).
@@ -41,11 +43,20 @@ The sections run top to bottom in this order:
    - Curves store the point the curve passes through. The quadratic control point is `2*through - midpoint`, as in the mod's `SkillTreeNodeConnectorRenderer`.
    - `hiddenConnectors` (wormhole pair links) are adjacent but not drawn.
    - `regions` holds one entry per tree (core plus each faction volume) for the zoomed-out labels. It uses the median centre because some volume nodes sit far from their tree.
-2. **Build state:** `state = { root, alloc (insertion-ordered Set, root excluded), choice, links (socket→exit), hull, cap, hiddenVolumes, ship }`.
+2. **Build state:** `state = { root, alloc (insertion-ordered Set, root excluded), choice, links (socket→exit), hull, cap, hiddenVolumes, ship, integrated }`.
    - `hiddenVolumes` holds the Optional Volumes toggles turned off (ids from `OPTIONAL_VOLUMES`, the extractor's `optionalVolumes`), serialized as `ov`. Old links with `wv: 0` load with all of them hidden; the old `wc` (core wormholes) is ignored. `setVolumeShown(id, on)` changes one; the checkboxes are in the Optional rules dialog (`#story-volumes`), each followed by its gates (`.vol-gates`, a gate goes there when all its nodes are in that toggle's volumes; disabled while hidden).
    - `ship` (`blankShip()`) holds both kinds of setting. Ship rules are the `SHIP_KEYS` (shield, armor, the tri-state facts, hull mods, extra logistics), where `null` means "not set, don't check". Optional rules are `lockedGates` and `lockedTypes`.
    - Both serialize under `ship` in the build JSON.
    - `subs` maps socket → `{id, aff?, grants?}`, serialized as `sb`. A socket holds an anchor (`links`) or a subroutine, never both. Dropped with its socket (`dropOrphanSubs`) and on reset or template import.
+   - `integrated` holds integrated node ids, serialized as `ig` (ids pass through `currentNodeId`). The section after `resetBuild` ("integrated nodes") has the rest:
+     - `integrable(t)` (the type has an `integrated` block), `canIntegrate(n)` (allocated and integrable), `isIntegrated(n)` (in the set, allocated, effective type integrable) and `integratedOn(n)`, which totals, tooltips and the map use: `isIntegrated`, or `canIntegrate` while `integPreview` (the panel's Preview all integrated, in memory only) is on.
+     - `toggleIntegration(n)` (Alt+click, the I key, Alt+click on panel and list rows) and `setAllIntegrated(on)` are one undo step each. Cost is shown only: `storyPointCost(k)` = k(k+1)/2, `nextIntegrationCost()`.
+     - `changed()` first runs `dropLostIntegrations()`: unless `keepIntegration` (the panel's Keep when removed, `localStorage['esp.keepIntegration']`) is on, ids not in `alloc` are dropped, so every way of removing nodes drops their integration. Kept ids still count toward the cost, as in game.
+     - Effects: `typeEffects(t, integ)`, `typeText(t, integ)` and `typeLines(t, integ)` read the `integrated` block (a full replacement; effectText only when it has any). `typeEffects` leaves out per-hull values of 0 for the Hull dropdown's size, as the game's `HullSizeSkillEffect.addNonZero` does. `contributions()` sets `integ` per node, and `totals()` sums carry `integ` (source names that are integrated) for the green names in the stat sheet's Sources. The node rules (`blockOf`, `currentShield`) keep using the normal effects, as the game's `NodeEligibility` does.
+     - `integrationRows(t)` pairs normal and integrated lines like `IntegrationLines` (same text, then the same wording with numbers replaced), and `integrationCompareHtml(n, t)` draws them for the tooltip and the list view (only the normal lines when `hullRefuses(t)`: the type's `requiredHullSizes` exclude the current hull, so it can't be allocated or integrated), by `integView` (the panel's Integrated effects select, `localStorage['esp.integView']`, `setIntegView`): `integrationColumnsHtml` (two columns, `.ic`, the inactive one faded) or `integrationInlineHtml` (`.ic-inl`: the active set's lines, the other set's differing numbers in brackets, other-set-only lines faded). Both layouts are a first try (TODO.md).
+     - `drawIntegratedRing` draws `STORY_GREEN` (an approximation of the game's story point colour; CSS `--builtin`, class `.builtin`, `<builtIn>` markup in `styled()`).
+     - With the preview on, `integPreviewBase()` computes the totals without it (`baseTotals`, cleared in `changed()`), and `previewDiffHtml`/`previewGone` mark changed, new and dropped totals in the Effects tab and the stat sheet.
+     - The summary panel's `#integ` block is `renderInteg()`.
    - Every mutation goes through `pushUndo()` and then `changed()`. `changed()` recomputes totals, the preview, chrome, panel and persistence, and clears the URL hash.
 3. **Rules,** mirroring the mod's `AllocationCheck`:
    - `sat(id)`: allocated, or the chosen root.
@@ -82,7 +93,7 @@ The sections run top to bottom in this order:
 6. **Text:** `describeRaw(effect, magnitude)` produces game markup (`<good>`, `<bad>`, `<hl>`) and `styled()` turns it into HTML. Lookup order:
    1. An `effect.NAME` string, with `.one`/`.other`/`.more`/`.less` variants and extra args evaluated from extractor expressions.
    2. A weapon family (`weapon.stat.*`).
-   3. A stat plus mode (`desc.<pct|flat|mult>.<up|down>`).
+   3. A stat plus mode (`desc.<pct|flat|mult>.<up|down>`). An effect whose description calls `describeStat` carries that call's mode and stat, `negate` (worded as -magnitude) and `subject` ("Your fleet has", using `desc.<mode>.<up|down>.subject`).
    4. A humanized fallback.
 7. **Canvas rendering:** draws in world space via `ctx.setTransform`, with line widths divided by zoom.
    - **Theme:** `theme` is `dark` or `light` (`themeSetting` may be `auto`, following `prefers-color-scheme`), set by `applyTheme`/`setTheme` and the `#btn-theme` button, saved to `localStorage['esp.theme']`. `<html data-theme>` switches the CSS variables in `style.css`.
@@ -102,13 +113,15 @@ The sections run top to bottom in this order:
 9. **DOM wiring:** toolbar, summary panel, tooltip, pickers, shortcuts dialog (`#keys`), Optional rules dialog (`#story`, `renderStory`), Templates dialog (`#export`), Mod art dialog (`#art`, `renderArt`), and keyboard, pointer and touch input. Opening one dialog closes the others.
    - Ship rules are the summary panel's Ship tab. It's `#panel-ship`, a persistent form beside `#panel-body`, so re-renders don't lose typing. `renderPanel` shows it when `panelTab === 'ship'` and calls `renderShipPane`.
    - Every change to ship or optional rules goes through `setShip(fn)`, which pushes undo and warns about new problems.
+   - Keyboard shortcuts (the window `keydown` handler near the end): letters go through `keyIs(e, letter)` (the typed letter when it's Latin, else the physical key `e.code`, so they work with a Korean input mode on); the toggles (?, S, T, L, I) ignore `e.repeat`; `typingIn` blocks shortcuts only in text boxes and dropdowns, not checkboxes or buttons; the Hull Size, Integrated effects and list Sort dropdowns blur after a change.
 
 ## Mod facts the code depends on
 
 - **Coordinates:** world y grows downward. Tier sizes are `NODE_SIZE` 64 times the tier multiplier (ROOT 2.5, WORMHOLE 1.3, SOCKET 1.2).
 - **Node cap:** the mod default `exiledSector_levelMaxAllocatedNodes` is 60, and the root counts toward it. The Nodes counter is `alloc.size + 1`.
 - **Template file:** `saves/common/exiledSector_skillTreeTemplates.json.data`, shaped `{"v":1,"templates":[…]}` (a bare array also reads).
-  - Each template is `{v,id,name,root,hull: FRIGATE|DESTROYER|CRUISER|CAPITAL_SHIP, steps, anchors?}`.
+  - Each template is `{v,id,name,root,hull: FRIGATE|DESTROYER|CRUISER|CAPITAL_SHIP, steps, anchors?, integrate?}`.
+  - `integrate` (mod 0.12.0) lists node ids marked for integration, only nodes in the steps. In game they're reminders. The planner writes the build's allocated integrated nodes there (`templateMarks`, in `buildTemplate`, codes and `templateSig` when there are any) and integrates the marked nodes on import. `templateBody` compares it for the outside-change notice.
   - Steps are `node` or `node=option`, the root is excluded, and a partner follows its wormhole or socket.
   - Names are at most 32 characters and unique per root, case-insensitive, whatever the hull. `uniqueTemplateName` ports `TemplateNames.unique`.
   - The mod accepts any non-control character (`SkillTreeTextField`). The planner deliberately limits names to printable ASCII (`NAME_CHAR`, `templateNameProblem`, `guardNameInput`), because the game's LWJGL keyboard input and default Insignia font only reliably handle those. The user chose this.
@@ -134,6 +147,7 @@ The sections run top to bottom in this order:
 
 ## Conventions the user asked for
 
+- **Commits and pushes:** always ask the user before committing or before pushing, every time, even when earlier changes in the session were committed or pushed. When a change is done, say what's ready and ask; don't commit on your own.
 - **Function over looks in CSS:** system font, solid opaque panels, no shadows, gradients, transitions, rounded corners or uppercase letter-spaced labels. Colour is only for meaning: good/bad values, notable and keystone, over-cap, focus. Every page colour is a CSS variable, with light values under `:root[data-theme="light"]`, so add new ones as variables in both sets. The canvas art (glows, nebulae) was not part of that request and stays, and neither is the Full Sheet (`#statsheet`), which copies the game's stat sheet colours in the dark theme. In the light theme it keeps the game's layout in light colours (the `:root[data-theme="light"] #statsheet` rules), as the user asked for the sheet to follow the theme.
 - **Shortcuts:** the list in `#keys` in `index.html` is written by hand. Update it, and the `#help` line, whenever controls change.
 - **Toggling elements:** use the `hidden` attribute. `style.css` has `[hidden]{display:none!important}` because some dialogs set `display: flex`.

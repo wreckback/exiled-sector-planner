@@ -1,0 +1,353 @@
+# Exiled Sector Skill Tree Planner
+
+A web planner for the ship skill tree of the Exiled Sector Starsector mod. It's a static site with no build step: plain HTML, CSS and JS drawing on a canvas. It reads its data from the mod checkout in `ExiledSector/`, and can import and export the game's skill tree templates. See `CHANGELOG.md` for what's been built.
+
+The mod itself:
+
+- Forum thread: [Exiled Sector on the Fractal Softworks forum](https://fractalsoftworks.com/forum/index.php?topic=36072.0)
+- Source: [ExiledPortals/ExiledSector on GitHub](https://github.com/ExiledPortals/ExiledSector)
+
+## Layout
+
+- `ExiledSector/`: the mod checkout, which is the data source. Nothing edits its files; `update.mjs` only switches it to a release tag.
+- `tools/update.mjs`: moves the mod to a release, runs the extractor and reports anything that needs a look
+- `tools/extract.mjs`: copies the tree, skill types, effect wording and rename tables from the mod into `web/data/`
+- `tools/mod-sync.json`: the mod release the data was last built from (written by `update.mjs`)
+- `tools/serve.mjs`: a small local web server
+- `tools/release.mjs` and `tools/package.mjs`: tag a release and build its zip
+- `web/`: the site. `data/planner-data.js` is generated. It holds none of the mod's art; see below.
+
+The tools need [Node.js](https://nodejs.org/) 26 or newer (`.nvmrc` names the version) and git 2.39 or newer, on Windows, Linux or macOS. They have no npm dependencies, so there's nothing to install. The site itself needs neither.
+
+## Set up after cloning
+
+The repository holds the code and the extracted data, but not the art. The art belongs to the mod and the authors it credits (see the mod's `CREDITS.md`), so neither the repository nor the release zip republishes it. Each user points the page at their own copy of the mod instead (see Mod art below).
+
+1. Clone the mod into `ExiledSector/` inside this folder: `git clone https://github.com/ExiledPortals/ExiledSector.git ExiledSector`. If it lives somewhere else, pass `--mod-root <path>` to the tools, or set the `ESP_MOD_ROOT` environment variable once. A relative path is taken from this folder.
+2. Run `node tools/extract.mjs` to rebuild the data. The data is committed, so this is only needed after a mod change.
+3. Run the planner as below, and choose a mod folder under **Show mod art** (the installed mod, or `ExiledSector/` itself).
+
+Every tool has `--help`, and `npm run <tool>` works too (`npm run serve`, `npm run update -- --commit`).
+
+## Run it
+
+```sh
+node tools/serve.mjs     # then open http://localhost:8765/
+```
+
+- `web/index.html` also works opened straight from disk, with the differences listed under Caveats.
+- To share the planner with others, upload the `web/` folder to any static host, such as GitHub Pages. It holds no art, so visitors choose their own mod folder (see Mod art).
+- `serve.mjs` stops with Ctrl+C. Use `--port` to change the port.
+- The summary panel's footer shows the mod version the data is from and the planner version, for example "Exiled Sector 0.11.2 · Planner v0.2.0-alpha.3". Data built from unreleased mod work shows the nearest mod release with the branch and commit instead, for example "Exiled Sector 0.11.2-alpha + Dev 93ceafe2". Through `serve.mjs` that's the latest planner tag, plus "+N" for commits since it and "(edited)" for uncommitted changes. Opened straight from disk it says "dev", and in a release zip it's that zip's tag. Hover it for the full version.
+
+## Update it after the mod changes
+
+When the mod releases a new version, run:
+
+```sh
+node tools/update.mjs             # newest release tag
+node tools/update.mjs --commit    # same, and commit the result
+```
+
+It fetches the mod's tags, checks out the newest release (detached HEAD), rebuilds the data and prints a report:
+
+- **Checks:** wording placeholders the extractor couldn't fill (they'd show as "?"), effects newly without wording, newly missing art, unknown node types or tiers, broken or one-way links, wormhole pairs, the template format versions and the default node cap.
+- **Tree changes:** nodes and skill types added, removed, renamed, retyped or moved, compared with the previous data. Effects whose mode, stat, lower-is-better or live flag changed are flagged: that more often means the extractor lost track of the mod's code than a real change.
+- **Mod code changed since the last sync:** the rule files the planner reimplements (`AllocationCheck`, the template classes, `AffinitySteps`, `SkillTier` and so on). This is the only part that can mean planner code needs updating.
+
+The last line says either "All checks passed, no rule files changed", in which case reload the page and you're done, or lists what needs a look.
+
+- `--tag 0.11.1-alpha` picks a specific release. `--no-checkout` uses the mod checkout as it is (for example, unreleased work on `Dev`). `--no-fetch` skips the network.
+- `--preview` is for trying unreleased mod work without changing the planner: it uses the mod checkout as it is, builds into a separate `preview/` folder and records nothing, so the planner's own data stays on the last release. Open it with `node tools/serve.mjs --root preview --port 8766`; its footer shows the mod's nearest release plus the branch and commit, for example "Exiled Sector 0.11.2-alpha + Dev 93ceafe2 · Planner preview".
+- `--report <file>` also saves the report to a text file, for example `--preview --report preview/report.txt` (the `preview/` folder isn't committed).
+- It refuses to switch the mod if the mod checkout has uncommitted changes.
+- To go back to the mod's branch, run `git switch main` inside the mod checkout.
+- `node tools/extract.mjs` alone still just rebuilds the data from whatever is checked out.
+
+## Tag a release
+
+Planner tags carry the planner's own version, with the mod release its data was synced from as build metadata: `v0.4.0-alpha.1+es0.11.1-alpha` for a pre-release, `v0.4.0+es0.11.1-alpha` for the release. (The trailing `-alpha` there is the mod's own release name.)
+
+```sh
+node tools/release.mjs --version 0.4.0 --pre alpha   # first alpha:  v0.4.0-alpha.1+es...
+node tools/release.mjs --pre alpha                   # next alpha:   v0.4.0-alpha.2+es...
+node tools/release.mjs --pre rc                      # candidate:    v0.4.0-rc.1+es...
+node tools/release.mjs                               # release it:   v0.4.0+es...
+node tools/release.mjs --bump minor --pre alpha      # from the last release: v0.5.0-alpha.1+es...
+```
+
+- Pre-release stages follow the usual order, and sort that way:
+  - **alpha:** internal testing; features still changing.
+  - **beta:** feature-complete, wider testing.
+  - **rc:** a release candidate; fixes only.
+  Stages only move forward for a version: after an rc, the script refuses a new alpha. `--rc` is short for `--pre rc`.
+- Which number to raise: **patch** for a mod sync or fixes, **minor** for new features, **major** when old share links or saved builds stop loading.
+- `--push` pushes the tag, `--dry-run` only shows the tag and its message, and `--plain` leaves out the `+es…` part.
+- The tag message names the mod release and commit and lists the commits since the previous tag.
+- It refuses when the working tree has changes, when the version isn't newer than the last release, or when the mod checkout or `planner-data.js` doesn't match `tools/mod-sync.json`. Run `update.mjs` first after a mod release. Without a mod checkout it says so and skips that check.
+- Tags that don't look like `vX.Y.Z`, such as the earlier `0.11.1-alpha`, are ignored.
+
+To build the ready-to-use zip for a tag (the site, its data and a README.txt, in one folder that runs from a double-clicked `index.html`):
+
+```sh
+node tools/package.mjs --tag "v0.2.0-rc.1+es0.11.1-alpha"   # or no --tag for the tag on HEAD
+```
+
+It writes `dist/exiled-sector-planner-<tag>.zip`. The site files come from the tag itself, so any tag can be packaged, and the zip's `version.js` holds the tag, so its footer shows that version. The zip has no art: its README.txt tells users to choose their mod folder under **Show mod art**. Attach the zip to the GitHub release for that tag, marked as a pre-release for an alpha, beta or rc. The zip's README.txt says which stage it is.
+
+## Theme
+
+The **Theme** button in the top bar cycles **Dark**, **Light** and **Auto** (follows the system's light or dark setting). Dark is the default. The choice is saved in the browser.
+
+- Both themes work with and without the mod's art.
+- Light mode deepens bright colours (allocated paths, previews, affinity colours) so they stay readable on the light background.
+- With the art in light mode, unallocated icons fade toward white instead of darkening, and nebulae and planets are drawn as soft colour instead of glowing.
+- In light mode, the star at the centre of each tree is a deeper colour with a softer glow, so it doesn't glare.
+
+## Mod art
+
+The planner ships no images. Click **Show mod art** in the top bar and choose the Exiled Sector folder, usually `mods\ExiledSector` in the Starsector install. The Starsector folder or its `mods` folder work too: the planner looks for the mod's `mod_info.json` there, then in `mods\`, then in each folder inside. It only reads the images it draws (317 for mod 0.11.1). Nothing is uploaded or changed.
+
+- **Chrome and Edge** remember the folder. After a browser restart they need permission once more: the button then reads **Reconnect art**, and one click asks for it.
+- **Other browsers** can't remember folders, so they use a folder input that you pick again each visit.
+- **Without a folder,** the tree is drawn plainly so it still reads well:
+  - Nodes are discs tinted by kind: notables pink, keystones violet, small nodes grey. Bigger ones show the type's initials ("FC" for Flux Capacity).
+  - Affinity nodes show a Low / Mid / High split in the three tech colours, and once allocated they're filled with the chosen tech's colour.
+  - Names appear under the nodes as you zoom in: notables and keystones first, small nodes closer in. Affinity nodes stay unlabelled.
+  - The notable halo is drawn in code, and nebulae, planets and ring belts aren't drawn.
+- If the folder holds a different mod version than the planner's data, the dialog says so. Icons of node types that changed may be missing.
+- Picking a folder that isn't the mod keeps the art already showing and explains why.
+
+## Use it
+
+1. **Pick a root:** Low Tech, Midline or High Tech, near the centre. To change it later, right-click your root (or use Reset). It asks first, because changing the root clears the build. Undo brings the build back. The game itself never lets a ship drop its root; this is only a planning shortcut.
+2. **Allocate:**
+   - Click a glowing node next to your build, or click any node to take the shortest path to it. Hovering previews the path in green.
+   - Clicking an allocated node removes it and anything cut off from the root (orange preview). Right-click removes any node.
+3. **Choices:**
+   - Clicking an affinity node, or one of the three other choice nodes, opens a picker.
+   - Ctrl+click (Cmd+click on Mac) reuses the option you last picked for that kind of node, for the node you click and every choice node on its path.
+   - **Affinity nodes** in bulk, from the block under the affinity totals in the summary panel:
+     - **All to Low / Mid / High** sets every allocated affinity node to that option.
+     - **Split:** type how many of each you want, for example 1 / 6 / 3 for 10 nodes, and click Apply (or press Enter). The numbers must add up to the allocated count. Nodes already on an option that keeps its count aren't touched.
+     - Either is one Undo step.
+4. **Wormholes:**
+   - The core wormholes link the tech regions in pairs; taking one takes its pair.
+   - Faction volumes open by clicking an allocated subroutine socket, expanding **Wormhole anchor** and choosing one.
+   - **Jumping:** click a wormhole (or a linked exit) and choose **Jump to …** to move the view to the other end, or Ctrl+click it to jump straight there. This works from a linked socket too, and never changes the build. The button names where you'll land: a volume, or in the core the id of the node at the other end, e.g. **Jump to Core (midline_wormhole_1)**. Hovering one of the core's six wormholes draws a moving dashed line to the wormhole it's paired with, and rings that end.
+   - Volumes built around other mods can be hidden under **Optional Volumes** in Optional rules, as in the mod settings.
+5. **Read the results:**
+   - The summary panel (S) totals every effect for the hull size you pick. It also shows affinity totals and the threshold bonuses they unlock.
+   - The **Stats** tab shows the same effects the way the game's stat sheet does: its sections in its order (Progression, Durability, Shields, Phase Cloak, Flux, Weapons, Strikecraft, Mobility, Ship System, Fleet and Battle, Combat Readiness, Logistics, Mechanics), each effect in the section the game puts it in, with the game's wording for temporary and gated effects. Hover a line to see its sources (each node or affinity step and how much it adds).
+     - **Full Sheet** opens it like the game's full stat sheet, laid out in as many columns as fit: the game's colours in the dark theme, the same layout in light colours in the light theme. **Side Panel**, Close or Esc goes back.
+     - The planner has no real ship, so the game's stat rows with base and modified values (armor 1000 to 1200 and so on) aren't shown, only the effect lines. Granted hull mods and text-only effects stay on the Effects tab, as the game doesn't list them in its sheet either.
+     - Nodes whose effects only last a while after deployment (Knight's Charge, Temporary Maneuverability) are shown separately, "For the first N seconds after deployment", on both tabs.
+   - **Search** with `/`:
+     - Matching nodes get a pulsing gold glow and an outlined gold ring, visible at any zoom, in both themes and with or without the mod's art. The result Enter last stepped to gets a second ring. Other nodes and the lanes are dimmed only lightly, so the tree's shape stays readable.
+     - A **Search** tab in the summary panel lists every match with its location (a volume, or Core), an "allocated" tag, and the line that matched. Click a result to jump to it, or press Enter to step through them.
+     - Clearing the search puts the panel back how it was.
+   - **Filter** (next to the search box) highlights groups of nodes:
+     - **Show affinity nodes** highlights all 155 affinity nodes (the Low / Mid / High choice nodes).
+     - **Themes** are the mod's own theme tags: Flux, Shield, Armor, Hull, Speed, Weapons, Strikecraft, Logistics and so on, each with its node count.
+     - Ticked themes highlight and list their nodes the same way as search. Match **any ticked** or **all ticked**, and combine with search text (for example Weapons plus "emp").
+     - A choice node matches if any of its options has the theme. Roots, wormholes and sockets never match. **No theme** finds the few nodes without a theme tag.
+     - Affinity nodes never match a theme, only Show affinity nodes. The mod tags the affinity options too (Low Tech: Hull, Armor; Midline: Flux, Hull; High Tech: Flux), so they would otherwise drown out Flux, Hull and Armor. Show affinity nodes adds to whatever the themes match.
+     - Tooltips list a node's themes.
+   - When zoomed out, each tree is labelled. Click a label to zoom into that tree.
+   - **List** in the top bar (or `L`) swaps the map for a list of every node except affinity nodes: icon, name, tier, tree, themes, an "allocated" tag and its effects. The core's six wormholes and six sockets show their id, e.g. "Wormhole (hightech_wormhole_1)" or "Subroutine Socket (subroutine_socket_16)", wormholes with the one they're paired with and allocated sockets with what they hold; the exits in the other trees say which socket they're linked to when anchored.
+     - The search box and **Filter** narrow the list exactly as they highlight the map, and Enter in the search box steps through it.
+     - **Sort** by **Name (A to Z)**, with numbers in natural order, or by **Skill tree**: the core as one tree, then each volume, keystones and notables first. The choice is remembered.
+     - In the Skill tree sort, click a tree's heading to collapse or expand it, or use **Collapse all** / **Expand all**. Collapsed trees are remembered, and the count says how many matches are in collapsed trees.
+     - Click a node to go back to the map, centred on it. **Map** (or `L`) goes back without moving.
+     - In **target mode** (`T` or the Targets button), the All nodes list gets a green **O** (want) and a red **X** (forbid) button on every row, and clicking a row cycles its mark as on the map (right-click clears). The Targets bar with **Allocate** sits at the top of the list. Marked rows have a green or red edge, and keep their O or X after target mode is turned off.
+     - **All nodes** / **Build (N)** at the top switches lists. **Build** shows what's allocated: your root, every chosen node (including wormholes, exits and sockets, with what each socket holds) and one row per tech for the affinity nodes, such as "High Tech Affinity ×20" with their combined effect. It also sorts by **Order taken**. Nodes granted by a modspec cache aren't allocated, so they aren't listed.
+6. **Node rules:** the planner refuses nodes the game would refuse, with the game's own reason in the tooltip or a toast. See the section below.
+7. **Save and share:**
+   - The build is kept in your browser between visits.
+   - **Copy code** in the toolbar copies the build as a template code. It's named after the last template name you used, or "<root> plan".
+8. **Templates:** see the section below.
+9. **Waypoints** (Shift+click): force a route instead of the shortest one.
+   - Shift+click nodes to make them waypoints 1, 2, 3 and so on (a gold ring with a numbered badge). Shift+click a waypoint again to drop it, or press Esc to clear them all.
+   - The next click allocates a path through the waypoints in order, each leg the shortest legal way from the waypoint before. The hover preview and tooltip show that route. Clicking a waypoint itself goes through the ones before it and keeps the later ones.
+   - Use it when a longer route pays off. A Root Conduit counts the nodes on the route from the root to its socket, so a detour adds affinity, as long as you don't also take the shortcut. Other uses: running through or around a subroutine's radius, or picking up particular small nodes on the way.
+10. **Target Mode** (toolbar button, or T): pick the nodes you want, and the planner finds the fewest nodes that reach them.
+   - Click a node to mark it wanted (white ring with ticks), again to forbid it (red ring with a slash), and again to clear it. Right-click clears. The nodes don't have to be connected.
+   - The planned path is drawn in green as you go. The bar says how many nodes it adds, or why it isn't possible: a wanted node the rules refuse, two wanted nodes that clash, a node only reachable through forbidden or refused ones, a faction volume with no anchor linked, or the node cap.
+   - **Allocate** applies the plan as one Undo step and leaves target mode. **Done** or Esc leaves without changing the build. Marks are kept in your browser for next time, and **Clear marks** drops them.
+   - **Keep current build** (on by default) adds to what you have. Turned off, it plans from the root alone and removes allocated nodes the plan doesn't need.
+   - The plan follows the same node rules as clicking: a node that clashes with a wanted one is routed around. With up to 10 wanted nodes it is the fewest possible; with more, the search is approximate and the bar says so. Choice nodes on the way get your root's affinity, as with a plain click.
+
+Press **?** or click **Shortcuts** for every control:
+- Arrows pan.
+- Page Up and Page Down zoom.
+- Home re-centers.
+- X turns the refused-node marks on and off.
+- T turns target mode on and off.
+- Shift+click sets waypoints, and Esc clears them.
+- Ctrl+Z undoes.
+- Esc closes dialogs.
+
+## Node rules, Ship rules and Optional rules
+
+The planner checks the same things the game checks before it allows a node (the mod's `NodeEligibility`).
+
+**Always checked:**
+- **Hull size:** some nodes only fit certain sizes, going by the Hull size dropdown. For example, Dedicated Targeting Core needs a cruiser or capital.
+- **Nodes that can't be taken together:** two nodes clash when the hull mods they add clash. Examples are Phase Anchor and Adaptive Phase Coils, Heavy Armor and Critical Point Refit, or any two of Shield Shunt and the two Shield Conversions.
+- **Logistics limit:** a ship holds 2 logistics notables and keystones (cargo, fuel, sensors and the like).
+
+Two kinds of setting cover what the planner can't see.
+
+**Ship rules** live on the **Ship** tab of the summary panel, so they stay in view while you build. The **Ship rules** toolbar button opens that tab. Everything starts as "Not set", which isn't checked:
+- **Ship Options:** shield type (front, omni, none or phase cloak), base armor, civilian-grade hull, ship system charges, station modules, and whether the ship has only built-in fighter wings.
+- **Installed Hullmods:** built-in or installed. A node can't be taken if it adds one of these or clashes with one. Pick them by their in-game name. Only hull mods some node clashes with are offered.
+- **Extra logistics slots** from items.
+
+**Optional rules** (toolbar button, a dialog) cover what your campaign has reached. Everything starts ticked:
+- **Wormholes** (at the top): untick the Wormhole if your campaign can't use gates yet.
+- **Optional Volumes:** the mod settings' toggles for volumes built around other mods (Lost Sector, Random Assortment of Things, Nightcross Armory, Navarchy of Tania). In game each shows only when its mod is installed or set On. Untick one to plan without it: the volume disappears from the map, search and list view, its wormhole anchor can't be used, and hiding it removes the build's nodes there (Undo brings them back). Loading a template that uses a hidden volume shows it again. Each toggle lists its volumes' story gates under it, greyed out while it's hidden.
+- **Game state reached:** untick a gate you haven't reached yet. Only the vanilla volumes' gates are listed here; the optional volumes' gates sit under their toggle. **Tick all** and **Untick all** set every gate at once, both lists included.
+- **Unlocked hullmods:** untick the hull mods whose blueprint you don't have. They're listed by name; hover one to see which blueprint it needs (Shield Arc Multiplier needs the Shield Conversion - Omni blueprint, for example). **Tick all** and **Untick all** only change this list.
+
+Each part has its own Reset button. The toolbar buttons show how many settings are in use, for example "Ship rules (2)".
+
+The shield type follows the build in order, as in game. A ship set to "No shield" can't take Shield Shunt, but once a Makeshift Shield Generator is allocated, nodes that need shields are allowed.
+
+A red X marks every node the rules refuse right now: clashes with your build, the wrong hull size, the logistics limit, and ship and optional rules. Allocated nodes that break a rule get the X over their red ring. When zoomed out, refused nodes show as red dots. Hover a marked node to see why.
+
+**When rules are broken:**
+- **Paths:** the shortest path goes around refused nodes. If every way passes one, the message says which node and why.
+- **Choice nodes:** the picker greys out options that are refused and shows the reason under each.
+- **Existing nodes:** if a hull, ship or story change makes allocated nodes break a rule, they get a red ring and are listed at the top of the summary and of the Ship tab. Nothing is removed for you, and Undo goes back.
+- **Templates:** steps the rules refuse are skipped on import, as in game, and the load message says how many and why.
+
+## Subroutines
+
+Click an allocated subroutine socket. The picker shows two headers, **Subroutine** and **Wormhole anchor**, each saying what the socket holds. Click one to expand its list, and click it again to collapse it. The socketed subroutine stays in the list, highlighted, and clicking it again removes it. A socket holds one item, and a subroutine only works while its socket is allocated. The picker enforces the per-ship limits: one doctrine archive, one Root Conduit, and each unique once.
+
+| Subroutine | What the planner does |
+|---|---|
+| **Root Conduit** | +5 to one affinity for every allocated node on the route from your root to its socket. The route is drawn in that affinity's colour. Its affinity is rolled per item, so pick the one yours shows. |
+| **Empty Shell Axion** | Small nodes in its radius grant nothing. The socket gives +1 to every affinity for each small node in the radius, allocated or not. |
+| **Phoenix Ash Archive / P-Space Lattice** | Allocated nodes in the radius only apply below 50% hull or while phased, at 3×. Only effects read live in combat survive, so affinity and similar effects are lost. The summary lists these separately under their condition. |
+| **Contraband Modspec Cache** | Allocates 1 to 3 notables for free: no path, no node slot. Its notables are rolled per item, so add the ones yours shows in the socket's picker. |
+| **Doctrine archives** | The radius is drawn, and tooltips list what the archive can do to each node: Augment's possible lines with their ranges, Rewrite's possible replacements. The actual result is rolled from a hidden per-item seed, so it isn't in the totals. |
+
+- Radiuses are drawn as dashed circles. Hover a node to see how a subroutine affects it.
+- **Subroutines** in the summary says what each one does right now.
+- Subroutines the mod no longer drops (rarity 0 in its data, currently Phoenix Ash Archive and P-Space Lattice) are marked unobtainable in the picker, the socket tooltip and the summary. You can still socket them, for copies you already own.
+- Templates and codes don't hold subroutines, as in game.
+- **Not modelled:** a granted notable that touches your allocated tree doesn't count as a neighbour for further allocation, though in game it does. Corruption implicits are also not modelled.
+
+## Integrated nodes
+
+In game (mod 0.12.0+) you spend story points to integrate an allocated notable or keystone on one ship, like building in an s-mod. An integrated node uses its integrated effects instead of its normal ones. The nth integration on a ship costs n story points, so 3 integrations cost 1 + 2 + 3 = 6. In the planner they're free to add and take back; the story points are only shown.
+
+- **Integrate:** Alt+click (Option+click on Mac) an allocated node, or hover it and press **I**. Do the same again to remove the integration. Alt+click also works on rows in the summary panel's Notables & keystones tab and in the list view. Each change is one Undo step.
+- **Tooltips** of nodes that can be integrated can show both sets side by side: **Normal** on the left, **Integrated** on the right, one row per effect. Unchanged rows are greyed, a ▲ marks what integrating adds or changes, and a green "—" on the Integrated side marks a line it drops. The column the build uses is marked **active** and the other one is faded, and the Integrated heading shows what integrating would cost next. In narrow windows the two columns stack. The list view shows the same comparison.
+- **Integrated effects** in the summary panel chooses how. **Inline** (the default) lists each line once, as the build uses it, with the other set's value after each changed number, for example "10% (integrated 20%) increased damage…". Lines only the other set has are faded ("▲ When integrated: …", or "- …" for a line integrating drops), and a dropped line says "(removed when integrated)" while the node isn't integrated. This is shorter for most nodes. **Side by side** shows the two columns described above. The choice is kept in your browser.
+- **On the map,** an integrated node has a green ring outside its allocation ring.
+- **The summary panel** has a block under the affinity one:
+  - **Integrated: k of n · story points** for the build.
+  - **Integrate all nodes** integrates every allocated node that can be integrated; **Remove all integrations** removes every integration. Each is one Undo step, and the result is saved with the build.
+  - **Preview all integrated** shows the totals, the stat sheet, tooltips and the map as if every allocated node that can be integrated were integrated, without changing the build. The map draws those nodes with a dashed ring, and each changed total says what it is without the preview ("▲ without integration: …", "▲ new when integrated", and "- …" for a total it takes away). It isn't saved.
+  - **Keep when removed:** off (the default), removing a node removes its integration. On, a removed node stays integrated as it does in game: its ring shows faintly, it still counts toward the cost, and allocating it again restores its integrated effects. Hover it and press I to remove the integration. This setting is kept in your browser.
+- **The stat sheet's Sources** show integrated nodes' names in green, as the game's summary does.
+- **Templates and codes** carry integrations as the game's integration marks. Saving writes the build's integrated nodes as marks, and loading a template integrates the nodes its marks name. In game the marks are only reminders: a template never integrates anything by itself.
+- **Not modelled:** the Deintegration Schematic (in the planner, Remove all integrations does the same), and NPC ships' random integrations.
+
+## Templates: import and export with the game
+
+The Templates button reads and writes the mod's shared template file, `saves\common\exiledSector_skillTreeTemplates.json.data` in your Starsector install (mod 0.11.1+). The game re-reads that file whenever the skill tree opens, so changes show up while the game is running.
+
+**Link the file** (Chrome or Edge):
+- Click "Link templates file…" and pick the file. The planner remembers it between visits; when the browser asks again, click Reconnect.
+- No file yet, or want a separate one? Click "Create templates file…". The first time, pick the planner's own folder (the one with `web` and this README); the planner makes an empty `exiledSector_skillTreeTemplates.json.data` in its `savedTemplates` folder (numbered if taken) and links it. The game only reads `saves\common`, so copy the file there, under that exact name, to use it in game.
+- Browsers can't open a typed path, so you pick the file instead.
+- Other browsers can only open the file read-only, each visit.
+
+**Changes from the game:** while the file is linked, and the browser allows access this visit, the planner watches it for changes. Choose how in the Templates dialog, under **Watch the linked file for changes from the game**:
+
+| Setting | What it does |
+|---|---|
+| **Instantly (file observer)** (default) | The browser tells the planner as soon as the file changes, so the notice appears within about a third of a second, and nothing runs in between. Where the observer isn't available, nothing is watched and the dialog says so; it never falls back to checking on its own. |
+| **By checking every few seconds** | Only when you choose it. Looks at the file's timestamp and size every **Check every … seconds** (1 to 600, default 2), and reads the file only when they change. |
+| **Off** | No watching. |
+
+**Check file** in the top bar checks the linked file right away, whatever the setting, with the same notice. It reports "No changes" when there are none. Because it's a click, it can also ask the browser for access, so after a browser restart it reconnects the file too. It shows once a file is linked.
+
+The settings are kept in your browser, and the dialog says which method is running right now. Whichever you choose:
+- It only watches while the tab is visible. A hidden tab (another tab in front, the window minimized, or covered by the game) does nothing. Coming back checks at once and picks up whatever changed meanwhile. A planner open on a second monitor counts as visible, so it keeps up while you play.
+- When Starsector, or anything else, changes it, a notice at the top left lists the templates added, changed or removed, and the Templates list updates by itself.
+- If the template your build came from changed in the game, the notice offers **Load the new version**. That replaces your build, including any edits since you loaded or saved it, and Undo brings it back. **Keep my build** leaves it as it is.
+- If that template was removed in the game, your build is kept.
+- The planner's own saves, and rewrites that leave the templates the same, don't raise the notice.
+
+**Browser limitations:**
+- **Instant watching** needs the browser's File System Observer. Recent Chrome and Edge have it. Where it's missing, the file isn't watched: use **Check file**, or choose checking every few seconds. The dialog says so.
+- **The observer can stop**, for example after the computer sleeps. Watching then stops, and the observer is tried again when you come back to the tab or relink the file. **Check file** works meanwhile.
+- **Access is asked for each visit.** After a browser restart, nothing is watched until you click **Check file**, or **Reconnect** in the Templates dialog.
+- **Firefox and Safari** can only open the file read-only, a copy picked each visit, so they can't watch it at all. The watch settings are hidden there.
+- **Only while visible:** a hidden tab doesn't watch, as described above.
+
+**Import:**
+- The dialog lists the file's templates, grouped by root, and re-reads the file each time it opens. **Load** replaces your build with a template.
+- Old node and option ids from earlier mod versions are mapped to current ones, the way the game does.
+- Steps that don't exist or can't be connected are skipped and reported.
+- Undo goes back to your previous build.
+
+**Names:** up to 32 characters, using English letters, digits, spaces and keyboard symbols. Anything else is removed as you type, with a note saying what was removed.
+- The mod itself accepts any character, but its keyboard input and default font only reliably handle these.
+- A template loaded with other characters in its name is flagged, and has to be renamed before you save it.
+
+**Export:** type a name, then use one of these:
+
+| Button | Where it goes |
+|---|---|
+| Save into linked file | Straight into the linked file. A template with the same name and root is replaced and keeps its id, so ships using it stay assigned. Other templates are kept. |
+| Download as a new file | A file holding only this template. Placing it over an existing file drops the templates already there. |
+
+**Editing a template made in game:** Load it, edit it, then click Save into linked file without renaming it. The game picks up the change the next time the skill tree opens.
+
+**Template codes (when you can't send the file):** a code holds one template as text, about 200–700 characters, for pasting into Discord, forums or chat.
+- **Get a code:** **Copy code** in the toolbar, or "Copy code for current build" in the dialog, uses the template name and Hull size dropdown. Each template in the file list also has its own **Code** button.
+- A code holds the root, hull, steps, anchors and integration marks, like a template. Ship rules, optional rules and the node cap aren't in it.
+- **Use a code:** paste it into the Template code box and click **Load code**, or press Ctrl+Enter. It loads exactly like a template from the file. Save it into your file afterwards to use it in game.
+- Codes start with `ES1.`. Spaces and line breaks added by chat apps are ignored.
+- Codes keep node ids, so they survive mod updates the same way template files do.
+- If a code was made with a different mod version, the load message says so.
+
+**Hull size:** a template's hull decides where it's listed in game. The template list opens filtered to the current ship's hull size.
+- A new template gets the Hull size dropdown's size.
+- Saving over an existing template whose hull matches the dropdown, or that has no hull, keeps its hull, as the game does.
+- If the existing template's hull differs from the dropdown, saving stops and asks you to choose:
+  - **Keep** its hull and update the steps.
+  - **Change** it to the dropdown's hull.
+  - **Save as a new template** under a free name, such as "Flux plan 2", which you can edit.
+- The dialog's summary line warns ahead of time when this will happen.
+
+## Caveats
+
+- **Template saving is untested against a real file.** Writing into the real game file hasn't been tested end to end yet. Keep a copy of `exiledSector_skillTreeTemplates.json.data` the first time you save into it.
+- **Changing a template's name or root makes a new template.** Templates are matched by name plus root, so the original stays in the file.
+- **Ships keep the nodes they already have** when you edit their template. How the game handles nodes since removed from a template hasn't been checked.
+- **Downloads may be renamed.** If the file name is already taken in Downloads, Chrome adds "(1)". The game won't read the file until it's renamed back.
+- **Opened from disk** (no server):
+  - Firefox may not keep the saved build between visits.
+- **Missing effect wording:** wording is read from the mod's string files and Java source. 13 effects show their raw name and value (fighter role stats, converted hangar, unhit armor regen). Two of them only appear in integrated effects.
+- **Not modelled:**
+  - Ordnance point costs and node item costs.
+  - The per-ship weapon and shield requirements shown in tooltips ("Needs a ship with: …"). The game doesn't block allocation on these either.
+  - Hull mod clashes the game learns while you play (`exiledSector_learnedHullModConflicts.json`).
+  - What a doctrine archive actually rolls (see Subroutines), and subroutine corruption implicits.
+- **Placeholder magnitudes:** the mod marks its magnitudes as placeholders pending balance.
+- **Simplified art:** stars, wormholes, sockets, roots, keystone belts and notable rings are drawn in code as simple versions of the mod's effects. The mod uses vanilla sprites and custom OpenGL for these.
+
+## Credits
+
+- **Exiled Sector** is by Portals. Its source code is licensed under the GNU GPL v3.0.
+- **The art** the planner shows belongs to Exiled Sector and to the authors of the other mods and games its art comes from (Random Assortment of Things, Nightcross Armory, Navarchy of Tania, LOST_SECTOR, Ashes of the Domain and others). The mod's own `CREDITS.md` lists who made what and under which terms. It's in the mod folder and in the Exiled Sector repository.
+  - The planner contains none of this art and doesn't redistribute it, not in this repository and not in the release zip. It only displays the images from the copy of the mod that each user already has installed, read locally in their browser (see Mod art).
+- **The tree data** in `web/data/planner-data.js` is extracted from the mod's data and string files: the node layout, skill type names and effect wording. It's what lets the planner match the game.
+- **Starsector** is by Fractal Softworks.
+- The planner is a free, non-commercial fan tool for Exiled Sector players.

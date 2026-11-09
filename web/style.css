@@ -15,6 +15,7 @@
   --notable: #ffb8f0;
   --keystone-tier: #b9a8ff;
   --notable-tier: #ff9ce8;
+  --builtin: #8cff96;     /* story point colour: integrated nodes (the game's storyOptionColor, approximated) */
   color-scheme: dark;
 }
 /* Light theme (the Theme button; "Auto" follows the system). The canvas has its own palette in app.js (THEMES). */
@@ -35,6 +36,7 @@
   --notable: #a0157f;
   --keystone-tier: #4a35b5;
   --notable-tier: #a0157f;
+  --builtin: #12804c;
   color-scheme: light;
 }
 
@@ -112,6 +114,8 @@ button:disabled { opacity: 0.5; cursor: default; }
 .aff-all button { padding: 1px 8px; margin-left: 4px; }
 #aff-mix input { width: 52px; padding: 1px 4px; }
 #aff-mix label { white-space: nowrap; }
+#integ { padding: 0 16px 8px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+#integ label { white-space: nowrap; }
 #aff-apply { padding: 1px 10px; }
 #aff-note:empty { display: none; }
 #aff-note.bad { color: var(--bad); }
@@ -160,8 +164,9 @@ button:disabled { opacity: 0.5; cursor: default; }
 #listview .lv-hint { flex: 1 1 260px; font-size: 12px; }
 #listview-body { flex: 1; overflow-y: auto; padding: 8px 16px 16px; user-select: text; }
 #listview .lv-row { align-items: flex-start; border-bottom: 1px solid var(--rule); padding: 6px 4px; }
-#listview .lv-main { min-width: 0; }
+#listview .lv-main { min-width: 0; flex: 1 1 auto; }
 #listview .lv-effects { font-size: 13px; margin-top: 2px; }
+#listview .ic { max-width: 960px; } /* two ~480 px columns, so lines stay readable on wide screens */
 #listview .lv-group { margin: 14px 0 4px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--edge); }
 #listview .lv-group:first-child { margin-top: 4px; }
 #listview .lv-group button { display: block; width: 100%; text-align: left; font-weight: 600; color: var(--text); background: none; border: none; padding: 3px 2px; }
@@ -284,6 +289,29 @@ button:disabled { opacity: 0.5; cursor: default; }
 .good { color: var(--good); }
 .bad { color: var(--bad); }
 .hl { color: var(--hl); }
+.builtin { color: var(--builtin); }
+
+/* integrated effects beside the normal ones (tooltip, list view): one row per effect line, two columns */
+#tooltip:has(.ic) { max-width: min(600px, calc(100vw - 32px)); }
+.ic { font-size: 13px; }
+.ic-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 12px; padding: 2px 0; border-top: 1px solid var(--rule); }
+.ic-head { border-top: none; font-size: 12px; color: var(--muted); }
+.ic-same > div, .ic-same span { color: var(--muted); }
+.ic-active { font-size: 11px; color: var(--text); border: 1px solid var(--edge); padding: 0 4px; margin-left: 4px; }
+.ic-was { font-size: 12px; margin-left: 8px; }
+/* inline view: one line each, the other set's values in brackets, lines only the other set has faded */
+.ic-inl { font-size: 13px; }
+.ic-inl-head { font-size: 12px; margin-bottom: 2px; }
+.ic-alt { color: var(--builtin); font-size: 12px; }
+.ic-off { opacity: 0.45; }
+/* the column the build doesn't use, lighter (no marking while the node isn't allocated) */
+.ic-on-integ .ic-row:not(.ic-head) > div:first-child,
+.ic-on-normal .ic-row:not(.ic-head) > div:last-child { opacity: 0.45; }
+@media (max-width: 600px) {
+  .ic-row { grid-template-columns: 1fr; }
+  .ic-row > div::before { content: attr(data-label) ": "; color: var(--muted); }
+  .ic-head { display: none; }
+}
 
 /* picker */
 #picker {

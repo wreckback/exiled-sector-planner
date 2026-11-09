@@ -4,6 +4,9 @@
 # Release zips built by tools/package.mjs.
 /dist/
 
+# Previews of unreleased mod work built by tools/update.mjs --preview.
+/preview/
+
 # Personal skill tree template files copied from the game's saves/common folder.
 *.json.data
 

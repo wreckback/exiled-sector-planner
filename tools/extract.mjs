@@ -10,10 +10,10 @@
 // Run again whenever the mod's tree or skill types change:
 //   node tools/extract.mjs [--mod-root <path>] [--web-root <path>]
 // The mod checkout is --mod-root, else ESP_MOD_ROOT, else ExiledSector/ in the planner folder.
-import { mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
 import { parseArgs } from 'node:util';
-import { existsCaseless, fromRepo, modRootFrom, readCsv, readJson, readText, say, warn } from './lib/common.mjs';
+import { existsCaseless, fromRepo, git, modRootFrom, readCsv, readJson, readText, say, warn } from './lib/common.mjs';
 
 const { values: opt } = parseArgs({
     options: {
@@ -111,28 +111,80 @@ for (const f of javaFiles) {
         constants.set(`${cls}.${m[1]}`, v);
         if (!constants.has(m[1])) constants.set(m[1], v);
     }
-    for (const m of allMatches(text, /\bstatic\s+final\s+String\s+([A-Z][A-Z0-9_]*)\s*=\s*"(stat\.[A-Za-z0-9_.]+)"\s*;/gm)) {
+    for (const m of allMatches(text, /\bstatic\s+final\s+String\s+([A-Z][A-Z0-9_]*)\s*=\s*"((?:stat|subject)\.[A-Za-z0-9_.]+)"\s*;/gm)) {
         stringConstants.set(`${cls}.${m[1]}`, m[2]);
         stringConstants.set(m[1], m[2]);
     }
 }
 
+// Calls to small numeric helpers, Owner.method(args) whose body is just `return <expr>;` (e.g.
+// AbsorbReserveListener.maxReserve(0) -> ParameterBonus.increasedBy(MAX_RESERVE, 0)), are inlined with their
+// parameters replaced by the resolved arguments. Returns the text with every such call replaced, or null.
+// A DescribeContext argument (the game's DescribeContext.NONE when wording an effect on its own) is passed through as
+// this marker; context.magnitudeOf(X), what a related effect adds, is 0 then.
+const NoContext = '__context__';
+const magnitudeOfRe = /(?:\(\s*\w+\s*\)|\b\w+)\.magnitudeOf\(\s*(?:\w+\.)?[A-Z][A-Z0-9_]*\s*\)/g;
+const mathCalls = ['round', 'abs', 'max', 'min'];
+function inlineHelperCalls(text, cls, depth) {
+    let e = text;
+    for (let guard = 0; guard < 20; guard++) {
+        // The first call that isn't Math.* or round/abs/max/min: Owner.method( or, in the same class, method(.
+        const m = allMatches(e, /(?:\b([A-Z]\w*)\.)?\b([a-z]\w*)\s*\(/g)
+            .find((x) => x[1] !== 'Math' && !(x[1] === undefined && mathCalls.includes(x[2])));
+        if (!m) return e;
+        const owner = m[1] ?? cls;
+        const open = m.index + m[0].length - 1;
+        const close = findClose(e, open);
+        const src = classText.get(owner);
+        if (close < 0 || !src || depth >= 4) return null;
+        const args = splitTopLevel(e.slice(open + 1, close))
+            .map((a) => (/^\(?\s*(context|__context__)\s*\)?$/.test(a) ? NoContext : resolveExpression(a, cls, depth + 1)));
+        if (args.includes(null)) return null;
+        // The overload with matching parameters (numbers, or a DescribeContext for the marker) and one return statement.
+        const defRe = new RegExp(String.raw`\bstatic\s+(?:float|int|double|long)\s+${m[2]}\s*\(([^)]*)\)\s*\{\s*return\s+([^;]+);\s*\}`, 'g');
+        let inlined = null;
+        for (const def of allMatches(src, defRe)) {
+            const params = splitTopLevel(def[1]);
+            const fits = params.length === args.length && params.every((p, k) => (args[k] === NoContext
+                ? /^(?:final\s+)?DescribeContext\s+\w+$/.test(p) : /^(?:final\s+)?(?:float|int|double|long)\s+\w+$/.test(p)));
+            if (!fits) continue;
+            let body = def[2];
+            params.forEach((p, k) => { body = body.replace(wordRe(p.split(/\s+/).at(-1)), () => (args[k] === NoContext ? NoContext : `(${args[k]})`)); });
+            inlined = resolveExpression(body, owner, depth + 1);
+            if (inlined) break;
+        }
+        if (!inlined) return null;
+        e = `${e.slice(0, m.index)}(${inlined})${e.slice(close + 1)}`;
+    }
+    return null;
+}
+
 // Returns a JS-evaluable expression over `magnitude`, or null if it uses anything unknown.
-function resolveExpression(expr, cls) {
-    let e = expr.trim();
+function resolveExpression(expr, cls, depth = 0) {
+    const start = expr.trim().replace(magnitudeOfRe, '0');
+    let e = inlineHelperCalls(start, cls, depth);
+    if (e === null) return null;
+    const inlined = e !== start;
     e = e.replace(/\(\s*(?:int|float|double)\s*\)/g, '');
     e = e.replace(/Math\.round/gi, 'round').replace(/Math\.abs/gi, 'abs').replace(/Math\.max/gi, 'max').replace(/Math\.min/gi, 'min');
     e = e.replace(/(\d+(?:\.\d+)?)[fFdD]\b/g, '$1');
     let failed = false;
     e = e.replace(/\b([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Z][A-Z0-9_]*)?)\b/g, (_, id) => {
         if (['magnitude', 'round', 'abs', 'max', 'min'].includes(lower(id))) return id;
-        if (constants.has(id)) return numText(constants.get(id));
+        // The class's own constant first: a bare name like RANGE is defined in many classes.
         if (constants.has(`${cls}.${id}`)) return numText(constants.get(`${cls}.${id}`));
+        if (constants.has(id)) return numText(constants.get(id));
         failed = true;
         return id;
     });
     if (failed) return null;
     if (!/^[0-9a-z+\-*/()., ]+$/i.test(e)) return null;
+    // An inlined helper without `magnitude` is a constant: fold it to its number (round is Java's Math.round,
+    // which JavaScript's matches). Only the characters checked above can be in it.
+    if (inlined && depth === 0 && !/magnitude/i.test(e)) {
+        const v = new Function('round', 'abs', 'max', 'min', `return (${e});`)(Math.round, Math.abs, Math.max, Math.min);
+        if (Number.isFinite(v)) return numText(v);
+    }
     return e;
 }
 
@@ -168,13 +220,25 @@ const substituteParams = (text, params) => {
 
 // Message args added by a description body: .arg("k", expr), HullSizeTable.withShipSizeArgs(...), and calls into
 // helper methods (followed into their class, with the helper's parameters replaced by the call's arguments).
-const skipCalls = /^(msg|arg|styled|templated|signed|text|format|of|valueOf|get|round|abs|max|min|withShipSizeArgs|affinityScaling|stepSize|count|plain|list)$/i;
+// description: the hand-over between the two description forms, which are both read already (not a helper to follow).
+const skipCalls = /^(msg|arg|styled|templated|signed|text|format|of|valueOf|get|round|abs|max|min|withShipSizeArgs|affinityScaling|stepSize|count|plain|list|description)$/i;
 const skipOwners = ['EffectText', 'Translation', 'Math', 'String', 'List', 'Map', 'NumberText'];
 function getDescriptionArgs(body, cls, params, depth) {
     const out = new Map();
+    // Local numbers the args use (int riftsPerSeries = Listener.riftsPerSeries(...); ... .arg("count", riftsPerSeries)).
+    const locals = new Map(params);
+    for (const v of allMatches(body, /\b(?:final\s+)?(?:int|float|double|long)\s+(\w+)\s*=\s*([^;]+);/g)) {
+        const r = resolveExpression(substituteParams(v[2], locals), cls);
+        if (r) locals.set(v[1], r);
+    }
     for (const a of allMatches(body, /\.arg\(\s*"(\w+)"\s*,\s*((?:[^()]|\((?:[^()]|\([^()]*\))*\))+)\)/g)) {
-        const r = resolveExpression(substituteParams(a[2], params), cls);
+        const r = resolveExpression(substituteParams(a[2], locals), cls);
         if (r && !out.has(a[1])) out.set(a[1], r);
+    }
+    // .count(n) fills {count} (and picks the message's .one/.other form in game).
+    for (const c of allMatches(body, /\.count\(\s*((?:[^()]|\((?:[^()]|\([^()]*\))*\))+)\)/g)) {
+        const r = resolveExpression(substituteParams(c[1], locals), cls);
+        if (r && !out.has('count')) out.set('count', r);
     }
     for (const m of allMatches(body, /\b(?:(\w+)\.)?(\w+)\.withShipSizeArgs\(/g)) {
         const key = m[1] !== undefined ? `${m[1]}.${m[2]}` : m[2];
@@ -241,6 +305,43 @@ if (sgf) {
 if (statGroups.length) say(`Stat sheet: ${statGroups.length} sections, ${packageGroups.size} effect packages mapped`);
 else warn("  ! StatGroup.java not found or not parsed; the Stats tab will put everything under one section");
 
+// Effects built on a backing class (a record or class implementing EffectBacking, made by a factory such as
+// DamageTakenWhile.within(condition, describedRange)) keep their mode, stat and wording in that class. Returns its
+// name, source and description bodies (with the factory's function arguments filled in), or null.
+function backingOf(body) {
+    for (const m of allMatches(body, /\b([A-Z]\w*)\.(\w+)\s*\(/g)) {
+        const src = classText.get(m[1]);
+        if (!src || !/\b(?:record|class)\s+\w+[^{]*\bimplements\b[^{]*\bEffectBacking\b/.test(src)) continue;
+        const open = m.index + m[0].length - 1;
+        const close = findClose(body, open);
+        const callArgs = close < 0 ? [] : splitTopLevel(body.slice(open + 1, close));
+        const def = new RegExp(String.raw`\bstatic\s+\w+\s+${m[2]}\s*\(([^)]*)\)`).exec(src);
+        // Function arguments, applied to the context: a method reference Owner::method, or a lambda x -> expr.
+        const fns = new Map();
+        if (def) {
+            splitTopLevel(def[1]).forEach((p, k) => {
+                const a = callArgs[k] ?? '';
+                const name = p.split(/\s+/).at(-1);
+                const ref = /^([A-Z]\w*)::(\w+)$/.exec(a);
+                const lambda = /^\(?\s*\w+\s*\)?\s*->\s*(.+)$/s.exec(a);
+                if (ref) fns.set(name, `${ref[1]}.${ref[2]}(context)`);
+                else if (lambda) fns.set(name, `(${lambda[1]})`);
+            });
+        }
+        const describe = [];
+        for (const d of allMatches(src, /\b(?:description|describe)\s*\(\s*SkillEffect\s+\w+\s*,\s*float\s+magnitude\s*(?:,\s*DescribeContext\s+\w+\s*)?\)\s*\{/g)) {
+            const bOpen = d.index + d[0].length - 1;
+            const bClose = findClose(src, bOpen);
+            if (bClose < 0) continue;
+            let b = src.slice(bOpen + 1, bClose);
+            for (const [name, call] of fns) b = b.replace(new RegExp(String.raw`\b${name}\.apply\w*\(\s*\w+\s*\)`, 'g'), () => call);
+            describe.push(b);
+        }
+        return { cls: m[1], src, describe };
+    }
+    return null;
+}
+
 const effects = new Map();
 for (const f of javaFiles.filter((x) => lower(x.name).endsWith('skilleffect.java'))) {
     const text = readText(f.full).replace(/\r/g, '');
@@ -256,11 +357,14 @@ for (const f of javaFiles.filter((x) => lower(x.name).endsWith('skilleffect.java
         const info = {};
         info.group = packageGroups.has(f.pkg) ? packageGroups.get(f.pkg) : defaultGroup;
 
-        let mode = /(?:statEffect|ConditionalStatEffect|DerivedStatEffect|ScaledBonus|statEffectFor\w*)\s*\(\s*(?:StatMode\.)?(PERCENT|FLAT|MULT)\b/.exec(body);
+        const backing = backingOf(body);
+        const modeRe = /(?:statEffect|ConditionalStatEffect|DerivedStatEffect|ScaledBonus|statEffectFor\w*)\s*\(\s*(?:StatMode\.)?(PERCENT|FLAT|MULT)\b/;
+        let mode = modeRe.exec(body);
         if (!mode) mode = /\b(PERCENT|FLAT|MULT)\s*,/.exec(body);
+        if (!mode && backing) mode = modeRe.exec(backing.src);
         if (mode) info.mode = lower(mode[1]);
 
-        const stat = /"(stat\.[A-Za-z0-9_.]+)"/.exec(body);
+        const stat = /"(stat\.[A-Za-z0-9_.]+)"/.exec(body) ?? (backing ? /"(stat\.[A-Za-z0-9_.]+)"/.exec(backing.src) : null);
         if (stat) info.stat = stat[1];
         else {
             const sc = /\b(?:([A-Z][A-Za-z]+)\.)?([A-Z][A-Z0-9_]+)\s*,\s*(?:true|false)\s*\)/.exec(body);
@@ -270,7 +374,8 @@ for (const f of javaFiles.filter((x) => lower(x.name).endsWith('skilleffect.java
                 else if (stringConstants.has(sc[2])) info.stat = stringConstants.get(sc[2]);
             }
         }
-        if (/,\s*true\s*\)\s*\)/i.test(body) || /lowerIsBetter\(\)\s*\{\s*return\s+true/i.test(body)) info.lowerIsBetter = true;
+        if (/,\s*true\s*\)\s*\)/i.test(body) || /lowerIsBetter\(\)\s*\{\s*return\s+true/i.test(body)
+            || (backing && /lowerIsBetter\(\)\s*\{\s*return\s+true/i.test(backing.src))) info.lowerIsBetter = true;
 
         const args = new Map();
         // Affinity-scaled effects (AffinityScaling backing) word themselves with {step} = the scaling's step size.
@@ -281,12 +386,17 @@ for (const f of javaFiles.filter((x) => lower(x.name).endsWith('skilleffect.java
             step = /^\d+$/.test(sv) ? sv : constants.has(`AffinityScaling.${sv}`) ? numText(constants.get(`AffinityScaling.${sv}`)) : null;
             if (step) args.set('step', step);
         }
-        const desc = /description\s*\(\s*float\s+magnitude\s*\)\s*\{(.*?)\n {8}\}/s.exec(body);
-        if (desc) {
+        // The wording method: description(float magnitude), and/or description(float magnitude, DescribeContext context),
+        // which the one-argument form may just hand over to. Both bodies are read (resolveExpression treats
+        // context.magnitudeOf(X) as 0). An effect built on a backing class (backingOf) is worded there instead.
+        let descBodies = allMatches(body, /description\s*\(\s*float\s+magnitude\s*(?:,\s*DescribeContext\s+\w+\s*)?\)\s*\{(.*?)\n {8}\}/gs).map((d) => d[1]);
+        let descCls = cls;
+        if (!descBodies.length && backing?.describe.length) { descBodies = backing.describe; descCls = backing.cls; }
+        if (descBodies.length) {
             info.custom = true;
-            let dbody = desc[1];
+            let dbody = descBodies.join('\n');
             if (step) dbody = dbody.replace(/affinityScaling\(\)\.stepSize\(\)/gi, () => step);
-            const found = getDescriptionArgs(dbody, cls, new Map(), 0);
+            const found = getDescriptionArgs(dbody, descCls, new Map(), 0);
             for (const [k, v] of found) if (!args.has(k)) args.set(k, v);
             // LowBaseArmorBonus.*ByHullSize(magnitude): one value per hull size joined with "/", plus per-hull values
             // for the hull-specific wording (effect.NAME.hullSize).
@@ -302,6 +412,20 @@ for (const f of javaFiles.filter((x) => lower(x.name).endsWith('skilleffect.java
                 info.hullArgs = hullArgs;
             }
             if (/EffectText\.(signed)\(/.test(dbody)) info.signed = true;
+            // StatMode.describeStat(±magnitude, [subject,] "stat.x"): the game words the effect with that mode and stat,
+            // with the magnitude's sign flipped when it's passed as -magnitude (the survey cost reductions, stored as
+            // positive amounts), and with a subject first ("Your fleet has", desc.<mode>.<up|down>.subject).
+            const ds = /\b(PERCENT|FLAT|MULT)\.describeStat\(\s*(-)?\s*magnitude\s*,\s*(?:("subject\.[\w.]+"|[A-Z][A-Z0-9_]*)\s*,\s*)?"(stat\.[\w.]+)"\s*\)/.exec(dbody);
+            if (ds) {
+                info.mode = lower(ds[1]);
+                info.stat = ds[4];
+                if (ds[2]) info.negate = true;
+                if (ds[3]) {
+                    const subj = ds[3].startsWith('"') ? ds[3].slice(1, -1) : stringConstants.get(`${descCls}.${ds[3]}`) ?? stringConstants.get(ds[3]);
+                    if (subj && subj.startsWith('subject.')) info.subject = subj;
+                    else warn(`  ! ${name}: describeStat subject ${ds[3]} not resolved; worded without it`);
+                }
+            }
         }
         // Effects that refuse allocation on some ships (shield type, phase hull, base armor, wings). app.js words each one.
         if (/\bblockAllocationReason\s*\(\s*ShipFacts/i.test(body)) info.blocks = true;
@@ -334,10 +458,12 @@ if (wsf) {
     }
 }
 
-// Effects actually used by skill types, plus the string templates they need.
+// Effects actually used by skill types, plus the string templates they need. A type's `integrated` block (the effects
+// an integrated node uses instead, like an s-mod) counts too, so its effects get their wording.
 const usedEffects = new Set();
 for (const t of types) {
-    for (const e of [...asList(t.effects), ...asList(t.hullSizeEffects)]) if (e && e.effect) usedEffects.add(e.effect);
+    for (const e of [...asList(t.effects), ...asList(t.hullSizeEffects), ...asList(t.integrated?.effects),
+        ...asList(t.integrated?.hullSizeEffects)]) if (e && e.effect) usedEffects.add(e.effect);
 }
 
 // ---------------------------------------------------------------- subroutines (socket items besides anchors)
@@ -400,7 +526,7 @@ say(`Subroutines: ${subroutines.length} items, ${subroutineModifiers.size} doctr
 
 const effectOut = new Map();
 const neededStrings = new Map();
-for (const [k, v] of strings) if (startsCaseless(k, 'desc.') || startsCaseless(k, 'stat.') || startsCaseless(k, 'weapon.')) neededStrings.set(k, v);
+for (const [k, v] of strings) if (startsCaseless(k, 'desc.') || startsCaseless(k, 'stat.') || startsCaseless(k, 'weapon.') || startsCaseless(k, 'subject.')) neededStrings.set(k, v);
 const missing = [];
 for (const name of sorted(usedEffects)) {
     let info = effects.has(name) ? effects.get(name) : {};
@@ -534,7 +660,7 @@ else warn('  ! no optional volume toggles found (VolumeToggles / SkillTreeSettin
 
 // UI strings the planner reuses.
 const uiPrefixes = ['ui.node.', 'tier.', 'node.block.', 'node.requires.', 'socketable.anchor.gate.', 'socketable.doctrine.', 'socketable.radius',
-    'socketable.rootConduit.', 'subroutine.grant.', 'ui.stats.group.', 'summary.gated.'];
+    'socketable.rootConduit.', 'subroutine.grant.', 'ui.stats.group.', 'summary.gated.', 'node.integration.'];
 const uiKeys = ['settings.volumes.header', 'settings.volumes.about', 'summary.forFirst', 'ui.stats.expand', 'ui.stats.collapse', 'ui.stats.nodes', 'ui.stats.breakdown.heading'];
 for (const [k, v] of strings) {
     if (uiPrefixes.some((p) => startsCaseless(k, p)) || inCaseless(k, uiKeys)) neededStrings.set(k, v);
@@ -544,8 +670,10 @@ for (const [k, v] of strings) {
 const present = (v) => v !== null && v !== undefined;
 const typeOut = types.map((t) => {
     const o = { id: t.id ?? null, name: t.name ?? null, icon: t.icon ?? null, tier: truthy(t.tier) ? t.tier : 'SMALL' };
+    // integrated: the effects (and effectText) an integrated node uses instead of its normal ones (app.js integratedOn).
     for (const k of ['effects', 'hullSizeEffects', 'options', 'tags', 'flavour', 'effectText', 'phantomHullMods', 'exclusiveHullMods',
-        'exclusiveSkillTypes', 'vanillaHullMod', 'requiredHullSizes', 'itemCost', 'unlockConditions', 'todo', 'temporaryAfterDeploymentSeconds']) {
+        'exclusiveSkillTypes', 'vanillaHullMod', 'requiredHullSizes', 'itemCost', 'unlockConditions', 'todo', 'temporaryAfterDeploymentSeconds',
+        'integrated']) {
         if (present(t[k])) o[k] = t[k];
     }
     return o;
@@ -564,6 +692,7 @@ const now = new Date();
 const data = {
     generated: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`,
     modVersion: null,
+    modGit: undefined,   // set below when the mod checkout is a git repo
     nodes: nodeOut,
     curves: asList(tree.connectorCurves),
     hiddenConnectors: asList(tree.hiddenConnectors),
@@ -596,6 +725,22 @@ if (exists(modInfo)) {
     const mo = /"version"\s*:\s*\{\s*"major"\s*:\s*(\d+)\s*,\s*"minor"\s*:\s*(\d+)\s*,\s*"patch"\s*:\s*(\d+)/.exec(infoText);
     if (mv) data.modVersion = mv[1];
     else if (mo) data.modVersion = `${mo[1]}.${mo[2]}.${mo[3]}`;
+}
+// Where the mod checkout stands in git, for the planner's footer: the nearest release tag and how many commits past it,
+// the commit, the branch (none when detached, as update.mjs leaves a release) and uncommitted changes. mod_info.json
+// keeps the last release's version on a branch like Dev, so this is what tells unreleased data apart.
+if (existsSync(join(ModRoot, '.git'))) {
+    const desc = git(ModRoot, ['describe', '--tags', '--long', '--dirty', '--always'], { allowFail: true });
+    if (desc) {
+        const dirty = desc.endsWith('-dirty');
+        const d = dirty ? desc.slice(0, -'-dirty'.length) : desc;
+        const m = /^(.+)-(\d+)-g([0-9a-f]+)$/.exec(d);
+        const modGit = m ? { release: m[1], ahead: Number(m[2]), commit: m[3] } : { commit: d };
+        const branch = git(ModRoot, ['rev-parse', '--abbrev-ref', 'HEAD'], { allowFail: true });
+        if (branch && branch !== 'HEAD') modGit.branch = branch;
+        if (dirty) modGit.dirty = true;
+        data.modGit = modGit;
+    }
 }
 
 const outFile = join(WebRoot, 'data', 'planner-data.js');

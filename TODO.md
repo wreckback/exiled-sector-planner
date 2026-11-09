@@ -2,41 +2,9 @@
 
 Inside the planner folder or beside it. Check how the other work environment has it laid out first. Then make the tools' default `--mod-root`, the README and `CLAUDE.md` match.
 
-# Now: finish the Node port of tools/ (branch `node-tools`)
-
-Decided 2026-11-09: one Node toolset for Windows and Linux (Node >=26, no npm dependencies); the `.ps1` files get deleted at the end. Remove this section once the port is merged.
-
-Done and committed (`8ae1cd1` on `node-tools`, not pushed): `package.json`, `.nvmrc`, `tools/lib/common.mjs`, `tools/extract.mjs`, `tools/serve.mjs`.
-- `extract.mjs` matches `extract.ps1` with 0 value differences (on Windows and on Linux); only the key order of `effects` and `strings` differs, which `app.js` doesn't depend on (it looks both up by name).
-- `serve.mjs` passed the same checks as `serve.ps1`: file types, 404, path escapes, bad encoding, `version.js` = `git describe`.
-
-To do, in this order:
-1. ~~Commit the two tools~~ (done, `8ae1cd1`).
-2. ~~Port `update.ps1`~~ (done, `tools/update.mjs`, `ece9990`). Same report and same `mod-sync.json` values as `update.ps1` over 8 scenarios: as is, an older sync baseline, a baseline 78 commits back (rule file list), no previous data or sync, made-up tree changes, `--tag`, newest tag with fetch, a dirty mod checkout, and `--commit` (on scratch clones). Differences on purpose, for the CHANGELOG:
-   - It flags newly missing images even when the last sync had none. The PowerShell version couldn't: an `if` that returns an empty list gives `$null` there, so an empty `absentImages` (or `noWording`) counted as "no record".
-   - Messages name `extract.mjs`, `getDescriptionArgs` and `--no-checkout`/`--commit`, and show the mod checkout's real path instead of `ExiledSector\`.
-   - Name, tier and wording changes are compared with case (PowerShell's `-ne` ignores it), and type fields are compared with sorted keys, so the PowerShell and Node extractors' key order doesn't show up as a change.
-   - `mod-sync.json` is written with 4-space `JSON.stringify` indentation (a one-time formatting diff).
-3. ~~Port `package.ps1`~~ (done, `tools/package.mjs`, `0e75f5a`). One `git archive` call writes the zip (git >=2.39 for `--add-virtual-file`), no zip package and no temp folder. For all 6 planner tags the unpacked zip matches the `.ps1` one byte for byte, except the `version.js` comment naming the tool. Also checked: the three refusals (no tag on HEAD, a bad tag name, a missing tag), a tag without `+es` (mod release from that tag's `mod-sync.json`, beta wording; in a scratch clone), and the zip's footer in headless Edge. Notes:
-   - It archives `<tag>:web` (the four site files), which leaves the repo's `.gitattributes` behind, so it runs git with `core.autocrlf=false`: otherwise a Windows git writes the files with CRLF.
-   - `--prefix` doesn't apply to `--add-virtual-file`, so `version.js` and `README.txt` are given the top folder in their path.
-   - Differences on purpose: the zip also has folder entries; a tag's `mod-sync.json` is only read when the tag has no `+es` part (the `.ps1` read it always, and failed without one); messages name `--tag` and `release.mjs`.
-   - Zip file dates are the build time, as before. `--mtime` (git >=2.42) could make rebuilds identical; not done.
-4. ~~Port `release.ps1`~~ (done, `tools/release.mjs`). Tested against `release.ps1` in a scratch clone with a scratch bare repo as `origin`: the same tag name and message over 11 dry runs (continue to a release, each `--pre` stage, `--rc`, each `--bump`, `--version`, `--plain`), the same refusals (bad `--version`, `--rc` with another `--pre`, not newer than the last release, dirty tree, mod at another commit, data vs `mod-sync.json`, a stage after a later one), identical annotated tag messages from a real tag, and `--push`. Differences on purpose:
-   - `--pre` and `--bump` take any case and lowercase it: `-Pre Beta` made `v0.2.0-Beta.1` in the PowerShell version. A bad value gets the tool's own message instead of PowerShell's ValidateSet error.
-   - Without a mod checkout at the mod root it prints a note that the data isn't checked against it (the `.ps1` skipped that check silently, which on a machine with the mod beside the planner is every time without `-ModRoot`). It also reads `ESP_MOD_ROOT`.
-   - Messages name the `.mjs` tools, the `--` options and "the mod checkout" instead of `ExiledSector`.
-5. ~~Regenerate `web/data/planner-data.js` with `extract.mjs`~~ (done, `abfffd9`: values unchanged, checked by value and in headless Edge).
-6. ~~Update README, `TOOLS.md`, `CLAUDE.md` and `CHANGELOG.md`~~ (done; also the `app.js` missing-data message and comments, `version.js`, `.gitignore`, `package.json`). Then delete the `.ps1` files in a final commit.
-
-Testing notes:
-- Compare data by value with a script that parses both `planner-data.js` files, drops `generated` and deep-compares (the last one was in a session scratchpad; rewrite it if gone). Build the PowerShell baseline into a scratch folder with `extract.ps1 -ModRoot ... -WebRoot <scratch>`.
-- PowerShell habits to port carefully: `-match`/`-like`/`-in`/`-contains` ignore case (use the `i` flag), `@($null)` is `[null]`, numbers as text use 15 significant digits.
-- Test on Linux as well as Windows, from a case-sensitive copy of both repos. How to do that on a given machine (WSL, nvm) is in its `CLAUDE.local.md`.
-
 # Next: follow-ups from the PR #1 review (`node-tools`)
 
-From the code review of PR #1 (2026-11-09). Already fixed in `4fe0eaa`: `/dist/` in `.gitignore`, `update.mjs --commit` commits only `SyncFiles`, and `git()` allows 64 MB of output. The rest, with the suggested fix for each. Suggested order: 1, 2 and 5 in one commit (behaviour and docs), then 3, 4 and 6. After each, check that `extract.mjs` output is byte-identical apart from `generated` and that `update.mjs` gives the same report, on Windows and under WSL (item 2 is a Linux problem).
+From the code review of PR #1 (2026-11-09). Already fixed in `4fe0eaa`: `/dist/` in `.gitignore`, `update.mjs --commit` commits only `SyncFiles`, and `git()` allows 64 MB of output. The rest, with the suggested fix for each. Suggested order: 1 and 2 in one commit, then 3 and 6. After each, check that `extract.mjs` output is byte-identical apart from `generated` and that `update.mjs` gives the same report, on Windows and under WSL (item 2 is a Linux problem).
 
 1. **Error messages can be lost on exit** (`common.mjs` `fail()`, `update.mjs` dirty mod checkout list). They print and then call `process.exit()` straight away, and Node can drop output that hasn't been written yet where stdout/stderr are asynchronous (Windows terminals, macOS pipes). Fix in `common.mjs`:
    - `fail()` throws a small `ToolExit` error with the message, and a `process.on('uncaughtException')` handler prints a `ToolExit` (no stack trace), sets `process.exitCode = 1` and returns, so Node ends on its own once output is written. Other errors still crash as now.
@@ -46,28 +14,55 @@ From the code review of PR #1 (2026-11-09). Already fixed in `4fe0eaa`: `/dist/`
    - Move `extract.mjs`'s `javaFilesUnder` (sorted, files before subfolders, dot-folders skipped) into `common.mjs`, with the mod root as a parameter, and build `javaText` on it, keeping the first match per lowercased name.
    - Optionally flag a name found in two modules in the update report, instead of picking one silently.
 3. **The planner tag pattern is written twice and differs:** `package.mjs` is case-sensitive and wants `+es…`, while `release.mjs` uses `/i` and accepts any `+…`. All tags so far are lowercase `+es…`, so nothing breaks today. Fix: export one `PlannerTag` pattern and a `parseTag(name)` from `common.mjs` (case-insensitive, stage lowercased, returning `{major, minor, patch, stage, n, build}`), and let `package.mjs` check `build?.startsWith('es')` itself.
-4. **`serve.mjs` and `version.js`:**
-   - With `--root` pointing at another folder (such as an unpacked release zip in `dist/`), it still answers `/version.js` from the planner repo's `git describe`, so the zip's footer shows the working tree's version. Answer from git only when the served folder is the repo's own `web/`; otherwise serve the folder's `version.js` from disk.
-   - Every `/version.js` request runs `git describe --dirty` synchronously and blocks other requests. Keep the result for about 2 seconds (short, so `-dirty` still follows edits).
-5. **Stale `.ps1` references here in TODO.md:** the Node port section above (its line 7 says to remove it once the port is merged, and its testing note names `extract.ps1`), and the "art" vs "assets" item, which names "the release README.txt from `package.ps1`" (now `package.mjs`).
+4. ~~**`serve.mjs` and `version.js`**~~ (done with `update.mjs --preview`: only the repo's own `web/` gets its version from git, and `git describe` is kept for 2 seconds).
+5. ~~**Stale `.ps1` references here in TODO.md**~~ (done: the finished Node port section is removed, and the "art" vs "assets" item names `package.mjs`).
 6. **Cleanups:**
    - Copied helpers: move `lines` (`release.mjs`, `update.mjs`), `collator`/`sorted` (`extract.mjs`, `update.mjs`) and the `pad`/`now` timestamp (both) into `common.mjs`.
    - `extract.mjs`'s own `exists` duplicates `existsSync`; delete it.
    - The effect wording loop in `extract.mjs` scans every string for every used effect, lowercasing both each time. Index the strings once (lowercased effect name to its `effect.NAME…` keys, in string-table order) so each effect is one lookup. Key order stays the same, so the output should stay byte-identical; check it.
    - Also from the review, not covered above: `release.mjs` works out the mod root itself instead of using `modRootFrom` (give it a non-failing option such as `{ required: false }`), and `update.mjs` reports a killed `extract.mjs` as "failed (undefined)" (add `run.signal` to the message).
+   - `update.mjs --report` starts recording after the `--preview` refusals (`--commit`, `--tag`), so those two leave no report file. Start recording before them.
+
+# Next: from the preview of the mod's `Dev` work (2026-11-09)
+
+1. ~~**Regenerate `web/data/planner-data.js` for the Rift Strike fix.**~~ (done by the 0.12.0 sync, `9968e3d`: 50% and 500 now.) The extractor used to take a bare constant from whichever class defined it first, so Rift Strike and Strikecraft Rift Strike show a 10% damage share and a 100 maximum instead of the mod's 50% and 500 (wrong since the first data commit, `460d7d0`). The fixed extractor gives the right values. Regenerate from the 0.11.2-alpha source without moving the mod checkout: export it with `git -C <mod> archive 3fe80956 | tar -x -C <scratch>` and run `extract.mjs --mod-root <scratch>`. Only those two effects change (plus two extra values the page doesn't show). `mod-sync.json` stays as it is.
+2. **The mod released the `Dev` work as 0.12.0, synced 2026-11-09 (`9968e3d`).** Still to check:
+   - ~~`BALLISTIC_WEAPON_LARGE_OP_COST_FLAT` became a plain flat stat effect~~ (checked after the 0.12.0 sync: the planner already guessed `flat` from the name, so Heavy Ballistics Integration reads the same, "−5 to ordnance point cost of large ballistic weapons" in green).
+   - The rule files the report lists were reviewed on 2026-11-09 (mod `93ceafe2`): `AffinityScaling`/`AffinitySteps` now allow a tolerance on "all affinities equal" from a new `AFFINITY_EQUALITY_TOLERANCE_FLAT` effect (the planner doesn't compute those scaled bonuses, and no node grants the effect yet); `ShipStatSheets` adds refining effects to a line's Sources (the Full Sheet's Sources may show less than the game's); `SkillType` is integrated nodes (see Later); `SkillTreeEffectSource`, `SkillTreeSettings` and `NodeAllocator` don't affect the planner. Look again at anything changed after `93ceafe2`.
+   - The two fighter effects newly without wording (see Later).
 
 # Later
 
 Ideas noted for a future pass. Not built yet.
 
+- **Integrated nodes: check the design** (built 2026-11-09). The tooltip and list view compare normal and integrated effects either side by side or inline with values in brackets (the panel's Integrated effects setting; inline is the default since 2026-11-09, measured over 156 types as about a third shorter). If either reads badly in use, change it. A third view copying the game (green changed lines, "No longer:", a muted "When integrated" list) was offered and not built. Other ideas from the design talk: only the lines that differ, or a key to flip the tooltip to the other set. Also check `STORY_GREEN`/`--builtin` against the game's real story point colour (`Misc.getStoryOptionColor()`), which isn't in the mod's sources.
+
+- **Wormhole travel is right-click in the mod now** (released in 0.12.0; mod `Dev` `1e0a37d4`): right-click jumps through a wormhole or boards the exoship, and Ctrl+click on a wormhole allocates it (on a socket with an open anchor, it opens Socket Items). The planner jumps with Ctrl+click and removes nodes with right-click. Decide whether to match.
+
+- **Fighter role-stat effects have no wording** (`FIGHTER_TOP_SPEED_PERCENT`, `FIGHTER_WEAPON_RANGE_PERCENT` and others in `mod-sync.json`'s `noWording`; integrated effects on `Dev` add `FIGHTER_DAMAGE_TAKEN_MULT` and `FIGHTER_WEAPON_RANGE_FLAT`). They're built from `RoleStat` in `FighterSkillEffect`, worded somewhere the extractor doesn't read yet.
+
 - **Ship tab: hover explanations for each setting.** Add a tooltip (`title` or a small hover box) per row in `#panel-ship` saying what the setting means and which nodes it affects. For example:
   - **Only built-in fighter wings:** the hull has at least one built-in wing and every fighter bay is taken by built-in wings (`ShipFacts.onlyBuiltInWings`: `builtInWings > 0 && fighterBays <= builtInWings`, e.g. a Tempest). It only affects Converted Fighter Bay (`REMOVE_ALL_FIGHTER_BAYS`), which needs "Yes".
   - Do the same for shield, base armor, civilian-grade hull, system charges and station modules.
 
-- **Split `web/app.js` into smaller files** (about 3,500 lines now). Do it at a quiet moment, ideally before the next big feature (a public build, another mod sync):
-  - **Files:** about 7, along the existing section boundaries: model, rules, subroutines, templates, render, ui, plus a small start file.
-  - **No ES modules:** Chrome blocks `import`/`export` on `file://`, and the page and the release zip must keep working from a double-clicked `index.html`. Use classic `<script>` tags in load order, sharing one namespace object.
-  - **Scope:** no behaviour change. Re-test every feature in the browser (rules, subroutines, templates, codes, panels, dialogs), then commit the split on its own so it's easy to revert. Update the `index.html` script tags, CLAUDE.md's architecture section and the release zip steps.
+- **Split `web/app.js` into smaller files** (about 5,400 lines now). Do it at a quiet moment, ideally before the next big feature (a public build, another mod sync):
+  - **Files:** split by responsibility, keeping logic (rules, paths, target planner, totals, wording) apart from canvas and DOM code, with dependencies one way (core, rules, render/ui, start). For example: `core/` (constants, model, state), `rules/` (eligibility, paths, subroutines, targets), `data/` (templates, codes, serialize), `text/` (describe, totals, statsheet), `render/` (camera, draw, theme, images), `ui/` (dom, tooltip, picker, panel, listview, input, dialogs), `main`. Name ported files after the mod class they mirror (`eligibility` for `NodeEligibility`), and give each a header saying what it holds.
+  - **No ES modules in what users get:** Chrome blocks `import`/`export` on `file://`, and the page and the release zip must keep working from a double-clicked `index.html`. Either bundle real modules into one classic `web/app.js` (see "Consider a bundler" below; preferred), or use classic `<script>` tags in load order sharing one namespace object (no tooling, but order and shared names are managed by hand).
+  - **Tools:** `extract.mjs` can split without a build (Node modules): the Java source reading (constants, `resolveExpression`, helper inlining, `backingOf`) into `tools/lib/java.mjs`, the rest by what it extracts; `update.mjs`'s checks into `tools/lib/checks.mjs`.
+  - **Scope:** no behaviour change. Re-test every feature in the browser through `window.planner` (rules, subroutines, templates, codes, panels, dialogs), check `extract.mjs` output is byte-identical, then commit the split on its own so it's easy to revert. Update CLAUDE.md's architecture section (it could become a file map) and the release steps.
+
+- **Consider a bundler (esbuild) for `web/`.** Write real modules in `src/`, and bundle them into one classic script (`--format=iife`) at `web/app.js`, so users get exactly what they get now: one file, working from `file://`, the same size (scope hoisting adds almost nothing).
+  - Settings: target modern browsers (`--target=es2022` or so) so no helpers or rewritten syntax get added, add no runtime libraries, and don't minify (the zip runs locally, the data file is the larger half anyway, and readable shipped code helps debugging).
+  - Commit the built `web/app.js` so `package.mjs` keeps zipping the tag as now. Release flow: build, commit source and build together, `release.mjs`, `package.mjs`, upload the zip to a GitHub Release. Have `release.mjs` run the build and refuse to tag if it changes `web/app.js`. (The alternative, building only in `package.mjs`, can't be forgotten but means a fresh clone needs a build before the page runs.)
+  - Optional later: a GitHub Actions workflow that packages and publishes the GitHub Release when a tag is pushed.
+  - Cost is developer-side only: `esbuild` (about 10 MB) as the first npm devDependency, and a build step (well under a second, can watch). `CLAUDE.md`'s "no build step, no npm dependencies" wording changes; it stays true for users.
+
+- **Consider TypeScript.** Users must still get plain JavaScript; the choice is where it gets converted:
+  - **Tools:** Node 26 runs `.ts` directly (type stripping), so `tools/*.mjs` could become `.ts` with no build. Only erasable syntax (no `enum`, `namespace` or constructor parameter properties). Check types with `tsc --noEmit`. Needs Node 26 everywhere (`.nvmrc` already asks for it).
+  - **Site, no build:** keep JavaScript, add `// @ts-check` and JSDoc types plus a `.d.ts` for `PLANNER_DATA`, and check with `tsc --noEmit`. Most of the safety, nothing to build.
+  - **Site, with the bundler:** write `src/*.ts`; esbuild strips the types while bundling (no size cost). Pairs with the split and the bundler above; convert files one at a time after the split.
+  - Not in-browser compiling (a large download in the zip, slow start).
+  - Cost: `typescript` (20 MB+) as a devDependency, developer-side only.
 
 - **Wormhole pairs: check the layout and the jump wording.** The core has 3 pairs (6 wormholes), named here by nearest root: `hightech_wormhole_1` (High Tech) <-> `midline_wormhole_1` (Midline), `hightech_wormhole_2` (High Tech) <-> `lowtech_wormhole_2` (Low Tech), `lowtech_wormhole_1` (Low Tech) <-> `wormhole_6` (High Tech, or between regions). By nearest root there's no Low Tech <-> Midline pair, so check where `wormhole_6` really sits. Related:
   - Jump texts now name a core destination by its id, "Core (midline_wormhole_1)" (`placeName`; the user's choice 2026-11-09), and lists say just "Core". The mod names no sides: it says "Ctrl-click to travel through it" and calls the core the "Core volume".
@@ -87,7 +82,7 @@ Ideas noted for a future pass. Not built yet.
 
 - **"hullmod" everywhere, after all text review files are done.** The mod writes "hullmods"; the user wants the planner to match. Sweep the code's "hull mod(s)" (tooltips, block messages, toasts, dialogs, README) once every review file is reviewed.
 
-- **"art" vs "assets": ask the user whether to rename project-wide.** In the toolbar review the Mod art button became **Show mod assets** / **Loading assets…** / **Reconnect assets** / **Mod assets**, and its hover and the first-visit toast now say "assets" (the Mod art dialog's "Reconnect assets in the top bar" too, since it names the button). Everything else still says "art": the Mod art dialog title and text (text-review-dialogs.md), the placeholder status line, README (Mod art section, "Show mod art", "Reconnect art"), the release README.txt from `package.ps1`, CLAUDE.md and code comments. Ask before changing these.
+- **"art" vs "assets": ask the user whether to rename project-wide.** In the toolbar review the Mod art button became **Show mod assets** / **Loading assets…** / **Reconnect assets** / **Mod assets**, and its hover and the first-visit toast now say "assets" (the Mod art dialog's "Reconnect assets in the top bar" too, since it names the button). Everything else still says "art": the Mod art dialog title and text (text-review-dialogs.md), the placeholder status line, README (Mod art section, "Show mod art", "Reconnect art"), the release README.txt from `package.mjs`, CLAUDE.md and code comments. Ask before changing these.
 
 - **Bring back "Copy link to this build"** (removed from the Templates dialog's Other ways to export on 2026-11-09). With the planner run as a local copy, a link only opens on the same computer, so it adds nothing over the saved build and Copy code. Worth adding back once the planner is hosted somewhere others can open it. `shareUrl()` and loading `#b=` links are still in `app.js`; the old button was `#btn-share` with the toasts "Link copied. It contains the whole build." / "Copy this link:" (TP97, TP102, TP103 in text-review-templates.md).
 
