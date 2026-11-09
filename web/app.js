@@ -1273,7 +1273,9 @@
     const src = integ && t.integrated ? t.integrated : t;
     const out = [];
     for (const e of src.effects || []) out.push({ effect: e.effect, magnitude: e.magnitude });
-    for (const e of src.hullSizeEffects || []) out.push({ effect: e.effect, magnitude: e[state.hull] ?? 0, hullScaled: true });
+    // A per-hull value of 0 is left out, as the game's HullSizeSkillEffect.addNonZero does (Inertial Supercharging's
+    // damage taken is frigate only, for example), so it shows no "0%" line and gives no source.
+    for (const e of src.hullSizeEffects || []) { const v = e[state.hull] ?? 0; if (v !== 0) out.push({ effect: e.effect, magnitude: v, hullScaled: true }); }
     return out;
   }
   const typeText = (t, integ = false) => (integ && t.integrated && (t.integrated.effectText || []).length ? t.integrated.effectText : t.effectText || []);
@@ -1308,7 +1310,11 @@
     integ.forEach((m, k) => { if (!used.has(k)) rows.push({ kind: 'added', normal: null, integ: m }); });
     return rows;
   }
-  const integrationCompareHtml = (n, t) => (integView === 'inline' ? integrationInlineHtml(n, t) : integrationColumnsHtml(n, t));
+  // On a hull the node's requiredHullSizes refuse, it can't be allocated, so it can't be integrated either: show just its
+  // normal effects (the tooltip gives the refusal), not a comparison (Dedicated Targeting Core on a frigate, say).
+  const hullRefuses = t => { const sizes = t.requiredHullSizes || []; return sizes.length > 0 && !sizes.includes(HULL_ENUM[state.hull]); };
+  const integrationCompareHtml = (n, t) => (hullRefuses(t) ? typeLines(t).map(l => `<div>${l}</div>`).join('')
+    : integView === 'inline' ? integrationInlineHtml(n, t) : integrationColumnsHtml(n, t));
   function integrationColumnsHtml(n, t) {
     const marked = state.integrated.has(n.id);
     // Which column the build uses now (none while the node isn't allocated).

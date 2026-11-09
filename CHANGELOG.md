@@ -67,6 +67,7 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - Totals, the stat sheet and its Sources use the integrated effects. Tooltips and the list view show normal and integrated effects side by side, paired line by line like the game's IntegrationLines. Integrated nodes get a green ring on the map.
 - The build saves its integrations (`ig`). Templates and codes carry them as the game's `integrate` marks, which also fixes saving over a template made in game dropping its marks.
 - The extractor keeps the `node.integration.*` strings, and `styled()` understands `<builtIn>`.
+- Fixed: per-hull effects worth 0 for the chosen hull showed as "0%" lines and counted as sources (Inertial Supercharging's damage taken on cruisers, which the integration comparison then marked as dropped). They're left out now, as in game. Nodes the hull rule refuses, such as Dedicated Targeting Core on a frigate, show only their normal effects instead of a comparison.
 - Fixed: Surveying Equipment and the Survey Cost Reduction nodes showed their cost reductions as "+12 to heavy machinery needed" in red. The extractor now reads the mod's `describeStat` calls, so they read "Your fleet has -12 to …" in green as in game, nav rating and post-battle salvage get "Your fleet has", and eight effects take the mod's own mode.
 
 ## Planner (`web/`)
