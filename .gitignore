@@ -10,3 +10,6 @@
 # Art extracted from the mod. It belongs to the mod and the authors it credits, so it isn't republished here;
 # tools/extract.ps1 copies it from the mod checkout.
 /web/assets/
+
+# Machine-specific notes for Claude Code (this computer's tools and setup).
+/CLAUDE.local.md
