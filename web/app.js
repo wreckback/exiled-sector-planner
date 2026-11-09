@@ -32,6 +32,9 @@
   const DEFAULT_AURORA = [140, 120, 255];
   const SEARCH_GOLD = [255, 211, 77];
   const RULE_PROBLEM = [255, 40, 40];
+  // The story point colour (the game's Misc.getStoryOptionColor, which the mod uses for integrated nodes). The exact
+  // value isn't in the mod's sources; this is a close green, deepened in the light theme like the other colours.
+  const STORY_GREEN = [140, 255, 150];
   const UNALLOCATED_ALPHA = 0.45;
   const VOLUME_NAMES = {
     core: 'Core', luddic: 'Luddic', pirate: 'Pirate', hegemony: 'Hegemony', persean_league: 'Persean League',
@@ -120,6 +123,7 @@
     hiddenVolumes: new Set(),   // Optional Volumes toggles (OPTIONAL_VOLUMES ids) turned off, as in the mod settings
     subs: new Map(),            // socketId -> { id: subroutine id, aff?: conduit affinity effect, grants?: [node ids] }
     template: null,             // { name, sig } of the template the build was loaded from or saved as (top bar)
+    integrated: new Set(),      // integrated node ids (ShipSkillData.integratedNodeIds), see "integrated nodes" below
   };
   const undoStack = [];
 
@@ -347,7 +351,7 @@
   function chooseRoot(n) {
     pushUndo();
     state.root = n.id;
-    state.alloc.clear(); state.choice.clear(); state.links.clear(); state.subs.clear(); state.template = null;
+    state.alloc.clear(); state.choice.clear(); state.links.clear(); state.subs.clear(); state.integrated.clear(); state.template = null;
     waypoints = [];
     changed();
   }
@@ -504,8 +508,71 @@
   }
   function resetBuild() {
     pushUndo();
-    state.root = null; state.alloc.clear(); state.choice.clear(); state.links.clear(); state.subs.clear(); state.template = null;
+    state.root = null; state.alloc.clear(); state.choice.clear(); state.links.clear(); state.subs.clear(); state.integrated.clear(); state.template = null;
     waypoints = [];
+    changed();
+  }
+
+  // ------------------------------------------------------------------ integrated nodes (the mod's IntegratedNodes)
+  // In game a player spends story points to integrate an allocated node on one ship, like building in an s-mod: it then
+  // uses its type's `integrated` block (a full replacement of effects, hullSizeEffects and, when given, effectText).
+  // The nth integration on a ship costs n story points. The planner lets integrations be added and taken back freely and
+  // only shows what they would cost. In game a node stays integrated when unallocated; here that's the "Keep integration
+  // when a node is removed" setting (off: removing a node drops its integration). The preview (integPreview, in memory
+  // only) counts every allocated integrable node as integrated in the totals, tooltips and map, without changing the build.
+  let keepIntegration = false;
+  try { keepIntegration = localStorage.getItem('esp.keepIntegration') === '1'; } catch { /* storage unavailable */ }
+  let integPreview = false;
+  const integrable = t => !!(t && t.integrated);
+  const canIntegrate = n => state.alloc.has(n.id) && integrable(effectiveType(n));
+  // Integrated in the build: allocated, marked, and its current type (a choice node's option) has integrated effects.
+  const isIntegrated = n => state.integrated.has(n.id) && state.alloc.has(n.id) && integrable(effectiveType(n));
+  // What totals, tooltips and the map use: the build's integrations, or every integrable allocated node in the preview.
+  const integratedOn = n => (integPreview ? canIntegrate(n) : isIntegrated(n));
+  // k integrations cost 1 + 2 + ... + k story points (IntegratedNodes.nextCost).
+  const storyPointCost = k => k * (k + 1) / 2;
+  const nextIntegrationCost = () => state.integrated.size + 1;
+  const pointsText = k => `${k} story point${k === 1 ? '' : 's'}`;
+  const integrableAllocated = () => [...state.alloc].map(id => byId.get(id)).filter(n => integrable(effectiveType(n)));
+  function toggleIntegration(n) {
+    if (!n) return;
+    const t = effectiveType(n);
+    if (state.integrated.has(n.id)) {
+      pushUndo();
+      state.integrated.delete(n.id);
+      changed();
+      return;
+    }
+    if (!integrable(t)) { toast(`${t.name} can't be integrated.`); return; }
+    if (!state.alloc.has(n.id)) { toast(`Allocate ${t.name} first to integrate it.`); return; }
+    pushUndo();
+    state.integrated.add(n.id);
+    changed();
+  }
+  // Integrate every allocated integrable node (on) or remove every integration (off). One undo step. Returns the count.
+  function setAllIntegrated(on) {
+    const ids = on ? integrableAllocated().map(n => n.id).filter(id => !state.integrated.has(id)) : [...state.integrated];
+    if (!ids.length) return 0;
+    pushUndo();
+    for (const id of ids) if (on) state.integrated.add(id); else state.integrated.delete(id);
+    changed();
+    return ids.length;
+  }
+  // Without "keep", an integration goes with its node. Run by changed(), so every way of removing nodes is covered.
+  function dropLostIntegrations() {
+    if (keepIntegration) return;
+    for (const id of [...state.integrated]) if (!state.alloc.has(id)) state.integrated.delete(id);
+  }
+  function setKeepIntegration(on) {
+    keepIntegration = !!on;
+    try { localStorage.setItem('esp.keepIntegration', on ? '1' : '0'); } catch { /* storage unavailable */ }
+    // Turning it off drops integrations kept on unallocated nodes, as one undo step.
+    if (!on && [...state.integrated].some(id => !state.alloc.has(id))) pushUndo();
+    changed();
+  }
+  function setIntegPreview(on) {
+    if (integPreview === !!on) return;
+    integPreview = !!on;
     changed();
   }
 
@@ -827,7 +894,9 @@
 
   // ------------------------------------------------------------------ template export
   // Matches the mod's shared template file (SkillTreeTemplateStore / TemplateCodec):
-  //   saves/common/exiledSector_skillTreeTemplates.json.data = {"v":1,"templates":[{v,id,name,root,hull,steps,anchors}]}
+  //   saves/common/exiledSector_skillTreeTemplates.json.data = {"v":1,"templates":[{v,id,name,root,hull,steps,anchors,integrate}]}
+  // integrate (mod 0.12.0): node ids marked for integration, only nodes in the steps (SkillTreeTemplate.marksOnSteps).
+  // In game the marks are reminders (templates never integrate); the planner loads them as integrated nodes.
   // Steps follow TemplateCapture: allocation order, each step joined to the root or an earlier step, a wormhole's
   // partner (or a socket's linked exit) right after it, choice nodes as "node=option", root excluded.
   const TEMPLATE_FILE = 'exiledSector_skillTreeTemplates.json.data';
@@ -863,6 +932,8 @@
     for (const [socket, exit] of state.links) { const a = anchorByExit.get(exit); if (a) anchors[socket] = a.id; }
     return anchors;
   }
+  // The build's integrations as template marks: allocated nodes only, since a mark must be on a step.
+  const templateMarks = () => [...state.integrated].filter(id => state.alloc.has(id));
   function newTemplateId() {
     if (crypto.randomUUID) return crypto.randomUUID();
     const b = crypto.getRandomValues(new Uint8Array(16));
@@ -873,7 +944,12 @@
   // The template the build came from (loaded or saved) is shown in the top bar. `sig` is a hash of the root and steps
   // at that moment, so the bar can say "(edited)" once the build no longer matches.
   const hashText = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
-  const templateSig = () => (state.root ? hashText(state.root + '|' + templateSteps().join(',')) : '');
+  // Integration marks join the signature only when there are any, so older saved signatures still match.
+  const templateSig = () => {
+    if (!state.root) return '';
+    const marks = templateMarks();
+    return hashText(state.root + '|' + templateSteps().join(',') + (marks.length ? '|i:' + marks.join(',') : ''));
+  };
   function setCurrentTemplate(name) {
     state.template = name ? { name: String(name).trim(), sig: templateSig() } : null;
     renderChrome();
@@ -883,6 +959,8 @@
     const t = { v: 1, id: id || newTemplateId(), name: name.trim(), root: state.root, hull: HULL_ENUM[state.hull], steps: templateSteps() };
     const anchors = templateAnchors();
     if (Object.keys(anchors).length) t.anchors = anchors;
+    const marks = templateMarks();
+    if (marks.length) t.integrate = marks;
     return t;
   }
   // Template names: the mod's rules (TemplateNames: trimmed, 1 to 32 characters, unique per root) plus a safe character
@@ -986,6 +1064,7 @@
     if (t.hull) body.hull = t.hull;
     body.steps = Array.isArray(t.steps) ? t.steps : [];
     if (t.anchors && Object.keys(t.anchors).length) body.anchors = t.anchors;
+    if (Array.isArray(t.integrate) && t.integrate.length) body.integrate = t.integrate;
     if (D.modVersion) body.mod = D.modVersion;
     const bytes = new TextEncoder().encode(JSON.stringify(body));
     if (typeof CompressionStream === 'function') return CODE_PREFIX + bytesToB64url(await streamBytes(bytes, new CompressionStream('deflate-raw')));
@@ -1038,6 +1117,7 @@
     if (sh.lockedTypes.size) so.ty = [...sh.lockedTypes];
     if (Object.keys(so).length) o.ship = so;
     if (state.template) { o.tn = state.template.name; o.th = state.template.sig; }
+    if (state.integrated.size) o.ig = [...state.integrated];
     if (state.subs.size) {
       o.sb = {};
       for (const [s, e] of state.subs) {
@@ -1077,6 +1157,7 @@
       : o.wv === 0 ? OPTIONAL_VOLUMES.map(g => g.id) : []);
     state.ship = readShip(o.ship);
     state.template = typeof o.tn === 'string' && o.tn.trim() ? { name: o.tn.trim().slice(0, 64), sig: String(o.th || '') } : null;
+    state.integrated = new Set((Array.isArray(o.ig) ? o.ig : []).filter(id => typeof id === 'string').map(currentNodeId).filter(id => byId.has(id)));
     state.subs = new Map();
     for (const [s, x] of Object.entries(o.sb || {})) {
       if (!x || !SUBS.has(x.i) || !state.alloc.has(s) || state.links.has(s) || byId.get(s)?.tier !== 'SOCKET') continue;
@@ -1109,10 +1190,10 @@
   // ------------------------------------------------------------------ text
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   function styled(text) {
-    // Game markup: <good>, <bad>, <hl>, <muted>. Escape everything else.
+    // Game markup: <good>, <bad>, <hl>, <muted>, <builtIn> (the story point colour). Escape everything else.
     return esc(text)
-      .replace(/&lt;(good|bad|hl|muted)&gt;/g, '<span class="$1">')
-      .replace(/&lt;\/(good|bad|hl|muted)&gt;/g, '</span>');
+      .replace(/&lt;(good|bad|hl|muted|builtIn)&gt;/g, (_, c) => `<span class="${c.toLowerCase()}">`)
+      .replace(/&lt;\/(good|bad|hl|muted|builtIn)&gt;/g, '</span>');
   }
   const plain = html => html.replace(/<[^>]+>/g, '');
   function fmt(v) {
@@ -1181,17 +1262,56 @@
   }
   const describe = (name, mag) => styled(describeRaw(name, mag));
 
-  function typeEffects(t) {
+  // integ: use the type's integrated block (IntegratedEffects: a full replacement of effects and hullSizeEffects, and
+  // of effectText when it has any), as SkillType.effectsFor(hullSize, integrated) does.
+  function typeEffects(t, integ = false) {
+    const src = integ && t.integrated ? t.integrated : t;
     const out = [];
-    for (const e of t.effects || []) out.push({ effect: e.effect, magnitude: e.magnitude });
-    for (const e of t.hullSizeEffects || []) out.push({ effect: e.effect, magnitude: e[state.hull] ?? 0, hullScaled: true });
+    for (const e of src.effects || []) out.push({ effect: e.effect, magnitude: e.magnitude });
+    for (const e of src.hullSizeEffects || []) out.push({ effect: e.effect, magnitude: e[state.hull] ?? 0, hullScaled: true });
     return out;
   }
-  function typeLines(t) {
-    const lines = typeEffects(t).map(e => describe(e.effect, e.magnitude) + (e.hullScaled ? ` <span class="muted">(${hullLabel()})</span>` : ''));
-    for (const txt of t.effectText || []) lines.push(styled(txt));
+  const typeText = (t, integ = false) => (integ && t.integrated && (t.integrated.effectText || []).length ? t.integrated.effectText : t.effectText || []);
+  function typeLines(t, integ = false) {
+    const lines = typeEffects(t, integ).map(e => describe(e.effect, e.magnitude) + (e.hullScaled ? ` <span class="muted">(${hullLabel()})</span>` : ''));
+    for (const txt of typeText(t, integ)) lines.push(styled(txt));
     for (const hm of grantedHullMods(t)) lines.push(`Grants <span class="hl">${esc(hullModName(hm))}</span>.`);
     return lines;
+  }
+  // ---- a type's integrated effects beside its normal ones (tooltip and list view)
+  // Rows pair each normal line with its integrated counterpart the way the game's IntegrationLines does: the same text is
+  // an unchanged row, the same wording with other numbers a changed row, and the rest are lines integrating adds or drops.
+  // DESIGN NOTE: the two-column layout was chosen 2026-11-09 to compare both sets at a glance; if it reads badly in use,
+  // change it (see TODO.md). In narrow windows style.css stacks the two cells of each row.
+  const wordingKey = html => plain(html).replace(/[+-]?\d+(?:[.,]\d+)*/g, '#');
+  function integrationRows(t) {
+    const normal = typeLines(t, false), integ = typeLines(t, true);
+    const match = normal.map(() => -1), used = new Set();
+    const pair = same => normal.forEach((l, i) => {
+      if (match[i] >= 0) return;
+      const j = integ.findIndex((m, k) => !used.has(k) && same(l, m));
+      if (j >= 0) { match[i] = j; used.add(j); }
+    });
+    pair((l, m) => plain(l) === plain(m));
+    pair((l, m) => wordingKey(l) === wordingKey(m));
+    const rows = normal.map((l, i) => (match[i] < 0 ? { kind: 'dropped', normal: l, integ: null }
+      : { kind: plain(l) === plain(integ[match[i]]) ? 'same' : 'changed', normal: l, integ: integ[match[i]] }));
+    integ.forEach((m, k) => { if (!used.has(k)) rows.push({ kind: 'added', normal: null, integ: m }); });
+    return rows;
+  }
+  function integrationCompareHtml(n, t) {
+    const marked = state.integrated.has(n.id);
+    // Which column the build uses now (none while the node isn't allocated).
+    const active = !state.alloc.has(n.id) ? null : integratedOn(n) ? 'integ' : 'normal';
+    const tag = side => (active === side ? ' <span class="ic-active">active</span>' : '');
+    const cost = marked ? '' : ` <span class="muted">(+${esc(pointsText(nextIntegrationCost()))})</span>`;
+    const cell = (label, html) => `<div data-label="${label}">${html}</div>`;
+    const none = '<span class="muted">—</span>';
+    const rows = integrationRows(t).map(r => `<div class="ic-row ic-${r.kind}">` +
+      cell('Normal', r.normal ?? none) +
+      cell('Integrated', r.kind === 'dropped' ? '<span class="builtin" title="Integrating drops this line">— no longer</span>'
+        : r.kind === 'same' ? r.integ : `<span class="builtin" aria-hidden="true">▲ </span>${r.integ}`) + '</div>').join('');
+    return `<div class="ic"><div class="ic-row ic-head"><div>Normal${tag('normal')}</div><div><span class="builtin">Integrated</span>${cost}${tag('integ')}</div></div>${rows}</div>`;
   }
   const grantedHullMods = t => [...new Set([t.vanillaHullMod, ...(t.phantomHullMods || [])].filter(Boolean))];
   // Names for hull mods: the extracted table, then the skill type that grants the hull mod, then the id itself.
@@ -1212,18 +1332,20 @@
     const list = [];
     for (const n of nodes) {
       if (!held(n.id) || sc.silent.has(n.id)) continue;
-      list.push({ node: n, type: effectiveType(n), gate: sat(n.id) || grantedActive(n.id) ? sc.gated.get(n.id) || null : null });
+      list.push({ node: n, type: effectiveType(n), integ: integratedOn(n), gate: sat(n.id) || grantedActive(n.id) ? sc.gated.get(n.id) || null : null });
     }
     return list;
   }
   function totals() {
     const sums = new Map();
     // `by` keeps each source's share (by name, like the game's stat breakdown), for the Stats tab's Sources.
-    const add = (effect, mag, src, into = sums, label = '') => {
-      const cur = into.get(effect) || { effect, magnitude: 0, sources: 0, affinity: 0, by: new Map() };
+    // `integ` holds the source names that are integrated nodes (shown in the story point colour, as the game's summary).
+    const add = (effect, mag, src, into = sums, label = '', integ = false) => {
+      const cur = into.get(effect) || { effect, magnitude: 0, sources: 0, affinity: 0, by: new Map(), integ: new Set() };
       cur.magnitude += mag;
       if (src === 'aff') cur.affinity += mag; else cur.sources++;
       if (label) cur.by.set(label, (cur.by.get(label) || 0) + mag);
+      if (label && integ) cur.integ.add(label);
       into.set(effect, cur);
     };
     // Gated nodes: only effects read live in combat survive, at the gate's strength (SkillTreeEffectSource.gatedEffects).
@@ -1236,14 +1358,14 @@
       if (!c.gate && secs) {
         const g = temp.get(secs) || { sums: new Map(), nodes: 0 };
         g.nodes++;
-        for (const e of typeEffects(c.type)) add(e.effect, e.magnitude, 'node', g.sums, c.type.name);
+        for (const e of typeEffects(c.type, c.integ)) add(e.effect, e.magnitude, 'node', g.sums, c.type.name, c.integ);
         temp.set(secs, g);
         continue;
       }
-      if (!c.gate) { for (const e of typeEffects(c.type)) add(e.effect, e.magnitude, 'node', sums, c.type.name); continue; }
+      if (!c.gate) { for (const e of typeEffects(c.type, c.integ)) add(e.effect, e.magnitude, 'node', sums, c.type.name, c.integ); continue; }
       const g = gated.get(c.gate.when) || { sums: new Map(), nodes: 0, strength: c.gate.strength, item: c.gate.def.name };
       g.nodes++;
-      for (const e of typeEffects(c.type)) if (D.effects[e.effect]?.live) add(e.effect, e.magnitude * c.gate.strength, 'node', g.sums, c.type.name);
+      for (const e of typeEffects(c.type, c.integ)) if (D.effects[e.effect]?.live) add(e.effect, e.magnitude * c.gate.strength, 'node', g.sums, c.type.name, c.integ);
       gated.set(c.gate.when, g);
     }
     // Socket effects: Empty Shell affinity and the Root Conduit route.
@@ -1278,6 +1400,23 @@
     ['Logistics', /CREW|CARGO|FUEL|SUPPLIES|REPAIR|SALVAGE|SENSOR|SURVEY|DMOD|D_MOD|COMMAND|NAV|ELECTRONIC|OBJECTIVE|CORONA/],
   ];
   const groupOf = name => (GROUPS.find(([, re]) => re.test(name)) || ['Other'])[0];
+  // The totals without the integration preview (null while it's off), to show what the preview changes.
+  function integPreviewBase() {
+    if (!integPreview) return null;
+    if (!baseTotals) { integPreview = false; try { baseTotals = totals(); } finally { integPreview = true; } }
+    return baseTotals;
+  }
+  // Under a total the preview changed: its value without the preview, or that it's new. '' when unchanged.
+  function previewDiffHtml(baseSums, s) {
+    if (!baseSums) return '';
+    const b = baseSums.get(s.effect);
+    if (!b || Math.abs(b.magnitude) < 1e-9) return '<div class="ic-was"><span class="builtin">▲ new when integrated</span></div>';
+    if (Math.abs(b.magnitude - s.magnitude) < 1e-9) return '';
+    return `<div class="ic-was"><span class="builtin">▲</span> <span class="muted">without integration:</span> ${describe(s.effect, b.magnitude)}</div>`;
+  }
+  // Totals the preview takes away entirely (an integration that drops a line), as entries of the base map.
+  const previewGone = (baseSums, sums) => (baseSums ? [...baseSums.values()].filter(b => Math.abs(b.magnitude) > 1e-9 && Math.abs(sums.get(b.effect)?.magnitude || 0) < 1e-9) : []);
+  const goneHtml = (b, describeIt = x => describe(x.effect, x.magnitude)) => `<span class="builtin">No longer when integrated:</span> <span class="muted">${plain(describeIt(b))}</span>`;
 
   // ------------------------------------------------------------------ images
   // The planner ships none of the mod's art. It's read from the Exiled Sector folder the user picks (the Mod art
@@ -1902,8 +2041,29 @@
       }
     }
     drawRingState(n, allocated, alpha, ac, pAdd, pRem, z, false);
+    drawIntegratedRing(n, alpha, z);
     if (refused) drawRefusedMark(n, alpha, z);
     ctx.globalAlpha = 1;
+  }
+  // Integrated nodes: a story point green ring outside the allocation ring (the game draws a green miniature circuit).
+  // Solid when integrated, faint when kept on an unallocated node, dashed for nodes only the preview integrates.
+  function drawIntegratedRing(n, alpha, z) {
+    const marked = state.integrated.has(n.id) && integrable(effectiveType(n));
+    const previewOnly = !marked && integPreview && canIntegrate(n);
+    if (!marked && !previewOnly) return;
+    const px = 1 / z;
+    const r = n.fp * ICON_INSET / 2 + Math.max(5 * px, n.fp * 0.12);
+    const w = Math.max(2 * px, n.fp * 0.05);
+    const a = state.alloc.has(n.id) ? 1 : 0.45;
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = P.searchOutline;
+    ctx.lineWidth = w * 2;
+    if (previewOnly) ctx.setLineDash([w * 2.5, w * 2]);
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = rgba(STORY_GREEN, a);
+    ctx.lineWidth = w;
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
   }
   // A red X on unallocated nodes the rules refuse and on allocated nodes that break a rule (always on).
   function isMarkedRefused(n) {
@@ -2270,11 +2430,14 @@
   };
   let panelTab = 'stats';
   let cachedTotals = null;
+  let baseTotals = null; // the totals without the integration preview, to mark what it changes (integPreviewBase)
 
   // When the hidden optional volumes change, the search (and the list, which follows it) is run again so their nodes
   // drop out of or come back into the matches. var, not let: changed() can run before this line during start-up.
   var hiddenVolSig = '', filterReady = false;
   function changed() {
+    dropLostIntegrations();
+    baseTotals = null;
     const hvSig = [...state.hiddenVolumes].sort().join();
     if (hvSig !== hiddenVolSig) { hiddenVolSig = hvSig; if (filterReady) runFilter(); }
     subCache = null;
@@ -2326,6 +2489,7 @@
       return `<div class="aff" style="border-color:${rgba(AFFINITY_COLOURS[k], 0.4)}"><div class="n" style="color:${rgba(AFFINITY_COLOURS[k], 1)}">${v}</div><div class="t">${AFFINITY_NAMES[k]} affinity</div></div>`;
     }).join('');
     renderAffMix();
+    renderInteg();
 
     // The Ship tab is a form, kept in its own element so typing isn't lost when the panel re-renders.
     const onShip = panelTab === 'ship';
@@ -2363,14 +2527,21 @@
         groups.get(g).push(s);
       }
       const order = [...GROUPS.map(g => g[0]), 'Other'];
+      const base = integPreviewBase();
+      for (const b of previewGone(base && base.sums, t.sums)) {
+        const g = groupOf(b.effect);
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g).push({ ...b, gone: true });
+      }
       let html = '';
       for (const g of order) {
         const list = groups.get(g);
         if (!list) continue;
         html += `<div class="stat-group"><h3>${esc(g)}</h3>`;
         for (const s of list) {
+          if (s.gone) { html += `<div class="stat-line">${goneHtml(s)}</div>`; continue; }
           const src = s.affinity && s.sources ? `${s.sources} node${s.sources > 1 ? 's' : ''} + affinity` : s.affinity ? 'affinity' : `${s.sources} node${s.sources > 1 ? 's' : ''}`;
-          html += `<div class="stat-line">${describe(s.effect, s.magnitude)}<span class="src">${src}</span></div>`;
+          html += `<div class="stat-line">${describe(s.effect, s.magnitude)}<span class="src">${src}</span>${previewDiffHtml(base && base.sums, s)}</div>`;
         }
         html += '</div>';
       }
@@ -2379,7 +2550,7 @@
       for (const c of contributions()) {
         if (c.node.tier === 'WORMHOLE' || c.node.tier === 'WORMHOLE_EXIT') continue; // their text is travel instructions
         for (const hm of grantedHullMods(c.type)) extras.add(`Grants <span class="hl">${esc(hullModName(hm))}</span>.`);
-        for (const txt of c.type.effectText || []) extras.add(styled(txt));
+        for (const txt of typeText(c.type, c.integ)) extras.add(styled(txt));
       }
       if (extras.size) html += `<div class="stat-group"><h3>Other effects</h3>${[...extras].map(e => `<div class="stat-line">${e}</div>`).join('')}</div>`;
       // Temporary nodes: their effects only for the first N seconds after deployment.
@@ -2417,7 +2588,8 @@
           sub += d ? ` · ${d.name}${d.unobtainable ? ' (unobtainable)' : ''}` : e ? ` · ${volumeName(byId.get(e).volume)} anchor` : ' · empty';
         }
         if (n.volume !== 'core') sub += ` · ${volumeName(n.volume)}`;
-        return `<div class="node-row ${n.tier.toLowerCase()}" data-node="${esc(n.id)}">${nodeIconHtml(n, t2)}<div><div class="nm">${esc(t2.name)}</div><div class="tr">${esc(sub)}</div></div></div>`;
+        const ig = isIntegrated(n) ? ' <span class="builtin">Integrated</span>' : integPreview && canIntegrate(n) ? ' <span class="builtin">Integrated (preview)</span>' : '';
+        return `<div class="node-row ${n.tier.toLowerCase()}" data-node="${esc(n.id)}" title="${integrable(t2) ? 'Alt+click to integrate or remove the integration' : ''}">${nodeIconHtml(n, t2)}<div><div class="nm${isIntegrated(n) ? ' builtin' : ''}">${esc(t2.name)}</div><div class="tr">${esc(sub)}${ig}</div></div></div>`;
       }).join('') : '<div class="empty">No notables or keystones allocated yet.</div>';
     }
     els.panelBody.insertAdjacentHTML('afterbegin', problemsHtml());
@@ -2479,6 +2651,38 @@
     if (b) applyAffinity({ [b.dataset.all]: affinityNodes().length });
   });
 
+  // Integrated nodes block under the affinity one: the count and story point cost, Integrate all / Remove all (saved
+  // with the build), the preview (not saved) and the keep setting (a browser setting, esp.keepIntegration).
+  const integEl = {
+    box: document.getElementById('integ'),
+    summary: document.getElementById('integ-summary'),
+    all: document.getElementById('integ-all'),
+    none: document.getElementById('integ-none'),
+    preview: document.getElementById('integ-preview'),
+    keep: document.getElementById('integ-keep'),
+    note: document.getElementById('integ-note'),
+  };
+  function renderInteg() {
+    const able = state.root ? integrableAllocated() : [];
+    const k = state.integrated.size;
+    integEl.box.hidden = !state.root || (!able.length && !k);
+    if (integEl.box.hidden) return;
+    const kept = [...state.integrated].filter(id => !state.alloc.has(id)).length;
+    integEl.summary.innerHTML = `<span class="muted">Integrated:</span> <b class="builtin">${k}</b> of ${able.length + kept} · <b>${storyPointCost(k)}</b> story point${storyPointCost(k) === 1 ? '' : 's'}`;
+    integEl.all.disabled = able.every(n => state.integrated.has(n.id));
+    integEl.none.disabled = !k;
+    integEl.preview.checked = integPreview;
+    integEl.keep.checked = keepIntegration;
+    const notes = [];
+    if (kept) notes.push(`${kept} kept on removed node${kept === 1 ? '' : 's'}.`);
+    if (integPreview) notes.push(`Preview: all ${able.length} integrated, ${pointsText(storyPointCost(able.length))}. Totals and the stat sheet show it; the build is unchanged.`);
+    integEl.note.textContent = notes.join(' ');
+  }
+  integEl.all.addEventListener('click', () => { const c = setAllIntegrated(true); if (c) toast(`Integrated ${c} node${c === 1 ? '' : 's'}. Undo goes back.`); });
+  integEl.none.addEventListener('click', () => { const c = setAllIntegrated(false); if (c) toast(`Removed ${c} integration${c === 1 ? '' : 's'}. Undo goes back.`); });
+  integEl.preview.addEventListener('change', () => setIntegPreview(integEl.preview.checked));
+  integEl.keep.addEventListener('change', () => setKeepIntegration(integEl.keep.checked));
+
   // After a hull or ship rules change: say so when allocated nodes newly break a rule.
   function warnNewProblems(before) {
     const now = rules().problems.size;
@@ -2515,7 +2719,7 @@
     const t = effectiveType(n);
     const allocated = sat(n.id);
     const tierClass = n.tier.toLowerCase();
-    let html = `<div class="tt-head">${nodeIconHtml(n, t)}<div><div class="tt-title">${esc(t.name)}</div><div class="tt-tier ${tierClass}">${esc(TIER_LABEL[n.tier] || n.tier)}${n.volume !== 'core' ? ' · ' + esc(volumeName(n.volume)) : ''}</div></div></div>`;
+    let html = `<div class="tt-head">${nodeIconHtml(n, t)}<div><div class="tt-title">${esc(t.name)}</div><div class="tt-tier ${tierClass}">${esc(TIER_LABEL[n.tier] || n.tier)}${n.volume !== 'core' ? ' · ' + esc(volumeName(n.volume)) : ''}${state.integrated.has(n.id) && integrable(t) ? ' · <span class="builtin">Integrated</span>' : integPreview && canIntegrate(n) ? ' · <span class="builtin">Integrated (preview)</span>' : ''}</div></div></div>`;
 
     if (isChoice(n)) {
       const cur = state.choice.get(n.id);
@@ -2536,6 +2740,8 @@
       html += `<div class="tt-effects"><div>Leads to ${p ? `<span class="hl">${esc(effectiveType(p).name)}</span>` : 'another wormhole'}. Allocating it also allocates the other end.</div></div>`;
     } else if (n.tier === 'WORMHOLE_EXIT') {
       html += `<div class="tt-effects"><div><span class="hl">${esc(volumeName(n.volume))}</span> volume's Wormhole exit. Reached by linking an anchor in a subroutine socket.</div></div>`;
+    } else if (integrable(t)) {
+      html += `<div class="tt-effects">${integrationCompareHtml(n, t)}</div>`;
     } else {
       const lines = typeLines(t);
       if (lines.length) html += `<div class="tt-effects">${lines.map(l => `<div>${l}</div>`).join('')}</div>`;
@@ -2579,6 +2785,10 @@
       else if (!path) html += `<div class="tt-warn">${n.tier === 'WORMHOLE_EXIT' ? 'Link an anchor in a subroutine socket to reach this node.' : 'Not reachable from your allocated nodes.'}</div>`;
       else if (used() + path.length > state.cap) html += `<div class="tt-warn">${path.length} node${path.length > 1 ? 's' : ''}${viaText} needed; Only ${Math.max(0, state.cap - used())} left (over cap).</div>`;
       else html += `<div class="tt-note">Click to allocate${path.length > 1 ? ` (${path.length} nodes${viaText})` : viaText}${isChoice(n) ? ' and pick an option' : ''}.</div>`;
+    }
+    if (state.root && n.id !== state.root && integrable(t) && !isChoice(n)) {
+      if (state.integrated.has(n.id)) html += `<div class="tt-note">${allocated ? '' : 'Integrated, kept while unallocated. '}Alt+click or I to remove the integration.</div>`;
+      else if (allocated) html += `<div class="tt-note">Alt+click or I to integrate (+${esc(pointsText(nextIntegrationCost()))}).</div>`;
     }
     if (state.root && n.id !== state.root) {
       const wi = waypoints.indexOf(n);
@@ -2878,7 +3088,9 @@
   });
 
   // ------------------------------------------------------------------ actions
-  function primaryAction(n, sx, sy, quick = false, shift = false) {
+  function primaryAction(n, sx, sy, quick = false, shift = false, alt = false) {
+    // Alt+click integrates a node or takes its integration back (the game's click and hold).
+    if (alt && state.root) { toggleIntegration(n); return; }
     // Wormholes: Ctrl/Cmd+click travels to the other end (as in the mod); a plain click offers jump or allocate/remove.
     const jump = jumpTarget(n);
     if (jump && quick) { jumpTo(jump); return; }
@@ -3403,7 +3615,7 @@
         }
         if (n) {
           if (wasDrag.button === 2) secondaryAction(n, e.clientX, e.clientY);
-          else if (wasDrag.button === 0) primaryAction(n, e.clientX, e.clientY, e.ctrlKey || e.metaKey, e.shiftKey);
+          else if (wasDrag.button === 0) primaryAction(n, e.clientX, e.clientY, e.ctrlKey || e.metaKey, e.shiftKey, e.altKey);
         }
       }
     }
@@ -3483,6 +3695,7 @@
     const row = e.target.closest('[data-node]');
     if (!row) return;
     const n = byId.get(row.dataset.node);
+    if (e.altKey && state.root) { toggleIntegration(n); return; }
     if (panelTab === 'search') {
       searchCursor = searchOrder.indexOf(n);
       els.searchCount.textContent = `${searchCursor + 1}/${searchOrder.length}`;
@@ -3497,7 +3710,7 @@
     let s = searchText.get(n.id);
     if (s == null) {
       const ts = isChoice(n) ? n.type.options.map(id => types.get(id)).filter(Boolean) : [n.type];
-      s = [n.id, n.type.name, volumeName(n.volume), ...ts.flatMap(t => [t.name, t.flavour || '', ...typeLines(t).map(plain)])].join(' \n ').toLowerCase();
+      s = [n.id, n.type.name, volumeName(n.volume), ...ts.flatMap(t => [t.name, t.flavour || '', ...typeLines(t).map(plain), ...(t.integrated ? typeLines(t, true).map(plain) : [])])].join(' \n ').toLowerCase();
       searchText.set(n.id, s);
     }
     return s;
@@ -3763,18 +3976,35 @@
     const last = STAT_GROUPS[STAT_GROUPS.length - 1];
     const sections = new Map(STAT_GROUPS.map(g => [g, []]));
     if (STAT_GROUPS[0] === 'PROGRESSION') sections.get('PROGRESSION').push({ label: gameString('ui.stats.nodes', 'Nodes'), value: `${state.alloc.size + 1}/${state.cap}` });
-    const push = (s, wrap) => {
+    // With the integration preview on, each row also says what it is without the preview (baseSums: the same bucket).
+    const base = integPreviewBase();
+    const push = (s, wrap, baseSums) => {
       if (Math.abs(s.magnitude) < 1e-9) return;
       const g = (D.effects[s.effect] && D.effects[s.effect].group) || last;
       const raw = describeRaw(s.effect, s.magnitude);
-      (sections.get(g) || sections.get(last)).push({ html: styled(wrap ? wrap(raw) : raw), effect: s.effect, by: [...(s.by || [])] });
+      (sections.get(g) || sections.get(last)).push({ html: styled(wrap ? wrap(raw) : raw) + previewDiffHtml(baseSums, s), effect: s.effect, by: [...(s.by || [])], integ: [...(s.integ || [])] });
     };
-    for (const s of t.sums.values()) push(s);
+    const pushGone = (baseSums, sums, wrap) => {
+      for (const b of previewGone(baseSums, sums)) {
+        const g = (D.effects[b.effect] && D.effects[b.effect].group) || last;
+        (sections.get(g) || sections.get(last)).push({ html: goneHtml(b, x => styled(wrap ? wrap(describeRaw(x.effect, x.magnitude)) : describeRaw(x.effect, x.magnitude))), effect: b.effect, by: [] });
+      }
+    };
+    for (const s of t.sums.values()) push(s, null, base && base.sums);
+    if (base) pushGone(base.sums, t.sums);
     const forFirst = gameString('summary.forFirst', 'For the first {seconds} seconds after deployment: {text}');
-    for (const [secs, g] of t.temp || []) for (const s of g.sums.values()) push(s, raw => forFirst.replace('{seconds}', secs).replace('{text}', raw));
+    for (const [secs, g] of t.temp || []) {
+      const wrap = raw => forFirst.replace('{seconds}', secs).replace('{text}', raw);
+      const bs = base && (base.temp.get(secs)?.sums || new Map());
+      for (const s of g.sums.values()) push(s, wrap, bs);
+      if (base) pushGone(bs, g.sums, wrap);
+    }
     for (const [when, g] of t.gated || []) {
       const tpl = gameString(GATE_KEYS[when] ? `summary.gated.${GATE_KEYS[when]}` : '', `${when}: {text}`);
-      for (const s of g.sums.values()) push(s, raw => tpl.replace('{text}', raw));
+      const wrap = raw => tpl.replace('{text}', raw);
+      const bs = base && (base.gated.get(when)?.sums || new Map());
+      for (const s of g.sums.values()) push(s, wrap, bs);
+      if (base) pushGone(bs, g.sums, wrap);
     }
     return STAT_GROUPS.filter(g => sections.get(g).length).map(g => ({ id: g, name: gameString(`ui.stats.group.${g}`, humanize(g)), rows: sections.get(g) }));
   }
@@ -3852,7 +4082,7 @@
     if (!row || !row.by || !row.by.length) { sheetTip.hidden = true; return; }
     sheetTip.classList.toggle('game', game);
     sheetTip.innerHTML = `<div class="tt-title">${esc(gameString('ui.stats.breakdown.heading', 'Sources'))}</div>` +
-      row.by.map(([name, amount]) => `<div class="gs-src"><b>${esc(name)}</b>${describe(row.effect, amount)}</div>`).join('');
+      row.by.map(([name, amount]) => `<div class="gs-src"><b${(row.integ || []).includes(name) ? ' class="builtin" title="Integrated"' : ''}>${esc(name)}</b>${describe(row.effect, amount)}</div>`).join('');
     sheetTip.hidden = false;
     placeFloating(sheetTip, x, y);
   }
@@ -3905,6 +4135,7 @@
     if (themes && themes.size) meta.push(`Themes: ${[...themes].map(themeName).join(', ')}`);
     const lines = isChoice(n) && !held(n.id)
       ? n.type.options.map(id => types.get(id)).filter(Boolean).map(o => `<div><span class="muted">${esc(o.name)}:</span> ${typeLines(o).join(' ')}</div>`)
+      : integrable(t) && !isChoice(n) ? [integrationCompareHtml(n, t)]
       : typeLines(t).map(l => `<div>${l}</div>`);
     // Target marks (All nodes list): a green O (wanted) and a red X (forbidden) as buttons while target mode is on,
     // and as a small tag otherwise.
@@ -3915,7 +4146,7 @@
         `<button type="button" data-mark="forbid" aria-pressed="${mark === 'forbid'}" aria-label="Forbidden" title="${mark === 'forbid' ? 'Clear the mark' : 'Mark forbidden: the plan avoids it'}">X</button></span>`
       : mark ? `<span class="lv-mark ${mark}" title="${mark === 'want' ? 'Wanted' : 'Forbidden'}">${mark === 'want' ? 'O' : 'X'}</span>` : '';
     return `<div class="node-row lv-row ${n.tier.toLowerCase()}${listMode === 'all' && mark ? ` lv-${mark}` : ''}" data-node="${esc(n.id)}">${nodeIconHtml(n, t)}<div class="lv-main">` +
-      `<div class="nm">${esc(listName(n))}${sat(n.id) && listMode !== 'build' ? '<span class="have">allocated</span>' : ''}</div>` +
+      `<div class="nm">${esc(listName(n))}${sat(n.id) && listMode !== 'build' ? '<span class="have">allocated</span>' : ''}${state.integrated.has(n.id) && integrable(t) ? '<span class="have builtin">integrated</span>' : ''}</div>` +
       `<div class="tr">${esc(meta.join(' · '))}</div>` +
       (lines.length ? `<div class="lv-effects">${lines.join('')}</div>` : '') + `</div>${marks}</div>`;
   }
@@ -4062,6 +4293,7 @@
     // Target mode in the All nodes list: the buttons set a mark, and clicking the row cycles it like on the map.
     const markBtn = e.target.closest('[data-mark]');
     if (markBtn) { setTargetMark(n, markBtn.dataset.mark); return; }
+    if (e.altKey && state.root) { toggleIntegration(n); return; }
     if (targets.mode && listMode === 'all') { cycleTarget(n); return; }
     setView(false);
     jumpTo(n);
@@ -4403,7 +4635,7 @@
     dismiss: document.getElementById('fn-dismiss'),
   };
   const templateKey = t => (t.id ? 'id:' + t.id : `${t.root}|${String(t.name).trim().toLowerCase()}`);
-  const templateBody = t => JSON.stringify([t.name, t.root, t.hull, t.steps, t.anchors || null]);
+  const templateBody = t => JSON.stringify([t.name, t.root, t.hull, t.steps, t.anchors || null, t.integrate || null]);
   const validTemplate = t => t && typeof t === 'object' && t.root && t.name;
   function noticeOutsideChange(text, now) {
     if (linkedText == null || text === linkedText) return;
@@ -4719,7 +4951,7 @@
   function refreshExport() {
     if (!state.root) tpl.summary.textContent = 'Choose a root.';
     else {
-      const steps = templateSteps(), anchors = Object.keys(templateAnchors()).length;
+      const steps = templateSteps(), anchors = Object.keys(templateAnchors()).length, marks = templateMarks().length;
       let replaces = '';
       const i = fileTemplates && tpl.name.value.trim() ? findTemplateIndex(fileTemplates, tpl.name.value) : -1;
       if (i >= 0) {
@@ -4729,7 +4961,7 @@
           : ' · replaces the template of this name';
       }
       tpl.summary.textContent = `${byId.get(state.root).type.name} root · ${hullLabel()} · ${steps.length} step${steps.length === 1 ? '' : 's'}` +
-        (anchors ? ` · ${anchors} anchor${anchors === 1 ? '' : 's'}` : '') + replaces;
+        (anchors ? ` · ${anchors} anchor${anchors === 1 ? '' : 's'}` : '') + (marks ? ` · ${marks} marked for integration` : '') + replaces;
     }
     if (canWriteFiles) {
       tpl.save.disabled = !(linkedHandle && linkedAccess === 'granted');
@@ -4776,7 +5008,7 @@
     const anchors = new Map();
     for (const [socket, aid] of Object.entries(t.anchors || {})) { const a = anchorById.get(String(aid).trim()); if (a) anchors.set(currentNodeId(socket), a.exit); }
     pushUndo();
-    state.root = root; state.alloc.clear(); state.choice.clear(); state.links.clear(); state.subs.clear(); state.template = null;
+    state.root = root; state.alloc.clear(); state.choice.clear(); state.links.clear(); state.subs.clear(); state.integrated.clear(); state.template = null;
     if (HULL_FROM_ENUM[t.hull]) state.hull = HULL_FROM_ENUM[t.hull];
     const turnedOn = [];
     // Show any hidden optional volume the template uses, so its steps can land.
@@ -4817,7 +5049,10 @@
       }
       pending = next;
     }
-    return { name: t.name, taken: state.alloc.size, unknown, unplaced: pending.map(e => e.id), turnedOn, refused };
+    // Integration marks on nodes that landed and can be integrated become the build's integrations.
+    const marks = (Array.isArray(t.integrate) ? t.integrate : []).map(id => currentNodeId(String(id).trim())).filter(id => byId.has(id));
+    for (const id of marks) if (canIntegrate(byId.get(id))) state.integrated.add(id);
+    return { name: t.name, taken: state.alloc.size, unknown, unplaced: pending.map(e => e.id), turnedOn, refused, integrated: state.integrated.size, marks: marks.length };
   }
   // Loads a template (from the file or a code) into the planner and reports through `report(message, kind)`.
   function loadTemplate(t, report, extraNote) {
@@ -4836,6 +5071,8 @@
       }
       if (r.unplaced.length) notes.push(`${r.unplaced.length} step${r.unplaced.length > 1 ? 's' : ''} couldn't be connected`);
       if (r.turnedOn.length) notes.push(`showed ${r.turnedOn.join(' and ')} (Optional Volumes, Optional rules)`);
+      if (r.integrated) notes.push(`${r.integrated} node${r.integrated === 1 ? '' : 's'} integrated from the template's marks`);
+      if (r.marks > r.integrated) notes.push(`${r.marks - r.integrated} integration mark${r.marks - r.integrated === 1 ? '' : 's'} on nodes that didn't land or can't be integrated`);
       if (used() > state.cap) notes.push(`${used()} nodes is over the ${state.cap} cap`);
       report(`Loaded "${r.name}" (${r.taken} nodes)${notes.length ? '; ' + notes.join('; ') : ''}.`, notes.length ? '' : 'ok');
       renderTemplateList();
@@ -5333,6 +5570,7 @@
     else if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey) togglePanel();
     else if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey && !e.altKey) setTargetMode(!targets.mode);
     else if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey) setView(listEl.hidden);
+    else if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey) { if (hover && state.root && listEl.hidden) toggleIntegration(hover); }
     else if (e.key === 'Escape') { if (!els.picker.hidden) closePicker(); else if (waypoints.length) clearWaypoints(); else if (targets.mode) setTargetMode(false); }
     else if (e.key === '/') { e.preventDefault(); els.search.focus(); }
   });
@@ -5373,5 +5611,6 @@
     problems: () => [...rules().problems].map(([id, b]) => ({ id, text: b.text })), setShip, setAffinitySplit,
     waypoints: () => waypoints.map(n => n.id), toggleWaypoint: id => toggleWaypoint(byId.get(id)), clearWaypoints, routeTo: (id, opt) => routeTo(byId.get(id), opt),
     statSheet, toggleSheet, targets, setTargetMode, setTargetKeep, cycleTarget: id => cycleTarget(byId.get(id)), plan: () => currentPlan(), applyPlan,
+    toggleIntegration: id => toggleIntegration(byId.get(id)), setAllIntegrated, setIntegPreview, setKeepIntegration, integrationRows: id => integrationRows(effectiveType(byId.get(id))),
     socketSub: (socket, id, extra) => socketSub(byId.get(socket), id, extra), setGrants: (socket, ids) => setGrants(byId.get(socket), ids), subState: () => subState(), typesExclusive: (a, b) => typesExclusive(types.get(a), types.get(b)) };
 })();

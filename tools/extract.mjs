@@ -646,7 +646,7 @@ else warn('  ! no optional volume toggles found (VolumeToggles / SkillTreeSettin
 
 // UI strings the planner reuses.
 const uiPrefixes = ['ui.node.', 'tier.', 'node.block.', 'node.requires.', 'socketable.anchor.gate.', 'socketable.doctrine.', 'socketable.radius',
-    'socketable.rootConduit.', 'subroutine.grant.', 'ui.stats.group.', 'summary.gated.'];
+    'socketable.rootConduit.', 'subroutine.grant.', 'ui.stats.group.', 'summary.gated.', 'node.integration.'];
 const uiKeys = ['settings.volumes.header', 'settings.volumes.about', 'summary.forFirst', 'ui.stats.expand', 'ui.stats.collapse', 'ui.stats.nodes', 'ui.stats.breakdown.heading'];
 for (const [k, v] of strings) {
     if (uiPrefixes.some((p) => startsCaseless(k, p)) || inCaseless(k, uiKeys)) neededStrings.set(k, v);
@@ -656,7 +656,7 @@ for (const [k, v] of strings) {
 const present = (v) => v !== null && v !== undefined;
 const typeOut = types.map((t) => {
     const o = { id: t.id ?? null, name: t.name ?? null, icon: t.icon ?? null, tier: truthy(t.tier) ? t.tier : 'SMALL' };
-    // integrated: the effects (and effectText) an integrated node uses instead of its normal ones. app.js doesn't read it yet.
+    // integrated: the effects (and effectText) an integrated node uses instead of its normal ones (app.js integratedOn).
     for (const k of ['effects', 'hullSizeEffects', 'options', 'tags', 'flavour', 'effectText', 'phantomHullMods', 'exclusiveHullMods',
         'exclusiveSkillTypes', 'vanillaHullMod', 'requiredHullSizes', 'itemCost', 'unlockConditions', 'todo', 'temporaryAfterDeploymentSeconds',
         'integrated']) {

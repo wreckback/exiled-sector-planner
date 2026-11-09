@@ -60,6 +60,14 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - `update.mjs` compares `integrated` blocks under skill type changes and prints how many types have one.
 - `.count(n)` in a description fills `{count}` (the integrated Cheap Shots wording needed it).
 
+## Integrated nodes (mod 0.12.0, 2026-11-09)
+
+- Synced the data to Exiled Sector 0.12.0-alpha, which releases the Dev work (integrated nodes, the Rift Strike values, Flux Coil Adjunct and Flux Distributor, Shield Arc Multiplier removed).
+- Alt+click or the I key integrates an allocated node or takes the integration back; the summary panel has Integrate all, Remove all, a Preview all integrated view (not saved) and Keep when removed (a browser setting; off by default, so removing a node removes its integration).
+- Totals, the stat sheet and its Sources use the integrated effects. Tooltips and the list view show normal and integrated effects side by side, paired line by line like the game's IntegrationLines. Integrated nodes get a green ring on the map.
+- The build saves its integrations (`ig`). Templates and codes carry them as the game's `integrate` marks, which also fixes saving over a template made in game dropping its marks.
+- The extractor keeps the `node.integration.*` strings, and `styled()` understands `<builtIn>`.
+
 ## Planner (`web/`)
 
 **Tree view**

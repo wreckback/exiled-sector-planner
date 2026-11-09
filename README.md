@@ -239,6 +239,22 @@ Click an allocated subroutine socket. The picker shows two headers, **Subroutine
 - Templates and codes don't hold subroutines, as in game.
 - **Not modelled:** a granted notable that touches your allocated tree doesn't count as a neighbour for further allocation, though in game it does. Corruption implicits are also not modelled.
 
+## Integrated nodes
+
+In game (mod 0.12.0+) you spend story points to integrate an allocated notable or keystone on one ship, like building in an s-mod. An integrated node uses its integrated effects instead of its normal ones. The nth integration on a ship costs n story points, so 3 integrations cost 1 + 2 + 3 = 6. In the planner they're free to add and take back; the story points are only shown.
+
+- **Integrate:** Alt+click (Option+click on Mac) an allocated node, or hover it and press **I**. Do the same again to remove the integration. Alt+click also works on rows in the summary panel's Notables & keystones tab and in the list view. Each change is one Undo step.
+- **Tooltips** of nodes that can be integrated show both sets side by side: **Normal** on the left, **Integrated** on the right, one row per effect. Unchanged rows are greyed, a ▲ marks what integrating adds or changes, and "— no longer" marks a line it drops. The column the build uses is marked **active**, and the Integrated heading shows what integrating would cost next. In narrow windows the two columns stack. The list view shows the same comparison.
+- **On the map,** an integrated node has a green ring outside its allocation ring.
+- **The summary panel** has a block under the affinity one:
+  - **Integrated: k of n · story points** for the build.
+  - **Integrate all** integrates every allocated node that can be integrated; **Remove all** removes every integration. Each is one Undo step, and the result is saved with the build.
+  - **Preview all integrated** shows the totals, the stat sheet, tooltips and the map as if every allocated node that can be integrated were integrated, without changing the build. The map draws those nodes with a dashed ring, and each changed total says what it is without the preview ("▲ without integration: …", "▲ new when integrated", "No longer when integrated: …"). It isn't saved.
+  - **Keep when removed:** off (the default), removing a node removes its integration. On, a removed node stays integrated as it does in game: its ring shows faintly, it still counts toward the cost, and allocating it again restores its integrated effects. Hover it and press I to remove the integration. This setting is kept in your browser.
+- **The stat sheet's Sources** show integrated nodes' names in green, as the game's summary does.
+- **Templates and codes** carry integrations as the game's integration marks. Saving writes the build's integrated nodes as marks, and loading a template integrates the nodes its marks name. In game the marks are only reminders: a template never integrates anything by itself.
+- **Not modelled:** the Deintegration Schematic (in the planner, Remove all does the same), and NPC ships' random integrations.
+
 ## Templates: import and export with the game
 
 The Templates button reads and writes the mod's shared template file, `saves\common\exiledSector_skillTreeTemplates.json.data` in your Starsector install (mod 0.11.1+). The game re-reads that file whenever the skill tree opens, so changes show up while the game is running.
@@ -294,7 +310,7 @@ The settings are kept in your browser, and the dialog says which method is runni
 
 **Template codes (when you can't send the file):** a code holds one template as text, about 200–700 characters, for pasting into Discord, forums or chat.
 - **Get a code:** **Copy code** in the toolbar, or "Copy code for current build" in the dialog, uses the template name and Hull size dropdown. Each template in the file list also has its own **Code** button.
-- A code holds the root, hull, steps and anchors, like a template. Ship rules, optional rules and the node cap aren't in it.
+- A code holds the root, hull, steps, anchors and integration marks, like a template. Ship rules, optional rules and the node cap aren't in it.
 - **Use a code:** paste it into the Template code box and click **Load code**, or press Ctrl+Enter. It loads exactly like a template from the file. Save it into your file afterwards to use it in game.
 - Codes start with `ES1.`. Spaces and line breaks added by chat apps are ignored.
 - Codes keep node ids, so they survive mod updates the same way template files do.
@@ -317,7 +333,7 @@ The settings are kept in your browser, and the dialog says which method is runni
 - **Downloads may be renamed.** If the file name is already taken in Downloads, Chrome adds "(1)". The game won't read the file until it's renamed back.
 - **Opened from disk** (no server):
   - Firefox may not keep the saved build between visits.
-- **Missing effect wording:** wording is read from the mod's string files and Java source. 11 effects show their raw name and value (fighter role stats, converted hangar, unhit armor regen).
+- **Missing effect wording:** wording is read from the mod's string files and Java source. 13 effects show their raw name and value (fighter role stats, converted hangar, unhit armor regen). Two of them only appear in integrated effects.
 - **Not modelled:**
   - Ordnance point costs and node item costs.
   - The per-ship weapon and shield requirements shown in tooltips ("Needs a ship with: …"). The game doesn't block allocation on these either.

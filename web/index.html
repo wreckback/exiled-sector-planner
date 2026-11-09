@@ -85,6 +85,18 @@
     </div>
     <div id="aff-note" class="muted"></div>
   </div>
+  <div id="integ" hidden>
+    <div class="aff-mix-row">
+      <span id="integ-summary"></span>
+      <span class="aff-all">
+        <button id="integ-all" title="Integrate every allocated node that can be integrated (one undo step)">Integrate all</button><button id="integ-none" title="Remove every integration (one undo step)">Remove all</button></span>
+    </div>
+    <div class="aff-mix-row">
+      <label title="Count every allocated node that can be integrated as integrated, without changing the build"><input id="integ-preview" type="checkbox"> Preview all integrated</label>
+      <label title="On: a removed node stays integrated, as in game, and its integration still counts. Off: removing a node removes its integration"><input id="integ-keep" type="checkbox"> Keep when removed</label>
+    </div>
+    <div id="integ-note" class="muted"></div>
+  </div>
   <div class="panel-tabs">
     <button data-tab="stats" class="active">Effects</button>
     <button data-tab="sheet" title="The effects in the in-game stat sheet's sections, with a Full Sheet view">Stats</button>
@@ -341,6 +353,7 @@
       <tr><td><kbd>S</kbd></td><td>Show or hide the summary panel</td></tr>
       <tr><td><kbd>T</kbd></td><td>Toggle target mode on/off</td></tr>
       <tr><td><kbd>L</kbd></td><td>Switch between the map and the list view</td></tr>
+      <tr><td><kbd>I</kbd></td><td>Integrate the node under the mouse, or remove its integration</td></tr>
       <tr><td><kbd>/</kbd></td><td>Jump to the search box</td></tr>
       <tr><td><kbd>?</kbd></td><td>Show or hide this list</td></tr>
       <tr><td><kbd>Esc</kbd></td><td>Close this list, the Filter list, the full stat sheet or the option/anchor picker, clear waypoints, or leave target mode</td></tr>
@@ -358,6 +371,7 @@
       <tr><td>Left-click an allocated affinity node or socket</td><td>Open its picker (switch option, change anchor)</td></tr>
       <tr><td><kbd>Ctrl</kbd>+click an affinity or other choice node <span class="muted">(<kbd>Cmd</kbd>+click on Mac)</span></td><td>Allocate all nodes up to that path with the previously chosen option</td></tr>
       <tr><td><kbd>Shift</kbd>+click a node</td><td>Add it as the next waypoint, or drop it if it already is one. The next node allocation then goes through the waypoints in order (the shortest legal path from each waypoint to the next). Can force a longer, specific route. <kbd>Esc</kbd> clears waypoints</td></tr>
+      <tr><td><kbd>Alt</kbd>+click an allocated notable or keystone <span class="muted">(<kbd>Option</kbd>+click on Mac)</span></td><td>Integrate it, or remove its integration. Also works on rows in the summary panel and the list view</td></tr>
       <tr><td>Right-click an allocated node</td><td>Remove node</td></tr>
       <tr><td>Right-click your starting root</td><td>Reset build</td></tr>
       <tr><td>Click a wormhole or linked wormhole exit</td><td>Menu: jump to the other end, or allocate/remove</td></tr>
@@ -381,7 +395,7 @@
 </div>
 
 <div id="help">
-  <b>Click</b> allocate · <b>Shift+click</b> set waypoint · <b>Right-click</b> remove · <b>T</b> target mode · <b>L</b> list view ·
+  <b>Click</b> allocate · <b>Shift+click</b> set waypoint · <b>Right-click</b> remove · <b>Alt+click</b>/<b>I</b> integrate · <b>T</b> target mode · <b>L</b> list view ·
   <b>Drag</b>/<b>arrows</b> pan · <b>Wheel</b>/<b>PgUp</b>/<b>PgDn</b> zoom · <b>?</b> all shortcuts
 </div>
 

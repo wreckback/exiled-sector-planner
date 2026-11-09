@@ -43,11 +43,20 @@ The sections run top to bottom in this order:
    - Curves store the point the curve passes through. The quadratic control point is `2*through - midpoint`, as in the mod's `SkillTreeNodeConnectorRenderer`.
    - `hiddenConnectors` (wormhole pair links) are adjacent but not drawn.
    - `regions` holds one entry per tree (core plus each faction volume) for the zoomed-out labels. It uses the median centre because some volume nodes sit far from their tree.
-2. **Build state:** `state = { root, alloc (insertion-ordered Set, root excluded), choice, links (socket→exit), hull, cap, hiddenVolumes, ship }`.
+2. **Build state:** `state = { root, alloc (insertion-ordered Set, root excluded), choice, links (socket→exit), hull, cap, hiddenVolumes, ship, integrated }`.
    - `hiddenVolumes` holds the Optional Volumes toggles turned off (ids from `OPTIONAL_VOLUMES`, the extractor's `optionalVolumes`), serialized as `ov`. Old links with `wv: 0` load with all of them hidden; the old `wc` (core wormholes) is ignored. `setVolumeShown(id, on)` changes one; the checkboxes are in the Optional rules dialog (`#story-volumes`), each followed by its gates (`.vol-gates`, a gate goes there when all its nodes are in that toggle's volumes; disabled while hidden).
    - `ship` (`blankShip()`) holds both kinds of setting. Ship rules are the `SHIP_KEYS` (shield, armor, the tri-state facts, hull mods, extra logistics), where `null` means "not set, don't check". Optional rules are `lockedGates` and `lockedTypes`.
    - Both serialize under `ship` in the build JSON.
    - `subs` maps socket → `{id, aff?, grants?}`, serialized as `sb`. A socket holds an anchor (`links`) or a subroutine, never both. Dropped with its socket (`dropOrphanSubs`) and on reset or template import.
+   - `integrated` holds integrated node ids, serialized as `ig` (ids pass through `currentNodeId`). The section after `resetBuild` ("integrated nodes") has the rest:
+     - `integrable(t)` (the type has an `integrated` block), `canIntegrate(n)` (allocated and integrable), `isIntegrated(n)` (in the set, allocated, effective type integrable) and `integratedOn(n)`, which totals, tooltips and the map use: `isIntegrated`, or `canIntegrate` while `integPreview` (the panel's Preview all integrated, in memory only) is on.
+     - `toggleIntegration(n)` (Alt+click, the I key, Alt+click on panel and list rows) and `setAllIntegrated(on)` are one undo step each. Cost is shown only: `storyPointCost(k)` = k(k+1)/2, `nextIntegrationCost()`.
+     - `changed()` first runs `dropLostIntegrations()`: unless `keepIntegration` (the panel's Keep when removed, `localStorage['esp.keepIntegration']`) is on, ids not in `alloc` are dropped, so every way of removing nodes drops their integration. Kept ids still count toward the cost, as in game.
+     - Effects: `typeEffects(t, integ)`, `typeText(t, integ)` and `typeLines(t, integ)` read the `integrated` block (a full replacement; effectText only when it has any). `contributions()` sets `integ` per node, and `totals()` sums carry `integ` (source names that are integrated) for the green names in the stat sheet's Sources. The node rules (`blockOf`, `currentShield`) keep using the normal effects, as the game's `NodeEligibility` does.
+     - `integrationRows(t)` pairs normal and integrated lines like `IntegrationLines` (same text, then the same wording with numbers replaced), and `integrationCompareHtml(n, t)` draws them as two columns (`.ic`), used by the tooltip and the list view. The layout is a first try (TODO.md).
+     - `drawIntegratedRing` draws `STORY_GREEN` (an approximation of the game's story point colour; CSS `--builtin`, class `.builtin`, `<builtIn>` markup in `styled()`).
+     - With the preview on, `integPreviewBase()` computes the totals without it (`baseTotals`, cleared in `changed()`), and `previewDiffHtml`/`previewGone` mark changed, new and dropped totals in the Effects tab and the stat sheet.
+     - The summary panel's `#integ` block is `renderInteg()`.
    - Every mutation goes through `pushUndo()` and then `changed()`. `changed()` recomputes totals, the preview, chrome, panel and persistence, and clears the URL hash.
 3. **Rules,** mirroring the mod's `AllocationCheck`:
    - `sat(id)`: allocated, or the chosen root.
@@ -110,7 +119,8 @@ The sections run top to bottom in this order:
 - **Coordinates:** world y grows downward. Tier sizes are `NODE_SIZE` 64 times the tier multiplier (ROOT 2.5, WORMHOLE 1.3, SOCKET 1.2).
 - **Node cap:** the mod default `exiledSector_levelMaxAllocatedNodes` is 60, and the root counts toward it. The Nodes counter is `alloc.size + 1`.
 - **Template file:** `saves/common/exiledSector_skillTreeTemplates.json.data`, shaped `{"v":1,"templates":[…]}` (a bare array also reads).
-  - Each template is `{v,id,name,root,hull: FRIGATE|DESTROYER|CRUISER|CAPITAL_SHIP, steps, anchors?}`.
+  - Each template is `{v,id,name,root,hull: FRIGATE|DESTROYER|CRUISER|CAPITAL_SHIP, steps, anchors?, integrate?}`.
+  - `integrate` (mod 0.12.0) lists node ids marked for integration, only nodes in the steps. In game they're reminders. The planner writes the build's allocated integrated nodes there (`templateMarks`, in `buildTemplate`, codes and `templateSig` when there are any) and integrates the marked nodes on import. `templateBody` compares it for the outside-change notice.
   - Steps are `node` or `node=option`, the root is excluded, and a partner follows its wormhole or socket.
   - Names are at most 32 characters and unique per root, case-insensitive, whatever the hull. `uniqueTemplateName` ports `TemplateNames.unique`.
   - The mod accepts any non-control character (`SkillTreeTextField`). The planner deliberately limits names to printable ASCII (`NAME_CHAR`, `templateNameProblem`, `guardNameInput`), because the game's LWJGL keyboard input and default Insignia font only reliably handle those. The user chose this.
