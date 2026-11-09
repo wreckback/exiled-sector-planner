@@ -1311,7 +1311,8 @@
       cell('Normal', r.normal ?? none) +
       cell('Integrated', r.kind === 'dropped' ? '<span class="builtin" title="Integrating drops this line">— no longer</span>'
         : r.kind === 'same' ? r.integ : `<span class="builtin" aria-hidden="true">▲ </span>${r.integ}`) + '</div>').join('');
-    return `<div class="ic"><div class="ic-row ic-head"><div>Normal${tag('normal')}</div><div><span class="builtin">Integrated</span>${cost}${tag('integ')}</div></div>${rows}</div>`;
+    // The column the build doesn't use is drawn lighter (style.css: .ic-on-normal / .ic-on-integ).
+    return `<div class="ic${active ? ` ic-on-${active}` : ''}"><div class="ic-row ic-head"><div>Normal${tag('normal')}</div><div><span class="builtin">Integrated</span>${cost}${tag('integ')}</div></div>${rows}</div>`;
   }
   const grantedHullMods = t => [...new Set([t.vanillaHullMod, ...(t.phantomHullMods || [])].filter(Boolean))];
   // Names for hull mods: the extracted table, then the skill type that grants the hull mod, then the id itself.

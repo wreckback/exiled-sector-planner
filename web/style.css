@@ -298,6 +298,9 @@ button:disabled { opacity: 0.5; cursor: default; }
 .ic-same > div, .ic-same span { color: var(--muted); }
 .ic-active { font-size: 11px; color: var(--text); border: 1px solid var(--edge); padding: 0 4px; margin-left: 4px; }
 .ic-was { font-size: 12px; margin-left: 8px; }
+/* the column the build doesn't use, lighter (no marking while the node isn't allocated) */
+.ic-on-integ .ic-row:not(.ic-head) > div:first-child,
+.ic-on-normal .ic-row:not(.ic-head) > div:last-child { opacity: 0.45; }
 @media (max-width: 600px) {
   .ic-row { grid-template-columns: 1fr; }
   .ic-row > div::before { content: attr(data-label) ": "; color: var(--muted); }
