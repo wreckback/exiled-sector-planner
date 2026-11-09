@@ -10,6 +10,7 @@
     "serve": "node tools/serve.mjs",
     "extract": "node tools/extract.mjs",
     "update": "node tools/update.mjs",
-    "package": "node tools/package.mjs"
+    "package": "node tools/package.mjs",
+    "release": "node tools/release.mjs"
   }
 }
