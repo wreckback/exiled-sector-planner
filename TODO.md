@@ -12,7 +12,11 @@ Done and committed (`8ae1cd1` on `node-tools`, not pushed): `package.json`, `.nv
 
 To do, in this order:
 1. ~~Commit the two tools~~ (done, `8ae1cd1`).
-2. Port `update.ps1` (338 lines): compare its report with `update.ps1 -NoCheckout -NoFetch`, and that `tools/mod-sync.json` comes out the same. It calls the extractor and reads `planner-data.js`, so point it at `extract.mjs`. Paths it matches (`\src\main\`) must work with `/` too.
+2. ~~Port `update.ps1`~~ (done, `tools/update.mjs`, not committed yet). Same report and same `mod-sync.json` values as `update.ps1` over 8 scenarios: as is, an older sync baseline, a baseline 78 commits back (rule file list), no previous data or sync, made-up tree changes, `--tag`, newest tag with fetch, a dirty mod checkout, and `--commit` (on scratch clones). Differences on purpose, for the CHANGELOG:
+   - It flags newly missing images even when the last sync had none. The PowerShell version couldn't: an `if` that returns an empty list gives `$null` there, so an empty `absentImages` (or `noWording`) counted as "no record".
+   - Messages name `extract.mjs`, `getDescriptionArgs` and `--no-checkout`/`--commit`, and show the mod checkout's real path instead of `ExiledSector\`.
+   - Name, tier and wording changes are compared with case (PowerShell's `-ne` ignores it), and type fields are compared with sorted keys, so the PowerShell and Node extractors' key order doesn't show up as a change.
+   - `mod-sync.json` is written with 4-space `JSON.stringify` indentation (a one-time formatting diff).
 3. Port `package.ps1` (127 lines): build the zip with `git archive refs/tags/<tag>:web ... --add-virtual-file` (git >=2.39), no zip package. Compare file lists and contents with the `.ps1` zip for the same tag.
 4. Port `release.ps1` (158 lines): compare `--dry-run` tag names over the version scenarios (continue a pre-release, `--bump`, `--pre`, `--rc`, `--plain`). Never create or push real tags unless the user asks.
 5. Regenerate `web/data/planner-data.js` with `extract.mjs` in a commit of its own (one-time formatting diff, values unchanged).

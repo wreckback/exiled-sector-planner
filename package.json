@@ -8,6 +8,7 @@
   },
   "scripts": {
     "serve": "node tools/serve.mjs",
-    "extract": "node tools/extract.mjs"
+    "extract": "node tools/extract.mjs",
+    "update": "node tools/update.mjs"
   }
 }

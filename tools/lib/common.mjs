@@ -93,10 +93,12 @@ export function readCsv(path) {
 }
 
 // ---------------------------------------------------------------- git
-// Runs git in `dir` and returns its trimmed output. Throws with git's message on failure.
-export function git(dir, args, { allowFail = false } = {}) {
+// Runs git in `dir` and returns its trimmed output (trailing only with keepIndent, for column formats like
+// `status --porcelain`). Throws with git's message on failure.
+export function git(dir, args, { allowFail = false, keepIndent = false } = {}) {
     try {
-        return execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }).trim();
+        const out = execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+        return keepIndent ? out.trimEnd() : out.trim();
     } catch (e) {
         if (allowFail) return null;
         const detail = `${e.stderr ?? ''}${e.stdout ?? ''}`.trim().replace(/\s+/g, ' ');
