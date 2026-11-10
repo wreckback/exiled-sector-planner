@@ -73,6 +73,11 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 
 - Mod 0.12.4 added a LunaLib setting, Integration Story Point Cost, and changed the default cost. Optional rules has an **Integration cost** dropdown: Exponential (1, 2, 4, 8…, the new default), Additive (1, 2, 3…, the old cost) or Static (2 each), ported from `IntegrationCostSetting`. It's saved with the build (`ship.ic`, only when not Exponential), is one Undo step, and Reset optional rules sets it back to Exponential. It only changes the story points shown.
 
+## Integration comparison (mod 0.12.2+, 2026-11-10)
+
+- The normal and integrated effects are paired like the mod's rewritten `IntegrationLines`: a number keeps its `%`, and an integrated line without a counterpart takes the place of a leftover normal line ("Instead grants …") before counting as new ("In addition, grants …"). Lion's Gaze, Lion's Guard Arsenal and At Any Cost now show one replaced line instead of a dropped one plus a new one.
+- Both Integrated effects layouts use the mod's wording for those lines, and the inline layout says "No longer grants …" for a dropped line while the node is integrated. Rows follow the integrated lines' order, with dropped lines last.
+
 ## Planner (`web/`)
 
 **Tree view**

@@ -1303,21 +1303,35 @@
   // (2026-11-09); if one reads badly in use, change it (see TODO.md).
   let integView = 'inline'; // the default: shorter for most nodes
   try { if (localStorage.getItem('esp.integView') === 'columns') integView = 'columns'; } catch { /* storage unavailable */ }
-  const wordingKey = html => plain(html).replace(/[+-]?\d+(?:[.,]\d+)*/g, '#');
+  // A number with its trailing %, as IntegrationLines.NUMBER (mod 0.12.2+), so "15%" -> "20%" is one changed value.
+  const NUMBER = /[+-]?\d+(?:[.,]\d+)*%?/g;
+  const wordingKey = html => plain(html).replace(NUMBER, '#');
+  // Ports IntegrationLines.Comparison (mod 0.12.2+), in the integrated lines' order: each integrated line is 'same'
+  // (identical text), 'changed' (same wording, other numbers), 'replaced' (no counterpart, taking the place of a normal
+  // line left over) or 'added' (no counterpart and none left over). Normal lines still left over are 'dropped', at the end.
   function integrationRows(t) {
     const normal = typeLines(t, false), integ = typeLines(t, true);
-    const match = normal.map(() => -1), used = new Set();
-    const pair = same => normal.forEach((l, i) => {
-      if (match[i] >= 0) return;
-      const j = integ.findIndex((m, k) => !used.has(k) && same(l, m));
-      if (j >= 0) { match[i] = j; used.add(j); }
+    const unmatched = normal.slice();
+    const take = (key, k) => { const i = unmatched.findIndex(l => k(l) === key); return i < 0 ? null : unmatched.splice(i, 1)[0]; };
+    const identical = integ.map(m => take(plain(m), plain));
+    const counterpart = integ.map((m, i) => (identical[i] != null ? null : take(wordingKey(m), wordingKey)));
+    let replaced = 0;
+    const rows = integ.map((m, i) => {
+      if (identical[i] != null) return { kind: 'same', normal: identical[i], integ: m };
+      if (counterpart[i] != null) return { kind: 'changed', normal: counterpart[i], integ: m };
+      if (replaced < unmatched.length) return { kind: 'replaced', normal: unmatched[replaced++], integ: m };
+      return { kind: 'added', normal: null, integ: m };
     });
-    pair((l, m) => plain(l) === plain(m));
-    pair((l, m) => wordingKey(l) === wordingKey(m));
-    const rows = normal.map((l, i) => (match[i] < 0 ? { kind: 'dropped', normal: l, integ: null }
-      : { kind: plain(l) === plain(integ[match[i]]) ? 'same' : 'changed', normal: l, integ: integ[match[i]] }));
-    integ.forEach((m, k) => { if (!used.has(k)) rows.push({ kind: 'added', normal: null, integ: m }); });
+    for (const l of unmatched.slice(replaced)) rows.push({ kind: 'dropped', normal: l, integ: null });
     return rows;
+  }
+  // The game's wording for lines that aren't a simple value change: node.integration.instead / inAddition / removes, or
+  // their ...Sentence forms ("Instead grants: When ...") when the line doesn't start with a value (IntegrationLines.grantsLine).
+  const GRANTS_FALLBACK = { instead: 'Instead grants {line}', inAddition: 'In addition, grants {line}', removes: 'No longer grants {line}' };
+  function grantsLine(kind, html) {
+    const key = `node.integration.${kind}${/^[+-]?\d/.test(plain(html)) ? '' : 'Sentence'}`;
+    const tpl = S[key] ?? S[`node.integration.${kind}`] ?? GRANTS_FALLBACK[kind];
+    return styled(tpl).replace('{line}', html);
   }
   // On a hull the node's requiredHullSizes refuse, it can't be allocated, so it can't be integrated either: show just its
   // normal effects (the tooltip gives the refusal), not a comparison (Dedicated Targeting Core on a frigate, say).
@@ -1332,16 +1346,19 @@
     const cost = marked ? '' : ` <span class="muted">(+${esc(pointsText(nextIntegrationCost()))})</span>`;
     const cell = (label, html) => `<div data-label="${label}">${html}</div>`;
     const none = '<span class="muted">—</span>';
+    const up = '<span class="builtin" aria-hidden="true">▲ </span>';
+    const integCell = r => (r.kind === 'dropped' ? '<span class="builtin">—</span>'
+      : r.kind === 'same' ? r.integ
+      : r.kind === 'replaced' ? up + grantsLine('instead', r.integ)
+      : r.kind === 'added' ? up + grantsLine('inAddition', r.integ)
+      : up + r.integ);
     const rows = integrationRows(t).map(r => `<div class="ic-row ic-${r.kind}">` +
-      cell('Normal', r.normal ?? none) +
-      cell('Integrated', r.kind === 'dropped' ? '<span class="builtin">—</span>'
-        : r.kind === 'same' ? r.integ : `<span class="builtin" aria-hidden="true">▲ </span>${r.integ}`) + '</div>').join('');
+      cell('Normal', r.normal ?? none) + cell('Integrated', integCell(r)) + '</div>').join('');
     // The column the build doesn't use is drawn lighter (style.css: .ic-on-normal / .ic-on-integ).
     return `<div class="ic${active ? ` ic-on-${active}` : ''}"><div class="ic-row ic-head"><div>Normal${tag('normal')}</div><div><span class="builtin">Integrated</span>${cost}${tag('integ')}</div></div>${rows}</div>`;
   }
   // The inline view: the set the build uses (normal while the node isn't allocated) line by line. A changed number gets the
   // other set's value in brackets, a line only the other set has is shown faded, and a dropped line says so.
-  const NUMBER = /[+-]?\d+(?:[.,]\d+)*%?/g;
   function integrationInlineHtml(n, t) {
     const marked = state.integrated.has(n.id);
     const integOn = state.alloc.has(n.id) && integratedOn(n);
@@ -1363,9 +1380,14 @@
     const rows = integrationRows(t).map(r => {
       if (r.kind === 'same') return `<div>${r.normal}</div>`;
       if (r.kind === 'changed') return `<div>${integOn ? withOther(r.integ, r.normal) : withOther(r.normal, r.integ)}</div>`;
+      // Lines without a counterpart: while integrated, the line itself (▲); otherwise, the integrated line faded under a
+      // "When integrated:" lead, in the game's "Instead grants" / "In addition, grants" wording.
+      const whenInteg = html => `<div class="ic-off"><span class="builtin">▲ When integrated:</span> ${html}</div>`;
+      if (r.kind === 'replaced') return integOn ? `<div><span class="builtin" aria-hidden="true">▲ </span>${r.integ}</div>`
+        : `<div>${r.normal}</div>${whenInteg(grantsLine('instead', r.integ))}`;
       if (r.kind === 'added') return integOn ? `<div><span class="builtin" aria-hidden="true">▲ </span>${r.integ}</div>`
-        : `<div class="ic-off"><span class="builtin">▲ When integrated:</span> ${r.integ}</div>`;
-      return integOn ? `<div class="ic-off"><span class="builtin">-</span> ${r.normal}</div>`
+        : whenInteg(grantsLine('inAddition', r.integ));
+      return integOn ? `<div class="ic-off">${grantsLine('removes', r.normal)}</div>`
         : `<div>${r.normal} <span class="ic-alt">(removed when integrated)</span></div>`;
     }).join('');
     return `<div class="ic-inl">${head}${rows}</div>`;
