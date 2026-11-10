@@ -2,6 +2,19 @@
 
 Inside the planner folder or beside it. Check how the other work environment has it laid out first. Then make the tools' default `--mod-root`, the README and `CLAUDE.md` match.
 
+# Now: mod 0.12.2 data sync and text externalization (2026-11-10)
+
+The user starts both on a separate branch off `main`, not on `main` itself.
+
+1. **Sync the data to mod 0.12.2.** The planner is synced to 0.12.1 (`tools/mod-sync.json`), the mod checkout is at 0.12.2. Start with a dry run (`node tools/update.mjs --preview --mod-root C:\tarnish\exiled\ExiledSector`, from PowerShell so it finds Node 26). Changes in the mod since 0.12.1 that may touch the planner:
+   - Every tooltip number is highlighted: the effect's own value is `<good>`/`<bad>`, every other number `<hl>`, and on integrated nodes only what integration changes is story-point green (`docs/tooltip_wording.md`, Highlighting).
+   - `IntegrationLines.java` was rewritten ("Show integration bonuses as differences"); the planner's `integrationRows` and compare layouts mirror it.
+   - Smaller: `StatMode`, `NodeSearch`, `KnownHullMods`, a trimmed exclusivity list, a renamed tree hullmod, `zh_CN.json` strings.
+2. **Move all user-facing text into separate files.** Goal: editing a large amount of text, by hand or by script, shouldn't hurt. English only for now, translations possible later; bundles through `tools/` possible later; the page must keep running from `file://` (no `fetch`).
+   - Design drafted (not built): `web/text/*.js` per area (pure data, one `key: 'string'` per line), loaded by `<script>` before `app.js`; `t(key, args)` with `{name}` placeholders (arguments escaped), the game's `<hl>`/`<good>`/`<bad>` markup inside strings, `.one`/`.other` plural variants, whole-sentence keys instead of concatenated fragments; `index.html` keeps only `data-t`, `data-t-title` and `data-t-placeholder` keys, filled by `applyText()`; the `#keys` shortcut list moves into the text files. Mod-derived text and node names stay in `planner-data.js`.
+   - Steps: inventory every literal (about 300 in `app.js`, 39 `toast(` calls, plus `index.html`); capture a baseline of tooltips, stat sheet, list view and dialogs through `serve.mjs` (not the user's tab) and require identical output after each migrated area; infrastructure; migrate `app.js` by area (label constants, tooltips, rule refusals, toasts and notices, panels and stat sheet, dialogs); migrate `index.html`; a check tool for missing, unused and mismatched keys; update `CLAUDE.md`, `TOOLS.md`, `README-TECHNICAL.md` and `CHANGELOG.md`.
+   - Undecided, ask the user: which task goes first, the key style (dotted keys by area was suggested), whether the check tool runs in `release.mjs`, whether to build `tools/text.mjs` (list, search, rename a key everywhere, find duplicates), and the branch name.
+
 # Next: follow-ups from the PR #1 review (`node-tools`)
 
 From the code review of PR #1 (2026-11-09). Already fixed in `4fe0eaa`: `/dist/` in `.gitignore`, `update.mjs --commit` commits only `SyncFiles`, and `git()` allows 64 MB of output. The rest, with the suggested fix for each. Suggested order: 1 and 2 in one commit, then 3 and 6. After each, check that `extract.mjs` output is byte-identical apart from `generated` and that `update.mjs` gives the same report, on Windows and under WSL (item 2 is a Linux problem).
