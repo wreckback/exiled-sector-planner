@@ -78,6 +78,10 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - The normal and integrated effects are paired like the mod's rewritten `IntegrationLines`: a number keeps its `%`, and an integrated line without a counterpart takes the place of a leftover normal line ("Instead grants …") before counting as new ("In addition, grants …"). Lion's Gaze, Lion's Guard Arsenal and At Any Cost now show one replaced line instead of a dropped one plus a new one.
 - Both Integrated effects layouts use the mod's wording for those lines, and the inline layout says "No longer grants …" for a dropped line while the node is integrated. Rows follow the integrated lines' order, with dropped lines last.
 
+## Mutually exclusive lists in tooltips (2026-11-10)
+
+- Node tooltips (and each option of a choice node) now have the game's "Mutually exclusive with nodes" and "Mutually exclusive with hullmods" lines (`SkillNode.describeExclusivity`), so a clash shows before either node is allocated. The nodes list is every type it clashes with. The hull mods list is the node's own hull mods plus the ones entered in Ship rules that it clashes with, since the planner can't know which hull mods the player knows (the game lists those since mod 0.12.4).
+
 ## Planner (`web/`)
 
 **Tree view**

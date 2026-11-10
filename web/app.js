@@ -2803,6 +2803,27 @@
 
   // ------------------------------------------------------------------ tooltip
   let lastMouse = { x: 0, y: 0 };
+  // The game's "Mutually exclusive with" lists (SkillNode.describeExclusivity). Nodes: every other type it clashes with
+  // (typesExclusive), by name. Hull mods: the game lists the type's own ones plus the conflicting ones the player knows
+  // (mod 0.12.4); the planner can't know those, so it lists the own ones plus those entered in Ship rules.
+  const exclusiveNodeCache = new Map();
+  function exclusiveNodeNames(t) {
+    let names = exclusiveNodeCache.get(t.id);
+    if (!names) {
+      names = [...new Set([...types.values()].filter(o => o !== t && typesExclusive(t, o)).map(o => o.name))];
+      exclusiveNodeCache.set(t.id, names);
+    }
+    return names;
+  }
+  function exclusivityHtml(t) {
+    const hullMods = [...new Set([...grantedHullMods(t), ...typeRules(t).excluded.filter(shipHasHullMod)])].map(hullModName);
+    const nodeNames = exclusiveNodeNames(t);
+    const label = (key, n, fallback) => (S[`${key}.${n === 1 ? 'one' : 'other'}`] || fallback).replace(/<\/?\w+>/g, '').replace(/:\s*$/, '');
+    let html = '';
+    if (hullMods.length) html += `<div class="tt-note">${esc(label('node.exclusive.hullmods', hullMods.length, 'Mutually exclusive with hullmods'))}: ${esc(hullMods.join(', '))}</div>`;
+    if (nodeNames.length) html += `<div class="tt-note">${esc(label('node.exclusive.nodes', nodeNames.length, 'Mutually exclusive with nodes'))}: ${esc(nodeNames.join(', '))}</div>`;
+    return html;
+  }
   function tooltipHtml(n) {
     const t = effectiveType(n);
     const allocated = sat(n.id);
@@ -2816,7 +2837,7 @@
         const o = types.get(id);
         if (!o) continue;
         const b = others && cur !== id ? blockOf(n, id, others) : null;
-        html += `<div class="tt-option"><div class="${cur === id ? 'on' : ''}">${esc(o.name)}${cur === id ? ' ✓' : ''}</div>${typeLines(o).map(l => `<div>${l}</div>`).join('')}${b ? `<div class="bad">${esc(b.text)}</div>` : ''}</div>`;
+        html += `<div class="tt-option"><div class="${cur === id ? 'on' : ''}">${esc(o.name)}${cur === id ? ' ✓' : ''}</div>${typeLines(o).map(l => `<div>${l}</div>`).join('')}${exclusivityHtml(o)}${b ? `<div class="bad">${esc(b.text)}</div>` : ''}</div>`;
       }
     } else if (n.tier === 'SOCKET') {
       const e = state.links.get(n.id);
@@ -2834,8 +2855,9 @@
       const lines = typeLines(t);
       if (lines.length) html += `<div class="tt-effects">${lines.map(l => `<div>${l}</div>`).join('')}</div>`;
     }
+    if (!isChoice(n)) html += exclusivityHtml(t);
     const nodeTheme = nodeThemes(n);
-    if (nodeTheme && nodeTheme.size) html += `<div class="tt-note">Themes: ${esc([...nodeTheme].map(themeName).join(', '))}</div>`;
+    if (nodeTheme && nodeTheme.size) html += `<div class="tt-note">Themes:${esc([...nodeTheme].map(themeName).join(', '))}</div>`;
     const reqs = (t.tags || []).filter(x => x.startsWith('req_')).map(x => humanize(x.slice(4)));
     if (reqs.length) html += `<div class="tt-note">Needs a ship with: ${esc(reqs.join(', '))}</div>`;
     if (n.gates.length) html += `<div class="tt-note">Unlocked by: ${esc(n.gates.map(g => humanize(g.slice(5))).join(', '))}</div>`;

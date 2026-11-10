@@ -193,7 +193,7 @@ The planner checks the same things the game checks before it allows a node (the 
 
 **Always checked:**
 - **Hull size:** some nodes only fit certain sizes, going by the Hull size dropdown. For example, Dedicated Targeting Core needs a cruiser or capital.
-- **Nodes that can't be taken together:** two nodes clash when the hull mods they add clash. Examples are Phase Anchor and Adaptive Phase Coils, Heavy Armor and Critical Point Refit, or any two of Shield Shunt and the two Shield Conversions.
+- **Nodes that can't be taken together:** two nodes clash when the hull mods they add clash. Examples are Phase Anchor and Adaptive Phase Coils, Heavy Armor and Critical Point Refit, or any two of Shield Shunt and the two Shield Conversions. A node's tooltip lists the nodes it can't be taken with ("Mutually exclusive with nodes"), and its hull mods plus any hull mods in Ship rules it clashes with ("Mutually exclusive with hullmods"). The game also lists the clashing hull mods you know; the planner can't know those, so add them in Ship rules.
 - **Logistics limit:** a ship holds 2 logistics notables and keystones (cargo, fuel, sensors and the like).
 
 Two kinds of setting cover what the planner can't see.

@@ -73,6 +73,7 @@ The sections run top to bottom in this order:
    - `rules()` caches the build entries, per-node `staticBlock` results, and `problems` (allocated nodes breaking a rule, found by replaying the build in order). `changed()` clears the cache. Problems are flagged, never pruned.
    - Problems draw a red ring. `isMarkedRefused` nodes also get `drawRefusedMark` (a red X, always on; the old Mark refused checkbox, X key and `esp.markRefused` setting were removed), or a red dot when zoomed out.
    - Wording comes from the mod's `node.block.*` and `node.requires.*` strings.
+   - Tooltips show `exclusivityHtml(t)` (before Themes; per option for choice nodes), a port of `SkillNode.describeExclusivity`: the nodes it clashes with (`exclusiveNodeNames`, every type that `typesExclusive`, cached) and its hull mods (`grantedHullMods`) plus the Ship rules hull mods it clashes with, worded with `node.exclusive.*`. The game lists the conflicting hull mods the player knows instead (mod 0.12.4, `KnownHullMods`), which the planner can't know.
    - **Subroutines:**
      - `subState()` is cached per change, like `rules()`. Active means the socket is allocated, in socket-id order. It works out:
        - Empty Shell's silenced nodes and count
