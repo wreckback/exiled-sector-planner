@@ -147,7 +147,6 @@ The sections run top to bottom in this order:
 
 ## Conventions the user asked for
 
-- **Commits and pushes:** always ask the user before committing or before pushing, every time, even when earlier changes in the session were committed or pushed. When a change is done, say what's ready and ask; don't commit on your own.
 - **Function over looks in CSS:** system font, solid opaque panels, no shadows, gradients, transitions, rounded corners or uppercase letter-spaced labels. Colour is only for meaning: good/bad values, notable and keystone, over-cap, focus. Every page colour is a CSS variable, with light values under `:root[data-theme="light"]`, so add new ones as variables in both sets. The canvas art (glows, nebulae) was not part of that request and stays, and neither is the Full Sheet (`#statsheet`), which copies the game's stat sheet colours in the dark theme. In the light theme it keeps the game's layout in light colours (the `:root[data-theme="light"] #statsheet` rules), as the user asked for the sheet to follow the theme.
 - **Shortcuts:** the list in `#keys` in `index.html` is written by hand. Update it, and the `#help` line, whenever controls change.
 - **Toggling elements:** use the `hidden` attribute. `style.css` has `[hidden]{display:none!important}` because some dialogs set `display: flex`.
