@@ -69,6 +69,9 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 - The extractor keeps the `node.integration.*` strings, and `styled()` understands `<builtIn>`.
 - Fixed: per-hull effects worth 0 for the chosen hull showed as "0%" lines and counted as sources (Inertial Supercharging's damage taken on cruisers, which the integration comparison then marked as dropped). They're left out now, as in game. Nodes the hull rule refuses, such as Dedicated Targeting Core on a frigate, show only their normal effects instead of a comparison.
 - Fixed: Surveying Equipment and the Survey Cost Reduction nodes showed their cost reductions as "+12 to heavy machinery needed" in red. The extractor now reads the mod's `describeStat` calls, so they read "Your fleet has -12 to …" in green as in game, nav rating and post-battle salvage get "Your fleet has", and eight effects take the mod's own mode.
+## Integration cost modes (mod 0.12.4, 2026-11-10)
+
+- Mod 0.12.4 added a LunaLib setting, Integration Story Point Cost, and changed the default cost. Optional rules has an **Integration cost** dropdown: Exponential (1, 2, 4, 8…, the new default), Additive (1, 2, 3…, the old cost) or Static (2 each), ported from `IntegrationCostSetting`. It's saved with the build (`ship.ic`, only when not Exponential), is one Undo step, and Reset optional rules sets it back to Exponential. It only changes the story points shown.
 
 ## Planner (`web/`)
 

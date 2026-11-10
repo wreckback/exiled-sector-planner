@@ -529,9 +529,16 @@
   const isIntegrated = n => state.integrated.has(n.id) && state.alloc.has(n.id) && integrable(effectiveType(n));
   // What totals, tooltips and the map use: the build's integrations, or every integrable allocated node in the preview.
   const integratedOn = n => (integPreview ? canIntegrate(n) : isIntegrated(n));
-  // k integrations cost 1 + 2 + ... + k story points (IntegratedNodes.nextCost).
-  const storyPointCost = k => k * (k + 1) / 2;
-  const nextIntegrationCost = () => state.integrated.size + 1;
+  // The i-th integration's cost under the mod's LunaLib setting (IntegrationCostSetting.Mode.costOf), an optional rule
+  // (state.ship.integCost); k integrations cost the sum of the first k (IntegratedNodes.nextCost).
+  const INTEG_COST = {
+    EXPONENTIAL: i => 2 ** Math.min(i - 1, 30),
+    ADDITIVE: i => i,
+    STATIC: () => 2,
+  };
+  const integCostOf = i => INTEG_COST[state.ship.integCost](i);
+  const storyPointCost = k => { let sum = 0; for (let i = 1; i <= k; i++) sum += integCostOf(i); return sum; };
+  const nextIntegrationCost = () => integCostOf(state.integrated.size + 1);
   const pointsText = k => `${k} story point${k === 1 ? '' : 's'}`;
   const integrableAllocated = () => [...state.alloc].map(id => byId.get(id)).filter(n => integrable(effectiveType(n)));
   function toggleIntegration(n) {
@@ -584,7 +591,7 @@
   const TRI_FACTS = ['civilian', 'charges', 'modules', 'builtInWings'];
   function blankShip() {
     return { shield: null, armor: null, civilian: null, charges: null, modules: null, builtInWings: null,
-      hullMods: new Set(), extraLogistics: 0, lockedGates: new Set(), lockedTypes: new Set() };
+      hullMods: new Set(), extraLogistics: 0, lockedGates: new Set(), lockedTypes: new Set(), integCost: 'EXPONENTIAL' };
   }
   state.ship = blankShip();
   // Ship rules describe the hull; optional rules (locked gates and types) the campaign.
@@ -1115,6 +1122,7 @@
     if (sh.extraLogistics) so.lg = sh.extraLogistics;
     if (sh.lockedGates.size) so.gt = [...sh.lockedGates];
     if (sh.lockedTypes.size) so.ty = [...sh.lockedTypes];
+    if (sh.integCost !== 'EXPONENTIAL') so.ic = sh.integCost;
     if (Object.keys(so).length) o.ship = so;
     if (state.template) { o.tn = state.template.name; o.th = state.template.sig; }
     if (state.integrated.size) o.ig = [...state.integrated];
@@ -1139,6 +1147,7 @@
     if (Number.isFinite(so.lg) && so.lg > 0) sh.extraLogistics = Math.min(20, Math.round(so.lg));
     if (Array.isArray(so.gt)) sh.lockedGates = new Set(so.gt.filter(g => typeof g === 'string'));
     if (Array.isArray(so.ty)) sh.lockedTypes = new Set(so.ty.filter(t => types.has(t)));
+    if (Object.hasOwn(INTEG_COST, so.ic)) sh.integCost = so.ic;
     return sh;
   }
   function deserialize(json) {
@@ -4423,6 +4432,7 @@
     unlocks: document.getElementById('story-unlocks'),
     other: document.getElementById('story-other'),
     volumes: document.getElementById('story-volumes'),
+    integCost: document.getElementById('story-integ-cost'),
   };
   // Types that can appear in the tree (node types and their options), and the hull mods any of them can clash with.
   const treeTypes = [...new Map(nodes.flatMap(n => [n.type.id, ...(n.type.options || [])]).filter(id => types.has(id)).map(id => [id, types.get(id)])).values()];
@@ -4499,6 +4509,7 @@
     }
     for (const cb of storyEl.querySelectorAll('[data-gate]')) cb.checked = !sh.lockedGates.has(cb.dataset.gate);
     for (const cb of [...story.unlocks.querySelectorAll('input'), ...story.other.querySelectorAll('input')]) cb.checked = !sh.lockedTypes.has(cb.dataset.type);
+    story.integCost.value = sh.integCost;
     const n = storyRuleCount(), hv = state.hiddenVolumes.size;
     const parts = [];
     if (n) parts.push(`${n} gate${n === 1 ? ' or unlock' : 's or unlocks'}`);
@@ -4586,7 +4597,12 @@
   document.getElementById('story-unlock-none').addEventListener('click', () => setShip(s => {
     for (const cb of story.unlocks.querySelectorAll('input')) s.lockedTypes.add(cb.dataset.type);
   }));
-  document.getElementById('story-clear').addEventListener('click', () => setShip(s => { s.lockedGates.clear(); s.lockedTypes.clear(); state.hiddenVolumes.clear(); }));
+  document.getElementById('story-clear').addEventListener('click', () => setShip(s => { s.lockedGates.clear(); s.lockedTypes.clear(); s.integCost = 'EXPONENTIAL'; state.hiddenVolumes.clear(); }));
+  story.integCost.addEventListener('change', () => {
+    const v = story.integCost.value;
+    story.integCost.blur();
+    if (Object.hasOwn(INTEG_COST, v) && v !== state.ship.integCost) setShip(s => { s.integCost = v; });
+  });
   story.volumes.addEventListener('change', e => {
     const id = e.target.dataset.volgroup, g = e.target.dataset.gate;
     if (id) setVolumeShown(id, e.target.checked);
