@@ -18,6 +18,13 @@ The text editor (`node tools/serve.mjs --edit`, branch `text-editor`; `TOOLS.md`
 2. Pick a text from `index.html` (a toolbar button) and a built one (a panel line or a tooltip), type, and check that the page changes as you type. Then Revert.
 3. Save a change, check with `git diff` that only that line (and its `// e.g.` line, if the wording left it behind) changed, then run `node tools/text-check.mjs`. Undo the change with `git checkout -- web/text`.
 4. Check that the page without `--edit`, and the release zip, show no editor.
+5. Once that passes, merge `text-editor` into `text-overhaul`.
+6. Then test `text-overhaul` again, and merge it into `main` (item 2 under "Now: text externalization"). Check at least:
+   - `node tools/text-check.mjs`
+   - `node tools/text-baseline.mjs --check` against a baseline saved from `main`
+   - `extract.mjs` output byte-identical
+   - `release.mjs --dry-run`
+   - a test zip from `package.mjs` that opens from `file://`
 
 # Next: follow-ups from the PR #1 review (`node-tools`)
 
