@@ -18,14 +18,27 @@
   // (Named tr, not t: t is the usual name for a node type in this file.)
   const TEXT = window.ESP_TEXT || {};
   const missingText = new Set();
-  function tr(key, args = {}) {
+  function textTemplate(key, args) {
     let s = TEXT[key];
     if (s === undefined && 'count' in args) s = TEXT[`${key}.${args.count === 1 ? 'one' : 'other'}`];
     if (s === undefined) {
       if (!missingText.has(key)) { missingText.add(key); console.warn(`Missing text: ${key}`); }
       return key;
     }
-    return s.replace(/\{(\w+)\}/g, (m, k) => (k in args ? String(args[k]) : m));
+    return s;
+  }
+  function tr(key, args = {}) {
+    return textTemplate(key, args).replace(/\{(\w+)\}/g, (m, k) => (k in args ? String(args[k]) : m));
+  }
+  // The same as HTML: the text's game markup (<hl>, <good>, <bad>, <muted>, <builtIn>) and <b> become HTML, everything
+  // else is escaped, values too, except a value whose name ends in Html, which is put in as it is.
+  function trHtml(key, args = {}) {
+    const html = textTemplate(key, args).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/&lt;(good|bad|hl|muted|builtIn)&gt;/g, (_, c) => `<span class="${c.toLowerCase()}">`)
+      .replace(/&lt;\/(good|bad|hl|muted|builtIn)&gt;/g, '</span>')
+      .replace(/&lt;(\/?)b&gt;/g, '<$1b>');
+    return html.replace(/\{(\w+)\}/g, (m, k) => (!(k in args) ? m : k.endsWith('Html') ? String(args[k])
+      : String(args[k]).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')));
   }
   // index.html names its text by key: data-t (the element's text), data-t-title, data-t-placeholder, data-t-aria-label.
   function applyText(root = document) {
@@ -566,7 +579,7 @@
   const integCostOf = i => INTEG_COST[state.ship.integCost](i);
   const storyPointCost = k => { let sum = 0; for (let i = 1; i <= k; i++) sum += integCostOf(i); return sum; };
   const nextIntegrationCost = () => integCostOf(state.integrated.size + 1);
-  const pointsText = k => `${k} story point${k === 1 ? '' : 's'}`;
+  const pointsText = k => tr('label.storyPoints', { count: k });
   const integrableAllocated = () => [...state.alloc].map(id => byId.get(id)).filter(n => integrable(effectiveType(n)));
   function toggleIntegration(n) {
     if (!n) return;
@@ -1326,7 +1339,7 @@
   function typeLines(t, integ = false) {
     const lines = typeEffects(t, integ).map(e => describe(e.effect, e.magnitude) + (e.hullScaled ? ` <span class="muted">(${hullLabel()})</span>` : ''));
     for (const txt of typeText(t, integ)) lines.push(styled(txt));
-    for (const hm of grantedHullMods(t)) lines.push(`Grants <span class="hl">${esc(hullModName(hm))}</span>.`);
+    for (const hm of grantedHullMods(t)) lines.push(trHtml('tooltip.grantsHullmod', { hullmod: hullModName(hm) }));
     return lines;
   }
   // ---- a type's integrated effects beside its normal ones (tooltip and list view)
@@ -1362,7 +1375,7 @@
   }
   // The game's wording for lines that aren't a simple value change: node.integration.instead / inAddition / removes, or
   // their ...Sentence forms ("Instead grants: When ...") when the line doesn't start with a value (IntegrationLines.grantsLine).
-  const GRANTS_FALLBACK = { instead: 'Instead grants {line}', inAddition: 'In addition, grants {line}', removes: 'No longer grants {line}' };
+  const GRANTS_FALLBACK = { instead: tr('tooltip.integ.instead'), inAddition: tr('tooltip.integ.inAddition'), removes: tr('tooltip.integ.removes') };
   function grantsLine(kind, html) {
     const key = `node.integration.${kind}${/^[+-]?\d/.test(plain(html)) ? '' : 'Sentence'}`;
     const tpl = S[key] ?? S[`node.integration.${kind}`] ?? GRANTS_FALLBACK[kind];
@@ -1377,9 +1390,10 @@
     const marked = state.integrated.has(n.id);
     // Which column the build uses now (none while the node isn't allocated).
     const active = !state.alloc.has(n.id) ? null : integratedOn(n) ? 'integ' : 'normal';
-    const tag = side => (active === side ? ' <span class="ic-active">active</span>' : '');
-    const cost = marked ? '' : ` <span class="muted">(+${esc(pointsText(nextIntegrationCost()))})</span>`;
-    const cell = (label, html) => `<div data-label="${label}">${html}</div>`;
+    const tag = side => (active === side ? ` <span class="ic-active">${esc(tr('tooltip.integ.active'))}</span>` : '');
+    const cost = marked ? '' : ` <span class="muted">${esc(tr('tooltip.integ.cost', { points: pointsText(nextIntegrationCost()) }))}</span>`;
+    const cell = (label, html) => `<div data-label="${esc(label)}">${html}</div>`;
+    const normalLabel = tr('tooltip.integ.normal'), integLabel = tr('tooltip.integ.integrated');
     const none = '<span class="muted">—</span>';
     const up = '<span class="builtin" aria-hidden="true">▲ </span>';
     const integCell = r => (r.kind === 'dropped' ? '<span class="builtin">—</span>'
@@ -1388,20 +1402,20 @@
       : r.kind === 'added' ? up + grantsLine('inAddition', r.integ)
       : up + r.integ);
     const rows = integrationRows(t).map(r => `<div class="ic-row ic-${r.kind}">` +
-      cell('Normal', r.normal ?? none) + cell('Integrated', integCell(r)) + '</div>').join('');
+      cell(normalLabel, r.normal ?? none) + cell(integLabel, integCell(r)) + '</div>').join('');
     // The column the build doesn't use is drawn lighter (style.css: .ic-on-normal / .ic-on-integ).
-    return `<div class="ic${active ? ` ic-on-${active}` : ''}"><div class="ic-row ic-head"><div>Normal${tag('normal')}</div><div><span class="builtin">Integrated</span>${cost}${tag('integ')}</div></div>${rows}</div>`;
+    return `<div class="ic${active ? ` ic-on-${active}` : ''}"><div class="ic-row ic-head"><div>${esc(normalLabel)}${tag('normal')}</div><div><span class="builtin">${esc(integLabel)}</span>${cost}${tag('integ')}</div></div>${rows}</div>`;
   }
   // The inline view: the set the build uses (normal while the node isn't allocated) line by line. A changed number gets the
   // other set's value in brackets, a line only the other set has is shown faded, and a dropped line says so.
   function integrationInlineHtml(n, t) {
     const marked = state.integrated.has(n.id);
     const integOn = state.alloc.has(n.id) && integratedOn(n);
-    const other = integOn ? 'normal' : 'integrated';
-    const cost = marked ? '' : ` <span class="muted">(+${esc(pointsText(nextIntegrationCost()))})</span>`;
+    const otherKey = integOn ? 'tooltip.integ.otherValue.normal' : 'tooltip.integ.otherValue.integrated';
+    const cost = marked ? '' : ` <span class="muted">${esc(tr('tooltip.integ.cost', { points: pointsText(nextIntegrationCost()) }))}</span>`;
     const head = integOn
-      ? '<div class="ic-inl-head"><span class="builtin">Integrated</span> <span class="ic-active">active</span> <span class="muted">· normal values in brackets</span></div>'
-      : `<div class="ic-inl-head"><span class="muted">Integrated values in brackets</span>${cost}</div>`;
+      ? `<div class="ic-inl-head"><span class="builtin">${esc(tr('tooltip.integ.integrated'))}</span> <span class="ic-active">${esc(tr('tooltip.integ.active'))}</span> <span class="muted">${esc(tr('tooltip.integ.normalInBrackets'))}</span></div>`
+      : `<div class="ic-inl-head"><span class="muted">${esc(tr('tooltip.integ.integratedInBrackets'))}</span>${cost}</div>`;
     // Puts the other line's numbers, where they differ, in brackets after this line's numbers (tags hold no digits).
     const withOther = (html, otherHtml) => {
       const nums = plain(otherHtml).match(NUMBER) || [];
@@ -1409,7 +1423,7 @@
       return html.replace(/(<[^>]*>)|([+-]?\d+(?:[.,]\d+)*%?)/g, (m, tag, num) => {
         if (tag) return tag;
         const o = nums[i++];
-        return o != null && o !== num ? `${num} <span class="ic-alt">(${other} ${esc(o)})</span>` : num;
+        return o != null && o !== num ? `${num} <span class="ic-alt">${esc(tr(otherKey, { value: o }))}</span>` : num;
       });
     };
     const rows = integrationRows(t).map(r => {
@@ -1417,13 +1431,13 @@
       if (r.kind === 'changed') return `<div>${integOn ? withOther(r.integ, r.normal) : withOther(r.normal, r.integ)}</div>`;
       // Lines without a counterpart: while integrated, the line itself (▲); otherwise, the integrated line faded under a
       // "When integrated:" lead, in the game's "Instead grants" / "In addition, grants" wording.
-      const whenInteg = html => `<div class="ic-off"><span class="builtin">▲ When integrated:</span> ${html}</div>`;
+      const whenInteg = html => `<div class="ic-off"><span class="builtin">${esc(tr('tooltip.integ.whenIntegrated'))}</span> ${html}</div>`;
       if (r.kind === 'replaced') return integOn ? `<div><span class="builtin" aria-hidden="true">▲ </span>${r.integ}</div>`
         : `<div>${r.normal}</div>${whenInteg(grantsLine('instead', r.integ))}`;
       if (r.kind === 'added') return integOn ? `<div><span class="builtin" aria-hidden="true">▲ </span>${r.integ}</div>`
         : whenInteg(grantsLine('inAddition', r.integ));
       return integOn ? `<div class="ic-off">${grantsLine('removes', r.normal)}</div>`
-        : `<div>${r.normal} <span class="ic-alt">(removed when integrated)</span></div>`;
+        : `<div>${r.normal} <span class="ic-alt">${esc(tr('tooltip.integ.removed'))}</span></div>`;
     }).join('');
     return `<div class="ic-inl">${head}${rows}</div>`;
   }
@@ -2671,7 +2685,7 @@
       const extras = new Set();
       for (const c of contributions()) {
         if (c.node.tier === 'WORMHOLE' || c.node.tier === 'WORMHOLE_EXIT') continue; // their text is travel instructions
-        for (const hm of grantedHullMods(c.type)) extras.add(`Grants <span class="hl">${esc(hullModName(hm))}</span>.`);
+        for (const hm of grantedHullMods(c.type)) extras.add(trHtml('tooltip.grantsHullmod', { hullmod: hullModName(hm) }));
         for (const txt of typeText(c.type, c.integ)) extras.add(styled(txt));
       }
       if (extras.size) html += `<div class="stat-group"><h3>Other effects</h3>${[...extras].map(e => `<div class="stat-line">${e}</div>`).join('')}</div>`;
@@ -2857,15 +2871,15 @@
     const nodeNames = exclusiveNodeNames(t);
     const label = (key, n, fallback) => (S[`${key}.${n === 1 ? 'one' : 'other'}`] || fallback).replace(/<\/?\w+>/g, '').replace(/:\s*$/, '');
     let html = '';
-    if (hullMods.length) html += `<div class="tt-note">${esc(label('node.exclusive.hullmods', hullMods.length, 'Mutually exclusive with hullmods'))}: ${esc(hullMods.join(', '))}</div>`;
-    if (nodeNames.length) html += `<div class="tt-note">${esc(label('node.exclusive.nodes', nodeNames.length, 'Mutually exclusive with nodes'))}: ${esc(nodeNames.join(', '))}</div>`;
+    if (hullMods.length) html += `<div class="tt-note">${esc(label('node.exclusive.hullmods', hullMods.length, tr('tooltip.exclusive.hullmods')))}: ${esc(hullMods.join(', '))}</div>`;
+    if (nodeNames.length) html += `<div class="tt-note">${esc(label('node.exclusive.nodes', nodeNames.length, tr('tooltip.exclusive.nodes')))}: ${esc(nodeNames.join(', '))}</div>`;
     return html;
   }
   function tooltipHtml(n) {
     const t = effectiveType(n);
     const allocated = sat(n.id);
     const tierClass = n.tier.toLowerCase();
-    let html = `<div class="tt-head">${nodeIconHtml(n, t)}<div><div class="tt-title">${esc(t.name)}</div><div class="tt-tier ${tierClass}">${esc(TIER_LABEL[n.tier] || n.tier)}${n.volume !== 'core' ? ' · ' + esc(volumeName(n.volume)) : ''}${state.integrated.has(n.id) && integrable(t) ? ' · <span class="builtin">Integrated</span>' : integPreview && canIntegrate(n) ? ' · <span class="builtin">Integrated (preview)</span>' : ''}</div></div></div>`;
+    let html = `<div class="tt-head">${nodeIconHtml(n, t)}<div><div class="tt-title">${esc(t.name)}</div><div class="tt-tier ${tierClass}">${esc(TIER_LABEL[n.tier] || n.tier)}${n.volume !== 'core' ? ' · ' + esc(volumeName(n.volume)) : ''}${state.integrated.has(n.id) && integrable(t) ? ` · <span class="builtin">${esc(tr('tooltip.integ.integrated'))}</span>` : integPreview && canIntegrate(n) ? ` · <span class="builtin">${esc(tr('tooltip.integ.preview'))}</span>` : ''}</div></div></div>`;
 
     if (isChoice(n)) {
       const cur = state.choice.get(n.id);
@@ -2880,12 +2894,12 @@
       const e = state.links.get(n.id);
       const se = state.subs.get(n.id), sd = se && SUBS.get(se.id);
       if (sd) html += `<div class="tt-effects"><div><span class="hl">${esc(sd.name)}</span></div><div>${esc(subSummary(sd, se, n))}</div>${sd.unobtainable ? `<div class="bad">${UNOBTAINABLE_TEXT}</div>` : ''}</div>${sd.description ? `<div class="tt-flavour">${esc(sd.description)}</div>` : ''}`;
-      else html += `<div class="tt-effects"><div>${e ? `Linked to <span class="hl">${esc(volumeName(byId.get(e).volume))}</span>.` : 'Install a subroutine, or an anchor.'}</div></div>`;
+      else html += `<div class="tt-effects"><div>${e ? trHtml('tooltip.socket.linked', { volume: volumeName(byId.get(e).volume) }) : trHtml('tooltip.socket.empty')}</div></div>`;
     } else if (n.tier === 'WORMHOLE') {
       const p = partnerOf(n);
-      html += `<div class="tt-effects"><div>Leads to ${p ? `<span class="hl">${esc(effectiveType(p).name)}</span>` : 'another wormhole'}. Allocating it also allocates the other end.</div></div>`;
+      html += `<div class="tt-effects"><div>${p ? trHtml('tooltip.wormhole.leadsTo', { node: effectiveType(p).name }) : trHtml('tooltip.wormhole.leadsToAnother')}</div></div>`;
     } else if (n.tier === 'WORMHOLE_EXIT') {
-      html += `<div class="tt-effects"><div><span class="hl">${esc(volumeName(n.volume))}</span> volume's Wormhole exit. Reached by linking an anchor in a subroutine socket.</div></div>`;
+      html += `<div class="tt-effects"><div>${trHtml('tooltip.exit', { volume: volumeName(n.volume) })}</div></div>`;
     } else if (integrable(t)) {
       html += `<div class="tt-effects">${integrationCompareHtml(n, t)}</div>`;
     } else {
@@ -2894,59 +2908,65 @@
     }
     if (!isChoice(n)) html += exclusivityHtml(t);
     const nodeTheme = nodeThemes(n);
-    if (nodeTheme && nodeTheme.size) html += `<div class="tt-note">Themes:${esc([...nodeTheme].map(themeName).join(', '))}</div>`;
+    if (nodeTheme && nodeTheme.size) html += `<div class="tt-note">${trHtml('tooltip.themes', { themes: [...nodeTheme].map(themeName).join(', ') })}</div>`;
     const reqs = (t.tags || []).filter(x => x.startsWith('req_')).map(x => humanize(x.slice(4)));
-    if (reqs.length) html += `<div class="tt-note">Needs a ship with: ${esc(reqs.join(', '))}</div>`;
-    if (n.gates.length) html += `<div class="tt-note">Unlocked by: ${esc(n.gates.map(g => humanize(g.slice(5))).join(', '))}</div>`;
+    if (reqs.length) html += `<div class="tt-note">${trHtml('tooltip.needs', { needs: reqs.join(', ') })}</div>`;
+    if (n.gates.length) html += `<div class="tt-note">${trHtml('tooltip.unlockedBy', { gates: n.gates.map(g => humanize(g.slice(5))).join(', ') })}</div>`;
     if (t.flavour) html += `<div class="tt-flavour">${esc(t.flavour)}</div>`;
     const problem = allocated && rules().problems.get(n.id);
-    if (problem) html += `<div class="tt-warn">Breaks a node rule: ${esc(problem.text)}</div>`;
+    if (problem) html += `<div class="tt-warn">${trHtml('tooltip.problem', { reason: problem.text })}</div>`;
     html += radiusNotesHtml(n);
     const grant = subState().granted.get(n.id);
     if (grant && grant.status === 'active') {
-      html += `<div class="tt-note">Allocated for free by the ${esc(grant.def.name)} (no path, no node slot). Change the cache's notables in its socket to free it.</div>`;
+      html += `<div class="tt-note">${trHtml('tooltip.granted', { item: grant.def.name })}</div>`;
       return html;
     }
 
     // action hint
+    const note = (key, args) => `<div class="tt-note">${trHtml(key, args)}</div>`;
+    const warn = (key, args) => `<div class="tt-warn">${trHtml(key, args)}</div>`;
     const jt = jumpTarget(n);
-    if (targets.mode && state.root) return html + targetTooltipNote(n) + (jt ? `<div class="tt-note">Ctrl+click to jump to ${esc(placeName(jt))}.</div>` : '');
-    if (jt && n.tier === 'SOCKET') html += `<div class="tt-note">Ctrl+click to jump to ${esc(placeName(jt))}.</div>`;
+    if (targets.mode && state.root) return html + targetTooltipNote(n) + (jt ? note('tooltip.jump', { place: placeName(jt) }) : '');
+    if (jt && n.tier === 'SOCKET') html += note('tooltip.jump', { place: placeName(jt) });
     if (jt && (n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT')) {
-      html += `<div class="tt-note">Click for options (jump${state.root && n.id !== state.root ? (allocated ? ', remove' : ', allocate') : ''}). Ctrl+click to jump to ${esc(placeName(jt))}.</div>`;
-    } else if (!state.root) html += n.tier === 'ROOT' ? '<div class="tt-note">Click to start from this root.</div>' : '';
-    else if (n.id === state.root) html += '<div class="tt-note">Starting root. Right-click to reset the build.</div>';
+      html += note(!state.root || n.id === state.root ? 'tooltip.wormhole.options' : allocated ? 'tooltip.wormhole.options.remove' : 'tooltip.wormhole.options.allocate', { place: placeName(jt) });
+    } else if (!state.root) html += n.tier === 'ROOT' ? note('tooltip.root.choose') : '';
+    else if (n.id === state.root) html += note('tooltip.root.start');
     else if (allocated) {
       const gone = removalSet(n) || [];
-      if (n.tier === 'SOCKET') html += `<div class="tt-note">Click to ${state.links.get(n.id) || state.subs.get(n.id) ? 'change what it holds' : 'socket a subroutine or link an anchor'}. Right-click to remove.</div>`;
-      else if (isChoice(n)) html += '<div class="tt-note">Click for options. Right-click to remove.</div>';
-      else html += `<div class="tt-warn">Click to remove${gone.length > 1 ? ` (${gone.length} nodes)` : ''}.</div>`;
+      if (n.tier === 'SOCKET') html += note(state.links.get(n.id) || state.subs.get(n.id) ? 'tooltip.socket.change' : 'tooltip.socket.fill');
+      else if (isChoice(n)) html += note('tooltip.choice.options');
+      else html += gone.length > 1 ? warn('tooltip.removeMany', { count: gone.length }) : warn('tooltip.remove');
     } else if (switchedOff(n)) {
       html += `<div class="tt-warn">${esc(hiddenText(n))}</div>`;
     } else {
       const found = routeTo(n);
       const path = found.path;
       const via = waypoints.includes(n) ? waypoints.indexOf(n) : waypoints.length;
-      const viaText = via ? ` through ${via} waypoint${via > 1 ? 's' : ''}` : '';
-      if (!path && found.block) html += `<div class="tt-warn">Can't be allocated${viaText}. ${esc(refusalText(n, found.block))}</div>`;
-      else if (!path) html += `<div class="tt-warn">${n.tier === 'WORMHOLE_EXIT' ? 'Link an anchor in a subroutine socket to reach this node.' : 'Not reachable from your allocated nodes.'}</div>`;
-      else if (used() + path.length > state.cap) html += `<div class="tt-warn">${path.length} node${path.length > 1 ? 's' : ''}${viaText} needed; Only ${Math.max(0, state.cap - used())} left (over cap).</div>`;
-      else html += `<div class="tt-note">Click to allocate${path.length > 1 ? ` (${path.length} nodes${viaText})` : viaText}${isChoice(n) ? ' and pick an option' : ''}.</div>`;
+      const waypointsText = tr('tooltip.waypoints', { count: via });
+      if (!path && found.block) html += via ? warn('tooltip.refusedVia', { count: via, reason: refusalText(n, found.block) }) : warn('tooltip.refused', { reason: refusalText(n, found.block) });
+      else if (!path) html += warn(n.tier === 'WORMHOLE_EXIT' ? 'tooltip.exitUnlinked' : 'tooltip.unreachable');
+      else if (used() + path.length > state.cap) {
+        html += warn(via ? 'tooltip.overCapVia' : 'tooltip.overCap', { nodes: tr('tooltip.nodes', { count: path.length }), waypoints: waypointsText, left: Math.max(0, state.cap - used()) });
+      } else {
+        const kind = path.length > 1 ? (via ? 'tooltip.allocate.manyVia' : 'tooltip.allocate.many') : via ? 'tooltip.allocate.via' : 'tooltip.allocate';
+        html += note(isChoice(n) ? `${kind}.choice` : kind, { count: path.length, waypoints: waypointsText });
+      }
     }
     if (state.root && n.id !== state.root && integrable(t) && !isChoice(n)) {
-      if (state.integrated.has(n.id)) html += `<div class="tt-note">${allocated ? '' : 'Integrated, kept while unallocated. '}Alt+click or I to remove integration.</div>`;
-      else if (allocated) html += `<div class="tt-note">Alt+click or I to integrate (+${esc(pointsText(nextIntegrationCost()))}).</div>`;
+      if (state.integrated.has(n.id)) html += note(allocated ? 'tooltip.integ.remove' : 'tooltip.integ.removeKept');
+      else if (allocated) html += note('tooltip.integ.add', { points: pointsText(nextIntegrationCost()) });
     }
     if (state.root && n.id !== state.root) {
       const wi = waypoints.indexOf(n);
-      if (wi >= 0) html += `<div class="tt-note">Waypoint ${wi + 1}. Shift+click delete waypoint.</div>`;
-      else if (waypoints.length) html += `<div class="tt-note">Shift+click waypoint ${waypoints.length + 1}.</div>`;
+      if (wi >= 0) html += note('tooltip.waypoint.this', { number: wi + 1 });
+      else if (waypoints.length) html += note('tooltip.waypoint.next', { number: waypoints.length + 1 });
     }
     if (state.root && isChoice(n) && (sat(n.id) || pathTo(n))) {
       const last = types.get(lastChoice.get(n.type.id));
       if (last && state.choice.get(n.id) !== last.id) {
         const many = !sat(n.id) && pathTo(n).length > 1;
-        html += `<div class="tt-note">Ctrl+click to ${sat(n.id) ? 'switch to' : 'allocate as'} ${esc(last.name)}${many ? ', path included' : ''}.</div>`;
+        html += note(sat(n.id) ? 'tooltip.choice.switchTo' : many ? 'tooltip.choice.allocateAsPath' : 'tooltip.choice.allocateAs', { option: last.name });
       }
     }
     return html;
@@ -2955,34 +2975,35 @@
   function radiusNotesHtml(n) {
     const sc = subState();
     let html = '';
-    if (sc.silent.has(n.id)) html += '<div class="tt-warn">Grants nothing: inside Empty Shell Axion\'s radius.</div>';
+    if (sc.silent.has(n.id)) html += `<div class="tt-warn">${trHtml('tooltip.shell.silenced')}</div>`;
     else if (n.tier === 'SMALL' && sc.active.some(a => subLine(a.def, 'EVERY_AFFINITY_FLAT_PER_EMPTY_SHELL_NODE') && nodesInRadius(a.socket, subRadius(a.def)).includes(n))) {
-      html += '<div class="tt-note">Inside Empty Shell Axion\'s radius: no effects granted if allocated.</div>';
+      html += `<div class="tt-note">${trHtml('tooltip.shell.inRadius')}</div>`;
     }
     const g = sc.gated.get(n.id);
-    if (g) html += `<div class="tt-note">${esc(g.def.name)}: applies only ${esc(GATE_IN_SENTENCE[g.when])}, at ×${g.strength}. Effects not read live in combat are lost.</div>`;
+    if (g) html += `<div class="tt-note">${trHtml('tooltip.gated', { item: g.def.name, when: GATE_IN_SENTENCE[g.when], strength: g.strength })}</div>`;
     const d = sc.doctrine;
     if (d && d.nodes.has(n.id)) {
       if (d.def.behaviour === 'REWRITE') {
         const pool = (n.tier === 'KEYSTONE' ? d.def.keystones : n.tier === 'NOTABLE' ? d.def.notables : d.def.small_nodes) || [];
-        html += pool.length ? `<div class="tt-note">${esc(d.def.name)} rewrites it into one of: ${esc(pool.map(id => types.get(id)?.name || id).join(', '))}. Which one is rolled per item; the planner shows the original.</div>`
-          : `<div class="tt-note">In the ${esc(d.def.name)}'s radius, but it has no ${n.tier.toLowerCase()} replacements, so it stays as it is.</div>`;
+        html += pool.length ? `<div class="tt-note">${trHtml('tooltip.doctrine.rewrites', { item: d.def.name, types: pool.map(id => types.get(id)?.name || id).join(', ') })}</div>`
+          : `<div class="tt-note">${trHtml('tooltip.doctrine.noReplacements', { item: d.def.name, tier: TIER_IN_SENTENCE[n.tier] || n.tier.toLowerCase() })}</div>`;
       } else {
-        const lines = (d.def.modifiers || []).map(m => (D.subroutineModifiers[m] || []).map(l => describeRange(l)).join(' and ')).filter(Boolean);
-        html += `<div class="tt-note">${esc(d.def.name)} adds ${d.def.minLines === d.def.maxLines ? d.def.minLines : `${d.def.minLines}–${d.def.maxLines}`} of these lines (rolled per item, not in the totals):</div>` +
+        const lines = (d.def.modifiers || []).map(m => (D.subroutineModifiers[m] || []).map(l => describeRange(l)).join(tr('tooltip.doctrine.lineJoin'))).filter(Boolean);
+        html += `<div class="tt-note">${trHtml('tooltip.doctrine.adds', { item: d.def.name, lines: d.def.minLines === d.def.maxLines ? d.def.minLines : `${d.def.minLines}–${d.def.maxLines}` })}</div>` +
           lines.map(l => `<div class="tt-option-line">· ${l}</div>`).join('');
       }
     }
-    if (sc.conduit && sc.conduit.route && sc.conduit.route.includes(n.id) && n !== sc.conduit.socket && n.id !== state.root) html += `<div class="tt-note">On the Root Conduit's route: +5 ${esc(affinityName(sc.conduit.aff))} affinity.</div>`;
+    if (sc.conduit && sc.conduit.route && sc.conduit.route.includes(n.id) && n !== sc.conduit.socket && n.id !== state.root) html += `<div class="tt-note">${trHtml('tooltip.conduitRoute', { affinity: affinityName(sc.conduit.aff) })}</div>`;
     return html;
   }
+  const TIER_IN_SENTENCE = { SMALL: tr('name.tier.small.inSentence'), NOTABLE: tr('name.tier.notable.inSentence'), KEYSTONE: tr('name.tier.keystone.inSentence') };
   // "+2–4% more armor": an effect described with a min–max range.
   function describeRange(l) {
     if (l.min === l.max) return describe(l.effect, l.min);
     const lo = describeRaw(l.effect, l.min), hi = describeRaw(l.effect, l.max);
     // Join the two wordings on their first differing number.
     const a = lo.match(/-?\d+(\.\d+)?/), b = hi.match(/-?\d+(\.\d+)?/);
-    if (!(a && b && lo.replace(a[0], '') === hi.replace(b[0], ''))) return styled(`${lo} to ${hi}`);
+    if (!(a && b && lo.replace(a[0], '') === hi.replace(b[0], ''))) return styled(tr('tooltip.range', { low: lo, high: hi }));
     const [p, q] = [a[0], b[0]].sort((x, y) => Math.abs(x) - Math.abs(y));
     return styled(lo.replace(a[0], `${p}–${q}`));
   }
@@ -3033,7 +3054,7 @@
   // Where a jump lands, for "Jump to …": a faction volume, or in the core the node's own id, "Core (midline_wormhole_1)",
   // since the core's wormholes and sockets have no other names that tell them apart (the mod tags core nodes just "core").
   function placeName(n) {
-    return n.volume !== 'core' ? `the ${volumeName(n.volume)} volume` : `Core (${n.id})`;
+    return n.volume !== 'core' ? tr('tooltip.place.volume', { volume: volumeName(n.volume) }) : tr('tooltip.place.core', { id: n.id });
   }
   let flash = null; // { id, start }: rings drawn on a jump's destination so it's easy to spot
   const FLASH_SECONDS = 1.6;
@@ -3673,13 +3694,11 @@
     ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
   }
   function targetTooltipNote(n) {
-    if (n.id === state.root) return '<div class="tt-note">Starting root: always in the build.</div>';
-    const st = targets.want.has(n.id) ? 'Wanted' : targets.forbid.has(n.id) ? 'Forbidden' : '';
-    const next = st === 'Wanted' ? 'forbid it' : st === 'Forbidden' ? 'clear it' : 'mark it wanted';
-    const p = currentPlan();
-    const onPath = !st && !sat(n.id) && p.add.includes(n.id);
-    return `<div class="tt-note">${st ? `<b>${st}.</b> ` : ''}Click to ${next}.${st === 'Wanted' ? ' Right-click to clear.' : ''}</div>` +
-      (onPath ? '<div class="tt-note">On the planned path.</div>' : '');
+    if (n.id === state.root) return `<div class="tt-note">${trHtml('tooltip.target.root')}</div>`;
+    const st = targets.want.has(n.id) ? 'wanted' : targets.forbid.has(n.id) ? 'forbidden' : 'none';
+    const onPath = st === 'none' && !sat(n.id) && currentPlan().add.includes(n.id);
+    return `<div class="tt-note">${trHtml(`tooltip.target.${st}`)}</div>` +
+      (onPath ? `<div class="tt-note">${trHtml('tooltip.target.onPath')}</div>` : '');
   }
   tgt.btn.addEventListener('click', () => setTargetMode(!targets.mode));
   tgt.keep.addEventListener('change', () => { setTargetKeep(tgt.keep.checked); tgt.keep.blur(); });

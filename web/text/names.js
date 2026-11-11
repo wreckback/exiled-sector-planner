@@ -9,6 +9,15 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "name.tier.wormholeExit": "Wormhole exit",
     "name.tier.root": "Root",
     "name.tier.socket": "Subroutine socket",
+    // Inside a sentence ("it has no small replacements"), for the tiers a doctrine archive rewrites.
+    "name.tier.small.inSentence": "small",
+    "name.tier.notable.inSentence": "notable",
+    "name.tier.keystone.inSentence": "keystone",
+
+    // A count of story points (integration costs).
+    // e.g. 2 story points
+    "label.storyPoints.one": "{count} story point",
+    "label.storyPoints.other": "{count} story points",
 
     // The three techs' affinities. The .stat forms are used where an effect's own wording is missing.
     "name.affinity.lowTech": "Low Tech",
