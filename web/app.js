@@ -1510,7 +1510,7 @@
       const shell = subLine(a.def, 'EVERY_AFFINITY_FLAT_PER_EMPTY_SHELL_NODE');
       if (shell) for (const k of AFFINITY_KEYS) add(k, shell.max * (sc.shellCount.get(a.socket.id) || 0), 'node', sums, a.def.name);
     }
-    if (sc.conduit && sc.conduit.count) add(sc.conduit.aff, 5 * sc.conduit.count, 'node', sums, 'Root Conduit');
+    if (sc.conduit && sc.conduit.count) add(sc.conduit.aff, 5 * sc.conduit.count, 'node', sums, sc.conduit.def.name);
     const aff = {};
     for (const k of Object.keys(D.affinitySteps || {})) aff[k] = sums.get(k)?.magnitude || 0;
     const affBonuses = [];
@@ -1518,7 +1518,7 @@
       for (const st of steps) {
         const reached = Math.floor((aff[k] || 0) / st.size);
         affBonuses.push({ affinity: k, ...st, reached });
-        if (reached > 0) add(st.effect, reached * st.bonus, 'aff', sums, `${AFFINITY_NAMES[k] || humanize(k)} affinity ${reached}×${st.size}`);
+        if (reached > 0) add(st.effect, reached * st.bonus, 'aff', sums, `${tr('panel.affinityTile', { affinity: AFFINITY_NAMES[k] || humanize(k) })} ${reached}×${st.size}`);
       }
     }
     return { sums, aff, affBonuses, gated, temp };
@@ -1548,9 +1548,9 @@
   function previewDiffHtml(baseSums, s) {
     if (!baseSums) return '';
     const b = baseSums.get(s.effect);
-    if (!b || Math.abs(b.magnitude) < 1e-9) return '<div class="ic-was"><span class="builtin">▲ new when integrated</span></div>';
+    if (!b || Math.abs(b.magnitude) < 1e-9) return `<div class="ic-was"><span class="builtin">${esc(tr('panel.preview.new'))}</span></div>`;
     if (Math.abs(b.magnitude - s.magnitude) < 1e-9) return '';
-    return `<div class="ic-was"><span class="builtin">▲</span> <span class="muted">without integration:</span> ${describe(s.effect, b.magnitude)}</div>`;
+    return `<div class="ic-was">${trHtml('panel.preview.without', { lineHtml: describe(s.effect, b.magnitude) })}</div>`;
   }
   // Totals the preview takes away entirely (an integration that drops a line), as entries of the base map.
   const previewGone = (baseSums, sums) => (baseSums ? [...baseSums.values()].filter(b => Math.abs(b.magnitude) > 1e-9 && Math.abs(sums.get(b.effect)?.magnitude || 0) < 1e-9) : []);
@@ -1861,9 +1861,9 @@
       if (a <= 0 || volumeHidden(r.volume)) continue; // a hidden optional volume isn't drawn at all
       const sx = toScreenX(r.x), sy = toScreenY(r.y);
       if (sx < -200 || sx > W + 200 || sy < -50 || sy > H + 50) continue;
-      const name = r.volume === 'core' ? 'Core tree' : volumeName(r.volume);
+      const name = r.volume === 'core' ? tr('name.region.core') : volumeName(r.volume);
       const count = r.ids.reduce((c, id) => c + (sat(id) ? 1 : 0), 0);
-      const sub = count ? `${count} allocated` : '';
+      const sub = count ? tr('label.regionAllocated', { count }) : '';
       ctx.font = `600 14px ${FONT}`;
       const w1 = ctx.measureText(name).width;
       ctx.font = `12px ${FONT}`;
@@ -2595,7 +2595,7 @@
 
   function renderChrome() {
     const r = state.root ? byId.get(state.root) : null;
-    els.rootName.textContent = r ? r.type.name : 'Choose a root';
+    els.rootName.textContent = r ? r.type.name : tr('bar.chooseRoot');
     els.rootName.classList.toggle('muted', !r);
     if (r) els.rootName.style.color = rgba(ROOT_COLOURS[r.type.id] || GLOW, 1); else els.rootName.style.color = '';
     els.used.textContent = used();
@@ -2603,28 +2603,27 @@
     if (document.activeElement !== els.cap) els.cap.value = state.cap;
     els.hull.value = state.hull;
     els.undo.disabled = undoStack.length === 0;
-    els.undo.title = `Undo, ${undoStack.length} step${undoStack.length === 1 ? '' : 's'} stored (Ctrl+Z)`;
+    els.undo.title = tr('bar.undo', { count: undoStack.length });
     const shipN = shipRuleCount(), storyN = storyRuleCount() + state.hiddenVolumes.size;
-    els.shipBtn.textContent = shipN ? `Ship rules (${shipN})` : 'Ship rules';
-    els.storyBtn.textContent = storyN ? `Optional rules (${storyN})` : 'Optional rules';
-    els.shipTab.textContent = shipN ? `Ship (${shipN})` : 'Ship';
+    els.shipBtn.textContent = shipN ? tr('bar.shipRules.set', { n: shipN }) : tr('bar.shipRules');
+    els.storyBtn.textContent = storyN ? tr('bar.optionalRules.set', { n: storyN }) : tr('bar.optionalRules');
+    els.shipTab.textContent = shipN ? tr('panel.tab.ship.set', { n: shipN }) : tr('panel.tab.ship');
     const tm = state.root ? state.template : null;
     els.tplGroup.hidden = !tm;
     if (tm) { els.tplCurrent.textContent = tm.name; els.tplEdited.hidden = templateSig() === tm.sig; }
     if (!state.root) waypoints = [];
     els.banner.hidden = targets.mode || (!!state.root && !waypoints.length);
-    els.banner.textContent = !state.root ? S['ui.node.startingRootPrompt'] || 'Choose a root'
-      : `${waypoints.length} waypoint${waypoints.length === 1 ? '' : 's'}: click a node to start pathing. Shift+click an existing waypoint to drop it, Esc to clear.`;
+    els.banner.textContent = !state.root ? S['ui.node.startingRootPrompt'] || tr('bar.chooseRoot') : tr('bar.waypoints', { count: waypoints.length });
     els.banner.classList.toggle('small', !!state.root);
   }
 
   function renderPanel() {
     const t = cachedTotals || totals();
-    els.panelSub.textContent = state.root ? `${used()} of ${state.cap} nodes` : '';
+    els.panelSub.textContent = state.root ? tr('panel.nodesUsed', { used: used(), cap: state.cap }) : '';
     // affinity tiles
     els.affinity.innerHTML = Object.keys(AFFINITY_NAMES).map(k => {
       const v = Math.round((t.aff[k] || 0) * 100) / 100;
-      return `<div class="aff" style="border-color:${rgba(AFFINITY_COLOURS[k], 0.4)}"><div class="n" style="color:${rgba(AFFINITY_COLOURS[k], 1)}">${v}</div><div class="t">${AFFINITY_NAMES[k]} affinity</div></div>`;
+      return `<div class="aff" style="border-color:${rgba(AFFINITY_COLOURS[k], 0.4)}"><div class="n" style="color:${rgba(AFFINITY_COLOURS[k], 1)}">${v}</div><div class="t">${esc(tr('panel.affinityTile', { affinity: AFFINITY_NAMES[k] }))}</div></div>`;
     }).join('');
     renderAffMix();
     renderInteg();
@@ -2647,7 +2646,7 @@
       return;
     }
     if (!state.root) {
-      els.panelBody.innerHTML = '<div class="empty">Pick one of the three roots near the center to start.</div>';
+      els.panelBody.innerHTML = `<div class="empty">${esc(tr('panel.pickRoot'))}</div>`;
       els.panelFoot.textContent = footText();
       return;
     }
@@ -2678,8 +2677,8 @@
         html += `<div class="stat-group"><h3>${esc(g)}</h3>`;
         for (const s of list) {
           if (s.gone) { html += `<div class="stat-line">${goneHtml(s)}</div>`; continue; }
-          const src = s.affinity && s.sources ? `${s.sources} node${s.sources > 1 ? 's' : ''} + affinity` : s.affinity ? 'affinity' : `${s.sources} node${s.sources > 1 ? 's' : ''}`;
-          html += `<div class="stat-line">${describe(s.effect, s.magnitude)}<span class="src">${src}</span>${previewDiffHtml(base && base.sums, s)}</div>`;
+          const src = s.affinity && s.sources ? tr('panel.src.nodesAffinity', { count: s.sources }) : s.affinity ? tr('panel.src.affinity') : tr('panel.src.nodes', { count: s.sources });
+          html += `<div class="stat-line">${describe(s.effect, s.magnitude)}<span class="src">${esc(src)}</span>${previewDiffHtml(base && base.sums, s)}</div>`;
         }
         html += '</div>';
       }
@@ -2690,30 +2689,30 @@
         for (const hm of grantedHullMods(c.type)) extras.add(trHtml('tooltip.grantsHullmod', { hullmod: hullModName(hm) }));
         for (const txt of typeText(c.type, c.integ)) extras.add(styled(txt));
       }
-      if (extras.size) html += `<div class="stat-group"><h3>Other effects</h3>${[...extras].map(e => `<div class="stat-line">${e}</div>`).join('')}</div>`;
+      if (extras.size) html += `<div class="stat-group"><h3>${esc(tr('panel.otherEffects'))}</h3>${[...extras].map(e => `<div class="stat-line">${e}</div>`).join('')}</div>`;
       // Temporary nodes: their effects only for the first N seconds after deployment.
       for (const [secs, g] of t.temp || []) {
         const lines = [...g.sums.values()].filter(s => Math.abs(s.magnitude) > 1e-9);
         if (!lines.length) continue;
-        html += `<div class="stat-group"><h3>For the first ${esc(secs)} seconds after deployment</h3>` +
-          lines.map(s => `<div class="stat-line">${describe(s.effect, s.magnitude)}<span class="src">${s.sources} node${s.sources > 1 ? 's' : ''}</span></div>`).join('') + '</div>';
+        html += `<div class="stat-group"><h3>${esc(tr('panel.temp.heading', { seconds: secs }))}</h3>` +
+          lines.map(s => `<div class="stat-line">${describe(s.effect, s.magnitude)}<span class="src">${esc(tr('panel.src.nodes', { count: s.sources }))}</span></div>`).join('') + '</div>';
       }
       // Gated nodes: their live-in-combat effects at the gate's strength, only under its condition.
       for (const [when, g] of t.gated || []) {
         const lines = [...g.sums.values()].filter(s => Math.abs(s.magnitude) > 1e-9);
-        html += `<div class="stat-group"><h3>${esc(GATE_NAMES[when])} (${esc(g.item)}, ×${g.strength})</h3>` +
-          (lines.length ? lines.map(s => `<div class="stat-line">${describe(s.effect, s.magnitude)}</div>`).join('') : '<div class="stat-line muted">Nothing: none of their effects are read live in combat.</div>') +
-          `<div class="stat-line muted">${g.nodes} allocated node${g.nodes === 1 ? '' : 's'} in its radius give these instead of their usual effects.</div></div>`;
+        html += `<div class="stat-group"><h3>${esc(tr('panel.gated.heading', { when: GATE_NAMES[when], item: g.item, strength: g.strength }))}</h3>` +
+          (lines.length ? lines.map(s => `<div class="stat-line">${describe(s.effect, s.magnitude)}</div>`).join('') : `<div class="stat-line muted">${esc(tr('panel.gated.nothing'))}</div>`) +
+          `<div class="stat-line muted">${esc(tr('panel.gated.nodes', { count: g.nodes }))}</div></div>`;
       }
       const subLines = subState().active.map(a => `<div class="stat-line"><span class="hl">${esc(a.def.name)}</span> <span class="src">${esc(subSummary(a.def, a.entry, a.socket))}</span>${a.def.unobtainable ? ` <span class="bad">${UNOBTAINABLE_TEXT}</span>` : ''}</div>`);
-      if (subLines.length) html += `<div class="stat-group"><h3>Subroutines</h3>${subLines.join('')}</div>`;
+      if (subLines.length) html += `<div class="stat-group"><h3>${esc(tr('panel.subroutines'))}</h3>${subLines.join('')}</div>`;
       const reached = t.affBonuses.filter(b => b.reached > 0);
       if (reached.length) {
-        html += '<div class="stat-group"><h3>Affinity thresholds reached</h3>';
-        for (const b of reached) html += `<div class="stat-line">${describe(b.effect, b.reached * b.bonus)}<span class="src">${AFFINITY_NAMES[b.affinity]} ${b.reached}×${b.size}</span></div>`;
+        html += `<div class="stat-group"><h3>${esc(tr('panel.thresholds'))}</h3>`;
+        for (const b of reached) html += `<div class="stat-line">${describe(b.effect, b.reached * b.bonus)}<span class="src">${esc(tr('panel.threshold.src', { affinity: AFFINITY_NAMES[b.affinity], reached: b.reached, size: b.size }))}</span></div>`;
         html += '</div>';
       }
-      els.panelBody.innerHTML = html || '<div class="empty">No effects yet. Click a glowing node next to your root.</div>';
+      els.panelBody.innerHTML = html || `<div class="empty">${esc(tr('panel.noEffects'))}</div>`;
     } else {
       const list = nodes.filter(n => sat(n.id) && ['NOTABLE', 'KEYSTONE', 'SOCKET', 'WORMHOLE', 'ROOT'].includes(n.tier));
       const rank = { ROOT: 0, KEYSTONE: 1, NOTABLE: 2, SOCKET: 3, WORMHOLE: 4 };
@@ -2723,12 +2722,12 @@
         let sub = TIER_LABEL[n.tier];
         if (n.tier === 'SOCKET') {
           const e = state.links.get(n.id), s = state.subs.get(n.id), d = s && SUBS.get(s.id);
-          sub += d ? ` · ${d.name}${d.unobtainable ? ' (unobtainable)' : ''}` : e ? ` · ${volumeName(byId.get(e).volume)} anchor` : ' · empty';
+          sub += d ? ` · ${d.name}${d.unobtainable ? ` ${tr('panel.nodes.unobtainable')}` : ''}` : e ? ` · ${tr('panel.nodes.anchor', { volume: volumeName(byId.get(e).volume) })}` : ` · ${tr('panel.nodes.empty')}`;
         }
         if (n.volume !== 'core') sub += ` · ${volumeName(n.volume)}`;
-        const ig = isIntegrated(n) ? ' <span class="builtin">Integrated</span>' : integPreview && canIntegrate(n) ? ' <span class="builtin">Integrated (preview)</span>' : '';
-        return `<div class="node-row ${n.tier.toLowerCase()}" data-node="${esc(n.id)}" title="${integrable(t2) ? 'Alt+click to integrate or remove' : ''}">${nodeIconHtml(n, t2)}<div><div class="nm${isIntegrated(n) ? ' builtin' : ''}">${esc(t2.name)}</div><div class="tr">${esc(sub)}${ig}</div></div></div>`;
-      }).join('') : '<div class="empty">No notables or keystones allocated yet.</div>';
+        const ig = isIntegrated(n) ? ` <span class="builtin">${esc(tr('tooltip.integ.integrated'))}</span>` : integPreview && canIntegrate(n) ? ` <span class="builtin">${esc(tr('tooltip.integ.preview'))}</span>` : '';
+        return `<div class="node-row ${n.tier.toLowerCase()}" data-node="${esc(n.id)}" title="${integrable(t2) ? esc(tr('panel.nodes.integTitle')) : ''}">${nodeIconHtml(n, t2)}<div><div class="nm${isIntegrated(n) ? ' builtin' : ''}">${esc(t2.name)}</div><div class="tr">${esc(sub)}${ig}</div></div></div>`;
+      }).join('') : `<div class="empty">${esc(tr('panel.nodes.none'))}</div>`;
     }
     els.panelBody.insertAdjacentHTML('afterbegin', problemsHtml());
     els.panelFoot.textContent = footText();
@@ -2741,8 +2740,8 @@
       const n = byId.get(id), t2 = effectiveType(n);
       return `<div class="node-row" data-node="${esc(id)}">${nodeIconHtml(n, t2)}<div><div class="nm">${esc(t2.name)}</div><div class="tr bad">${esc(b.text)}</div></div></div>`;
     }).join('');
-    return `<div class="rule-problems"><h3>${problems.size} illegal node${problems.size === 1 ? '' : 's'}</h3>` +
-      `<p class="muted">Illegal build</p>${rows}</div>`;
+    return `<div class="rule-problems"><h3>${esc(tr('panel.problems.heading', { count: problems.size }))}</h3>` +
+      `<p class="muted">${esc(tr('panel.problems.note'))}</p>${rows}</div>`;
   }
   // Affinity nodes block under the affinity totals: set them all to one option, or to a split of the three.
   const affMix = {
@@ -2770,7 +2769,7 @@
     const n = affinityNodes().length, t = affTargets(), c = affCounts();
     const sum = Object.values(t).reduce((a, b) => a + b, 0);
     affMix.apply.disabled = sum !== n || Object.keys(c).every(k => c[k] === t[k]);
-    affMix.note.textContent = sum !== n ? `These add up to ${sum}; ${n} affinity node${n === 1 ? ' is' : 's are'} allocated.` : '';
+    affMix.note.textContent = sum !== n ? tr('panel.affMix.mismatch', { sum, count: n }) : '';
     affMix.note.className = sum !== n ? 'bad' : 'muted';
   }
   function applyAffinity(targets) {
@@ -2807,15 +2806,16 @@
     integEl.box.hidden = !state.root;
     if (integEl.box.hidden) return;
     const kept = [...state.integrated].filter(id => !state.alloc.has(id)).length;
-    integEl.summary.innerHTML = `<span class="muted">Integrated:</span> <b class="builtin">${k}</b> of ${able.length + kept} · <b>${storyPointCost(k)}</b> story point${storyPointCost(k) === 1 ? '' : 's'}`;
+    const cost = storyPointCost(k);
+    integEl.summary.innerHTML = trHtml('panel.integ.summary', { count: cost, countHtml: `<b class="builtin">${k}</b>`, total: able.length + kept, pointsHtml: `<b>${cost}</b>` });
     integEl.all.disabled = able.every(n => state.integrated.has(n.id));
     integEl.none.disabled = !k;
     integEl.preview.checked = integPreview;
     integEl.keep.checked = keepIntegration;
     integEl.view.value = integView;
     const notes = [];
-    if (kept) notes.push(`${kept} kept on removed node${kept === 1 ? '' : 's'}.`);
-    if (integPreview) notes.push(`Preview: all ${able.length} integrated, ${pointsText(storyPointCost(able.length))}. Totals and the stat sheet show changes; build unchanged.`);
+    if (kept) notes.push(tr('panel.integ.kept', { count: kept }));
+    if (integPreview) notes.push(tr('panel.integ.preview', { total: able.length, points: pointsText(storyPointCost(able.length)) }));
     integEl.note.textContent = notes.join(' ');
   }
   integEl.all.addEventListener('click', () => { const c = setAllIntegrated(true); if (c) toast(tr('toast.integratedAll', { count: c })); });
@@ -2840,19 +2840,29 @@
     const ahead = /-(\d+)-g[0-9a-f]+$/.exec(v);
     if (ahead) v = v.slice(0, ahead.index);
     v = v.replace(/\+es.*$/, '');
-    return `${v}${ahead ? ` +${ahead[1]}` : ''}${dirty ? ' (edited)' : ''}`;
+    const shown = `${v}${ahead ? ` +${ahead[1]}` : ''}`;
+    return dirty ? tr('panel.version.edited', { version: shown }) : shown;
   })();
   // The mod data's version: mod_info.json's (D.modVersion), or, for data extracted past a release (unreleased work on
   // a branch like Dev; D.modGit from extract.mjs), the nearest release tag with the branch and commit.
   const MOD_GIT = D.modGit && typeof D.modGit === 'object' ? D.modGit : null;
   const modPastRelease = !!MOD_GIT && (!MOD_GIT.release || MOD_GIT.ahead > 0 || !!MOD_GIT.dirty);
-  const modVersionShort = modPastRelease
-    ? `${MOD_GIT.release || D.modVersion || '?'} + ${MOD_GIT.branch || 'commit'} ${MOD_GIT.commit}${MOD_GIT.dirty ? ' (edited)' : ''}`
-    : (D.modVersion || '?');
+  const modVersionShort = (() => {
+    if (!modPastRelease) return D.modVersion || '?';
+    const release = MOD_GIT.release || D.modVersion || '?';
+    const v = MOD_GIT.branch ? tr('panel.modVersion.branch', { release, branch: MOD_GIT.branch, commit: MOD_GIT.commit })
+      : tr('panel.modVersion.commit', { release, commit: MOD_GIT.commit });
+    return MOD_GIT.dirty ? tr('panel.version.edited', { version: v }) : v;
+  })();
   const modVersionLong = modPastRelease
-    ? `Exiled Sector ${D.modVersion || 'unknown'} (mod_info.json), ${MOD_GIT.release ? `${MOD_GIT.ahead} commit${MOD_GIT.ahead === 1 ? '' : 's'} after release ${MOD_GIT.release}` : 'no release tag'}, ${MOD_GIT.branch ? `branch ${MOD_GIT.branch} at` : 'commit'} ${MOD_GIT.commit}${MOD_GIT.dirty ? ', with uncommitted changes' : ''}`
-    : `Exiled Sector ${D.modVersion || 'unknown'}`;
-  const footText = () => `Exiled Sector ${modVersionShort} · Planner ${plannerVersionShort}`;
+    ? tr(MOD_GIT.dirty ? 'panel.modLong.dirty' : 'panel.modLong', {
+      version: D.modVersion || tr('panel.modVersion.unknown'),
+      release: MOD_GIT.release ? tr('panel.modLong.ahead', { count: MOD_GIT.ahead, release: MOD_GIT.release }) : tr('panel.modLong.noRelease'),
+      where: MOD_GIT.branch ? tr('panel.modLong.branch', { branch: MOD_GIT.branch }) : tr('panel.modLong.commit'),
+      commit: MOD_GIT.commit,
+    })
+    : tr('panel.modShort', { version: D.modVersion || tr('panel.modVersion.unknown') });
+  const footText = () => tr('panel.foot', { mod: modVersionShort, planner: plannerVersionShort });
 
   // ------------------------------------------------------------------ tooltip
   let lastMouse = { x: 0, y: 0 };
@@ -4111,8 +4121,8 @@
   // Theme button: Dark -> Light -> Auto (follows the system) -> Dark.
   const themeBtn = document.getElementById('btn-theme');
   function renderThemeButton() {
-    const name = { dark: 'Dark', light: 'Light' };
-    themeBtn.textContent = themeSetting === 'auto' ? `Theme: Auto (${name[theme]})` : `Theme: ${name[theme]}`;
+    const name = { dark: tr('bar.theme.dark'), light: tr('bar.theme.light') };
+    themeBtn.textContent = tr(themeSetting === 'auto' ? 'bar.theme.auto' : 'bar.theme.fixed', { theme: name[theme] });
   }
   function setTheme(setting) {
     applyTheme(setting);
@@ -4142,7 +4152,7 @@
     const t = cachedTotals || totals();
     const last = STAT_GROUPS[STAT_GROUPS.length - 1];
     const sections = new Map(STAT_GROUPS.map(g => [g, []]));
-    if (STAT_GROUPS[0] === 'PROGRESSION') sections.get('PROGRESSION').push({ label: gameString('ui.stats.nodes', 'Nodes'), value: `${state.alloc.size + 1}/${state.cap}` });
+    if (STAT_GROUPS[0] === 'PROGRESSION') sections.get('PROGRESSION').push({ label: gameString('ui.stats.nodes', tr('sheet.fallback.nodes')), value: `${state.alloc.size + 1}/${state.cap}` });
     // With the integration preview on, each row also says what it is without the preview (baseSums: the same bucket).
     const base = integPreviewBase();
     const push = (s, wrap, baseSums) => {
@@ -4159,7 +4169,7 @@
     };
     for (const s of t.sums.values()) push(s, null, base && base.sums);
     if (base) pushGone(base.sums, t.sums);
-    const forFirst = gameString('summary.forFirst', 'For the first {seconds} seconds after deployment: {text}');
+    const forFirst = gameString('summary.forFirst', textTemplate('sheet.fallback.forFirst', {}));
     for (const [secs, g] of t.temp || []) {
       const wrap = raw => forFirst.replace('{seconds}', secs).replace('{text}', raw);
       const bs = base && (base.temp.get(secs)?.sums || new Map());
@@ -4167,7 +4177,7 @@
       if (base) pushGone(bs, g.sums, wrap);
     }
     for (const [when, g] of t.gated || []) {
-      const tpl = gameString(`summary.gated.${when}`, `${GATE_NAMES[when]}: {text}`);
+      const tpl = gameString(`summary.gated.${when}`, tr('sheet.fallback.gated', { when: GATE_NAMES[when] }));
       const wrap = raw => tpl.replace('{text}', raw);
       const bs = base && (base.gated.get(when)?.sums || new Map());
       for (const s of g.sums.values()) push(s, wrap, bs);
@@ -4189,8 +4199,8 @@
   let sheetTabRows = [];
   function sheetTabHtml() {
     const rows = [];
-    const html = `<div class="gs-tabhead"><span class="muted">The in-game stat sheet. Hover over the effects to see source(s).</span>` +
-      `<button id="gs-expand" title="Open the stat sheet in full, laid out like the game's">${esc(gameString('ui.stats.expand', 'Full Sheet'))}</button></div>` +
+    const html = `<div class="gs-tabhead"><span class="muted">${esc(tr('sheet.tabHint'))}</span>` +
+      `<button id="gs-expand" title="${esc(tr('sheet.expandTitle'))}">${esc(gameString('ui.stats.expand', tr('sheet.fallback.expand')))}</button></div>` +
       `<div class="gs gs-side">${statSheet().map(s => sheetSectionHtml(s, rows)).join('')}</div>`;
     sheetTabRows = rows;
     return html;
@@ -4206,7 +4216,7 @@
     if (sheetEl.hidden) return;
     const rows = [];
     if (!state.root) {
-      sheetBody.innerHTML = '<div class="gs-col"><p class="gs-empty">Pick one of the three roots near the center to start.</p></div>';
+      sheetBody.innerHTML = `<div class="gs-col"><p class="gs-empty">${esc(tr('panel.pickRoot'))}</p></div>`;
       sheetSub.textContent = '';
       sheetRows = rows;
       return;
@@ -4221,8 +4231,7 @@
     }
     sheetRows = rows;
     const root = byId.get(state.root);
-    const hull = hullLabel();
-    sheetSub.textContent = `${root ? root.type.name : ''} \u00b7 ${hull.charAt(0).toUpperCase() + hull.slice(1)} \u00b7 ${state.alloc.size + 1}/${state.cap} nodes`;
+    sheetSub.textContent = tr('sheet.sub', { root: root ? root.type.name : '', hull: HULL_ENUM_LABEL[HULL_ENUM[state.hull]], used: state.alloc.size + 1, cap: state.cap });
   }
   function toggleSheet(show = sheetEl.hidden) {
     sheetEl.hidden = !show;
@@ -4248,8 +4257,8 @@
   function showSheetTip(row, x, y, game) {
     if (!row || !row.by || !row.by.length) { sheetTip.hidden = true; return; }
     sheetTip.classList.toggle('game', game);
-    sheetTip.innerHTML = `<div class="tt-title">${esc(gameString('ui.stats.breakdown.heading', 'Sources'))}</div>` +
-      row.by.map(([name, amount]) => `<div class="gs-src"><b${(row.integ || []).includes(name) ? ' class="builtin" title="Integrated"' : ''}>${esc(name)}</b>${describe(row.effect, amount)}</div>`).join('');
+    sheetTip.innerHTML = `<div class="tt-title">${esc(gameString('ui.stats.breakdown.heading', tr('sheet.fallback.sources')))}</div>` +
+      row.by.map(([name, amount]) => `<div class="gs-src"><b${(row.integ || []).includes(name) ? ` class="builtin" title="${esc(tr('sheet.integratedTitle'))}"` : ''}>${esc(name)}</b>${describe(row.effect, amount)}</div>`).join('');
     sheetTip.hidden = false;
     placeFloating(sheetTip, x, y);
   }
@@ -5783,7 +5792,7 @@
   resize();
   frameCore();
   cachedTotals = totals();
-  els.panelFoot.title = `Mod data: ${modVersionLong}. Planner: ${PLANNER_VERSION}.`;
+  els.panelFoot.title = tr('panel.foot.title', { mod: modVersionLong, planner: PLANNER_VERSION });
   renderChrome();
   renderPanel();
   requestDraw();

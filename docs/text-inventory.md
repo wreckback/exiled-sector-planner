@@ -12,7 +12,7 @@ Tick an area when its migration step is committed and its output matches the bas
 - [x] Map tooltips (step 4b, `text/tooltip.js`; also the Effects tab's "Grants …" line, which is the same text, and the story point count, now `label.storyPoints` in `names.js`). New helper `trHtml()` for text with markup. Also moved, missed by the scan: the inline view's "normal"/"integrated" in brackets and the " and " joining a doctrine modifier's effects.
 - [x] Rule refusals and node rules (step 4c, `text/rules.js`; list joiners ", ", " and ", " or " in `common.js`). Also the waypoint's hidden-volume refusal ("Waypoint …: …"), missed by the scan. The fallbacks for the mod's `node.block.*`/`node.requires.*` strings moved too; the mod has all of them today, so none shows. The mod's gate wording is still lowercased in code to fit "Locked until …".
 - [x] Toasts (step 4d, `text/toast.js`; "Choose a root." is `common.chooseRoot`, and the new-problems toast reuses `ship.problemCount`, the same text)
-- [ ] Top bar, summary panel and stat sheet
+- [x] Top bar, summary panel and stat sheet (step 4e, `text/bar.js`, `text/panel.js`, `text/sheet.js`; the map's region labels in `names.js`). Also moved, missed by the scan: the Notables tab's "(unobtainable)", the Full Sheet button's hover text. The "Root Conduit" source label now comes from the mod data (the subroutine's own name, the same text). The Full Sheet's hull size uses `name.hull.*` instead of capitalising in code.
 - [ ] Search, filter and list view
 - [ ] Pickers
 - [ ] Target mode

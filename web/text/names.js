@@ -83,6 +83,11 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "name.group.logistics": "Logistics",
     "name.group.other": "Other",
 
+    // The map's labels over each tree when zoomed out, and how many of its nodes are allocated.
+    "name.region.core": "Core tree",
+    // e.g. 12 allocated
+    "label.regionAllocated": "{count} allocated",
+
     // The Filter's entry for nodes without a theme.
     "name.theme.none": "No theme",
 
