@@ -30,6 +30,12 @@
   function tr(key, args = {}) {
     return textTemplate(key, args).replace(/\{(\w+)\}/g, (m, k) => (k in args ? String(args[k]) : m));
   }
+  // A name kept in the text files under a mod data id (name.requirement.req_shields, name.gameState.gate_omega_found,
+  // name.subKind.DOCTRINE). An id without a line yet (one a mod update added) shows as `fallback()`, without a warning.
+  const idName = (group, id, fallback) => TEXT[`name.${group}.${id}`] ?? fallback();
+  // A node's req_* tag and gate_* tag in words. (humanize is a function declaration further down, so it's ready here.)
+  const requirementName = tag => idName('requirement', tag, () => humanize(tag.slice(4)));
+  const gameStateName = gate => idName('gameState', gate, () => humanize(gate.replace(/^gate_/, '')));
   // The same as HTML: the text's game markup (<hl>, <good>, <bad>, <muted>, <builtIn>) and <b>, <code>, <kbd> become
   // HTML, everything else is escaped, values too, except a value whose name ends in Html, which is put in as it is.
   function trHtml(key, args = {}) {
@@ -725,7 +731,7 @@
       : tag === 'req_non_phase_hull' ? sh.shield === 'PHASE'
       : tag === 'req_system_charges' ? sh.charges === false
       : tag === 'req_modules' ? sh.modules === false : false;
-    return unmet ? blockText('node.requires.' + tag, tr('rule.fallback.requires', { requirement: humanize(tag.slice(4)) })) : null;
+    return unmet ? blockText('node.requires.' + tag, tr('rule.fallback.requires', { requirement: requirementName(tag) })) : null;
   }
   const HULL_SIZE_NAMES = { FRIGATE: tr('name.hull.frigate.plural'), DESTROYER: tr('name.hull.destroyer.plural'), CRUISER: tr('name.hull.cruiser.plural'), CAPITAL_SHIP: tr('name.hull.capital.plural') };
   // "a, b and c"
@@ -806,7 +812,7 @@
   function gateText(g) {
     const s = S['socketable.anchor.gate.' + g];
     if (s) return plain(s).replace(/^Inert until\s+/i, '').replace(/\.$/, '').replace(/^./, c => c.toUpperCase());
-    return humanize(g.replace(/^gate_/, ''));
+    return gameStateName(g);
   }
   // ------------------------------------------------------------------ subroutines (socket items besides anchors)
   // One item per socket: an anchor (state.links) or a subroutine (state.subs). A subroutine only works while its socket is
@@ -923,7 +929,7 @@
   function subLimitProblem(def, socketId) {
     const others = [...state.subs].filter(([s]) => s !== socketId).map(([, e]) => SUBS.get(e.id)).filter(Boolean);
     const kindCap = D.subroutineKinds && D.subroutineKinds[def.kind] ? D.subroutineKinds[def.kind].perShip : null;
-    if (kindCap != null && others.filter(o => o.kind === def.kind).length >= kindCap) return tr('rule.subKindLimit', { count: kindCap, kind: humanize(def.kind).toLowerCase() });
+    if (kindCap != null && others.filter(o => o.kind === def.kind).length >= kindCap) return tr('rule.subKindLimit', { count: kindCap, kind: idName('subKind', def.kind, () => humanize(def.kind).toLowerCase()) });
     if (def.socketLimit && others.filter(o => o.id === def.id).length >= def.socketLimit) return tr('rule.subLimit', { count: def.socketLimit });
     return null;
   }
@@ -2929,9 +2935,9 @@
     if (!isChoice(n)) html += exclusivityHtml(t);
     const nodeTheme = nodeThemes(n);
     if (nodeTheme && nodeTheme.size) html += `<div class="tt-note">${trHtml('tooltip.themes', { themes: [...nodeTheme].map(themeName).join(', ') })}</div>`;
-    const reqs = (t.tags || []).filter(x => x.startsWith('req_')).map(x => humanize(x.slice(4)));
-    if (reqs.length) html += `<div class="tt-note">${trHtml('tooltip.needs', { needs: reqs.join(', ') })}</div>`;
-    if (n.gates.length) html += `<div class="tt-note">${trHtml('tooltip.unlockedBy', { gates: n.gates.map(g => humanize(g.slice(5))).join(', ') })}</div>`;
+    const reqs = (t.tags || []).filter(x => x.startsWith('req_')).map(requirementName);
+    if (reqs.length) html += `<div class="tt-note">${trHtml('tooltip.needs', { needs: reqs.join(tr('common.listComma')) })}</div>`;
+    if (n.gates.length) html += `<div class="tt-note">${trHtml('tooltip.unlockedBy', { gates: n.gates.map(gameStateName).join(tr('common.listComma')) })}</div>`;
     if (t.flavour) html += `<div class="tt-flavour">${esc(t.flavour)}</div>`;
     const problem = allocated && rules().problems.get(n.id);
     if (problem) html += `<div class="tt-warn">${trHtml('tooltip.problem', { reason: problem.text })}</div>`;
@@ -3227,7 +3233,7 @@
       const block = hidden || taken.has(ex.id) || cur === ex.id ? null : blockOf(ex, null, list);
       const dis = hidden || taken.has(ex.id) || !!block;
       const sub = hidden ? tr('picker.anchor.hidden') : taken.has(ex.id) ? tr('picker.anchor.taken') : block ? block.text
-        : ex.gates.length ? tr('picker.anchor.inGame', { gates: ex.gates.map(g => humanize(g.slice(5))).join(tr('common.listComma')) }) : '';
+        : ex.gates.length ? tr('picker.anchor.inGame', { gates: ex.gates.map(gameStateName).join(tr('common.listComma')) }) : '';
       html += `<button data-exit="${esc(ex.id)}" class="${cur === ex.id ? 'current' : ''}" ${dis ? 'disabled' : ''}><span><div>${esc(volumeName(ex.volume))}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</span></button>`;
     }
     if (cur) html += `<button data-act="unlink">${esc(tr('picker.anchor.unlink'))}</button>`;

@@ -83,6 +83,49 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "name.group.logistics": "Logistics",
     "name.group.other": "Other",
 
+    // The next three groups are keyed by the mod data's own ids. When a mod update adds an id, add a line for it here;
+    // until then the planner shows the id in words (as "req_no_shields" -> "No shields").
+
+    // What a node needs from the ship (its req_* tags), in tooltips ("Needs a ship with: …").
+    "name.requirement.req_ballistic": "Ballistic",
+    "name.requirement.req_beam": "Beam",
+    "name.requirement.req_civilian_hull": "Civilian hull",
+    "name.requirement.req_crewed": "Crewed",
+    "name.requirement.req_energy": "Energy",
+    "name.requirement.req_fighter_bays": "Fighter bays",
+    "name.requirement.req_flagship": "Flagship",
+    "name.requirement.req_missile": "Missile",
+    "name.requirement.req_no_fighter_bays": "No fighter bays",
+    "name.requirement.req_no_shields": "No shields",
+    "name.requirement.req_non_beam_energy": "Non beam energy",
+    "name.requirement.req_non_phase_hull": "Non phase hull",
+    "name.requirement.req_phase": "Phase",
+    "name.requirement.req_shields": "Shields",
+    "name.requirement.req_system_charges": "System charges",
+    "name.requirement.req_unscripted_hull": "Unscripted hull",
+
+    // Game states that unlock nodes (their gate_* tags), in tooltips ("Unlocked by: …") and the anchor list
+    // ("In game: …"). The Optional rules list uses the mod's own wording, and these only where it has none.
+    "name.gameState.gate_ancient_prototype_found": "Ancient prototype found",
+    "name.gameState.gate_blood_trail_defeated": "Blood trail defeated",
+    "name.gameState.gate_dweller_fought": "Dweller fought",
+    "name.gameState.gate_existential_threat_defeated": "Existential threat defeated",
+    "name.gameState.gate_frost_fire_defeated": "Frost fire defeated",
+    "name.gameState.gate_frozen_heart_visited": "Frozen heart visited",
+    "name.gameState.gate_last_strive_completed": "Last strive completed",
+    "name.gameState.gate_omega_found": "Omega found",
+    "name.gameState.gate_pascal_visited": "Pascal visited",
+    "name.gameState.gate_remnant_fought": "Remnant fought",
+    "name.gameState.gate_singularity_defeated": "Singularity defeated",
+    "name.gameState.gate_threat_fought": "Threat fought",
+
+    // Subroutine kinds inside a sentence ("Only 1 doctrine per ship.").
+    "name.subKind.DOCTRINE": "doctrine",
+    "name.subKind.MODSPEC_CACHE": "modspec cache",
+    "name.subKind.ROOT_CONDUIT": "root conduit",
+    "name.subKind.UNIQUE": "unique",
+    "name.subKind.BYPASS": "bypass",
+
     // The map's labels over each tree when zoomed out, and how many of its nodes are allocated.
     "name.region.core": "Core tree",
     // e.g. 12 allocated
