@@ -5583,7 +5583,7 @@
     return (mods && await inside(mods)) || await inside(dir);
   }
   // findModDir looks in the folder itself, its mods folder and each folder inside it.
-  const notModFolder = () => new Error('No Exiled Sector mod_info.json detected.');
+  const notModFolder = () => new Error(tr('assets.notModFolder'));
   // Reads every image the planner draws from a folder handle. Resolves to { urls, info } or throws.
   async function readArtFolder(handle) {
     const found = await findModDir(handle);
@@ -5631,7 +5631,7 @@
   }
 
   function showArt(result) {
-    if (!result.urls.size) throw new Error(`Found Exiled Sector in "${result.info.folder}", but none of the images the planner uses are in it.`);
+    if (!result.urls.size) throw new Error(tr('assets.noImages', { folder: result.info.folder }));
     setArt(result.urls);
     artInfo = result.info; artAccess = 'ready'; artError = '';
     renderArt(); renderPanel();
@@ -5686,28 +5686,28 @@
   }
 
   function renderArt() {
-    artBtn.textContent = artAccess === 'ready' ? 'Mod assets' : artAccess === 'loading' ? 'Loading assets…' : artAccess === 'prompt' ? 'Reconnect assets' : 'Show mod assets';
+    artBtn.textContent = tr(artAccess === 'ready' ? 'assets.button.ready' : artAccess === 'loading' ? 'assets.button.loading' : artAccess === 'prompt' ? 'assets.button.reconnect' : 'assets.button.show');
     artBtn.title = artAccess === 'prompt'
-      ? `Allow the planner to read the mod folder "${artHandle ? artHandle.name : ''}" again, to show the mod's assets`
-      : 'Show the mod\'s assets, read from your own Exiled Sector folder';
+      ? tr('assets.button.reconnectTitle', { folder: artHandle ? artHandle.name : '' })
+      : tr('assets.button.title');
     let status;
-    if (artAccess === 'loading') status = 'Reading the assets…';
-    else if (artInfo) status = `Showing the assets from <b>${esc(artInfo.folder)}</b>${artInfo.version ? ` (Exiled Sector ${esc(artInfo.version)})` : ''}, ${artInfo.count} images.`;
-    else if (artAccess === 'prompt') status = `Permission to read <b>${esc(artHandle.name)}</b> must be regranted. Click Reconnect.`;
-    else status = 'No mod folder chosen. Showing placeholders.';
+    if (artAccess === 'loading') status = trHtml('assets.status.reading');
+    else if (artInfo) status = trHtml(artInfo.version ? 'assets.status.showing' : 'assets.status.showingNoVersion', { folder: artInfo.folder, version: artInfo.version, count: artInfo.count });
+    else if (artAccess === 'prompt') status = trHtml('assets.status.prompt', { folder: artHandle.name });
+    else status = trHtml('assets.status.none');
     artUi.status.innerHTML = status;
     const notes = [];
     if (artError) notes.push(`<span class="bad">${esc(artError)}</span>`);
     if (artInfo && artInfo.version && D.modVersion && artInfo.version !== D.modVersion) {
-      notes.push(`This folder has Exiled Sector ${esc(artInfo.version)}, and the planner's tree is from ${esc(D.modVersion)}. Icons of node types that changed between updates may be missing or different.`);
+      notes.push(trHtml('assets.versionMismatch', { folderVersion: artInfo.version, treeVersion: D.modVersion }));
     }
     artUi.note.innerHTML = notes.join('<br>');
-    artUi.choose.textContent = artInfo || artHandle ? 'Choose another folder…' : 'Choose mod folder…';
+    artUi.choose.textContent = tr(artInfo || artHandle ? 'assets.chooseOther' : 'assets.choose');
     artUi.choose.disabled = artAccess === 'loading';
     artUi.reconnect.hidden = artAccess !== 'prompt';
     artUi.forget.hidden = !artHandle && !artInfo;
     // Other browsers (folder input) get no note for now: the old one is to be reworded later.
-    artUi.browser.textContent = canPickFolder ? 'After a browser restart, permission must be regranted (Reconnect assets in the top bar).' : '';
+    artUi.browser.textContent = canPickFolder ? tr('assets.restartNote') : '';
     artUi.browser.hidden = !canPickFolder;
   }
   function toggleArt(show = artEl.hidden) {
