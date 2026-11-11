@@ -17,14 +17,18 @@
   // of 1 and key.other otherwise. A missing key shows as the key itself (and a console warning), so it stands out.
   // (Named tr, not t: t is the usual name for a node type in this file.)
   const TEXT = window.ESP_TEXT || {};
+  // The text editor (only with `node tools/serve.mjs --edit`, see web/editor/) records each key the page uses, with its
+  // values. Without it this is null and nothing is recorded.
+  const EDIT = window.ESP_EDIT || null;
   const missingText = new Set();
   function textTemplate(key, args) {
-    let s = TEXT[key];
-    if (s === undefined && 'count' in args) s = TEXT[`${key}.${args.count === 1 ? 'one' : 'other'}`];
+    let k = key, s = TEXT[k];
+    if (s === undefined && 'count' in args) { k = `${key}.${args.count === 1 ? 'one' : 'other'}`; s = TEXT[k]; }
     if (s === undefined) {
       if (!missingText.has(key)) { missingText.add(key); console.warn(`Missing text: ${key}`); }
       return key;
     }
+    if (EDIT) EDIT.used(k, args);
     return s;
   }
   function tr(key, args = {}) {
@@ -32,7 +36,14 @@
   }
   // A name kept in the text files under a mod data id (name.requirement.req_shields, name.gameState.gate_omega_found,
   // name.subKind.DOCTRINE). An id without a line yet (one a mod update added) shows as `fallback()`, without a warning.
-  const idName = (group, id, fallback) => TEXT[`name.${group}.${id}`] ?? fallback();
+  const idName = (group, id, fallback) => {
+    // Joined with +, not a template literal: text-check reads `name.${…}` as a key pattern and would count every
+    // name.* key as used.
+    const k = 'name.' + group + '.' + id, s = TEXT[k];
+    if (s == null) return fallback();
+    if (EDIT) EDIT.used(k, {});
+    return s;
+  };
   // A node's req_* tag and gate_* tag in words. (humanize is a function declaration further down, so it's ready here.)
   const requirementName = tag => idName('requirement', tag, () => humanize(tag.slice(4)));
   const gameStateName = gate => idName('gameState', gate, () => humanize(gate.replace(/^gate_/, '')));
@@ -5824,8 +5835,29 @@
   renderPanel();
   requestDraw();
 
+  // Everything that shows text drawn again, for the text editor after it changes a text (web/editor/). Text read once
+  // when the page loads (names kept in constants) only changes on a reload.
+  function refreshText() {
+    applyText();
+    els.panelFoot.title = tr('panel.foot.title', { mod: modVersionLong, planner: PLANNER_VERSION });
+    renderChrome();
+    renderPanel();
+    renderTargets();
+    renderThemeFilter();
+    renderThemeButton();
+    renderArt();
+    renderFileNotice();
+    renderWatchStatus();
+    if (!searchTab.hidden) searchTab.textContent = tr('search.tab', { n: searchOrder.length });
+    refreshList();
+    if (!storyEl.hidden) renderStory();
+    if (!exportEl.hidden) refreshExport();
+    if (hover) showTooltip(hover, lastMouse.x, lastMouse.y);
+    requestDraw();
+  }
+
   // Debug/testing hook.
-  window.planner = { state, byId, images, cam, lastChoice, tooltipHtml,
+  window.planner = { state, byId, images, cam, lastChoice, tooltipHtml, refreshText, trHtml,
     click: (id, quick) => primaryAction(byId.get(id), 400, 300, quick),
     pick: (id, opt) => { rememberChoice(byId.get(id), opt); },
     load: json => { deserialize(json); changed(); },

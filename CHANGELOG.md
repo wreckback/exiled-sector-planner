@@ -92,6 +92,15 @@ On the `text-overhaul` branch. Nothing on the page reads differently; the text c
 - `tools/text-check.mjs` checks the text files against the code (missing, doubled and unused keys, unfilled placeholders, outdated examples); `release.mjs` refuses to tag on its errors. `tools/text-baseline.mjs` records every text the page shows, to compare before and after a change; it showed the page's output unchanged after each step. `docs/text-inventory.md` lists what moved.
 - The release zip includes `text/`.
 
+## Text editor (2026-11-11)
+
+On the `text-editor` branch. Without `--edit` the page is unchanged (the text baseline is identical).
+
+- `node tools/serve.mjs --edit` adds a Text editor panel to the page for changing the planner's own text while looking at it: Pick a text on the page (text from `index.html` by its key, built text by the keys whose filled-in text it contains), the texts the page showed newest first, or search.
+- Typing redraws the page (`planner.refreshText`) and a preview fills the text with the values the page last used. It checks placeholders, markup pairs and the two plural forms, and says when a text is only read at load.
+- Save rewrites that one line in `web/text/*.js` through `serve.mjs`, updates the `// e.g.` example when it no longer fits, and reports the text check. Only the page served by `serve.mjs` can save.
+- The editor lives in `web/editor/` (not in the release zip); `app.js` only reports which keys it uses when the editor is there.
+
 ## Planner (`web/`)
 
 **Tree view**

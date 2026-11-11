@@ -63,6 +63,11 @@ function propertyNames(body) {
 }
 const placeholders = (s) => [...String(s).matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Whether an "// e.g." example shows one of these texts filled in (markup left out, any value for a placeholder).
+// Also used by the text editor's save (tools/lib/text-edit.mjs).
+export function exampleFits(example, texts) {
+    return texts.some((s) => new RegExp(String(s).replace(MARKUP, '').split(/\{\w+\}/).map(escapeRegex).join('.+?'), 's').test(example));
+}
 
 export function checkText() {
     const errors = [], warnings = [];
@@ -164,11 +169,7 @@ export function checkText() {
             examples++;
             const base = key.replace(/\.(one|other)$/, '');
             const forms = [key, ...(key !== base ? [`${base}.one`, `${base}.other`] : [])].filter((k) => k in text);
-            const fits = forms.some((k) => {
-                const parts = String(text[k]).replace(MARKUP, '').split(/\{\w+\}/).map(escapeRegex);
-                return new RegExp(parts.join('.+?'), 's').test(example);
-            });
-            if (!fits) warnings.push(`The example above "${key}" (web/text/${f}) doesn't match its text: "${example}"`);
+            if (!exampleFits(example, forms.map((k) => text[k]))) warnings.push(`The example above "${key}" (web/text/${f}) doesn't match its text: "${example}"`);
         }
     }
 

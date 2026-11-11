@@ -1,0 +1,45 @@
+/* Text editor (web/editor/editor.js, only with serve.mjs --edit). Same plain look as style.css: its colours, no
+   shadows or rounded corners. */
+#esp-editor {
+  position: fixed; z-index: 47; left: 8px; bottom: 8px; /* over the dialogs (40), under toasts (50) */
+  width: min(420px, calc(100vw - 16px)); height: min(72vh, 680px);
+  display: flex; flex-direction: column; gap: 6px; padding: 8px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--edge);
+  font-size: 13px; user-select: text;
+}
+#esp-editor button { font: inherit; }
+#esp-editor-show { position: fixed; z-index: 47; left: 8px; bottom: 8px; font: inherit; }
+#esp-editor .ee-head { display: flex; align-items: center; gap: 8px; }
+#esp-editor .ee-head b { flex: 1; }
+#esp-editor .ee-unsaved { color: var(--hl); }
+#esp-editor .ee-pick[aria-pressed="true"] { outline: 2px solid var(--accent); }
+#esp-editor .ee-search { width: 100%; font: inherit; background: var(--raised); color: var(--text); border: 1px solid var(--edge); padding: 3px 6px; }
+#esp-editor .ee-listhead { color: var(--muted); }
+#esp-editor .ee-list { flex: 1 1 40%; min-height: 80px; overflow-y: auto; border: 1px solid var(--rule); }
+#esp-editor .ee-row {
+  display: block; width: 100%; text-align: left; padding: 3px 6px; cursor: pointer;
+  background: none; color: inherit; border: 0; border-bottom: 1px solid var(--rule);
+}
+#esp-editor .ee-row:hover { background: var(--raised); }
+#esp-editor .ee-row.ee-sel { background: var(--raised); outline: 1px solid var(--accent); }
+#esp-editor .ee-key { display: block; color: var(--accent); font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+#esp-editor .ee-text { display: block; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#esp-editor .ee-tag { margin-left: 6px; font-family: system-ui, sans-serif; font-size: 11px; }
+#esp-editor .ee-now { color: var(--good); }
+#esp-editor .ee-edited { color: var(--hl); }
+#esp-editor .ee-empty { padding: 6px; color: var(--muted); }
+#esp-editor .ee-detail { flex: 1 1 60%; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+#esp-editor .ee-dkey { color: var(--accent); font-family: ui-monospace, Consolas, monospace; }
+#esp-editor .ee-muted { color: var(--muted); }
+#esp-editor .ee-form { display: flex; flex-direction: column; gap: 2px; }
+#esp-editor textarea {
+  width: 100%; resize: vertical; font: 13px/1.4 ui-monospace, Consolas, monospace;
+  background: var(--raised); color: var(--text); border: 1px solid var(--edge); padding: 4px 6px;
+}
+#esp-editor .ee-plabel { margin-top: 4px; }
+#esp-editor .ee-preview { padding: 4px 6px; border: 1px solid var(--rule); min-height: 1.4em; }
+#esp-editor .ee-buttons { display: flex; gap: 6px; }
+#esp-editor .ee-li { padding-left: 12px; }
+/* Pick: the element under the mouse, outlined. */
+body.ee-picking, body.ee-picking * { cursor: crosshair !important; }
+.ee-hover { outline: 2px solid var(--accent) !important; }

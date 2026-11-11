@@ -115,6 +115,13 @@ Everything the planner writes itself (buttons, tooltips, messages, dialogs, the 
 
 Then reload the page, and run `node tools/text-check.mjs`. It reports a placeholder that no longer gets filled, a key that went missing, and examples that no longer match. A release (`release.mjs`) refuses to tag while it reports errors.
 
+**Or edit it on the page:** start `node tools/serve.mjs --edit` and open http://localhost:8765/. The Text editor panel at the bottom left saves straight into `web/text/`.
+
+- **Choose a text:** click **Pick**, then click a text on the page (Esc to stop). The list also shows the texts the page showed, newest first ("now" marks its latest update), and the search box finds any key or text.
+- **Edit:** the page changes as you type. The preview shows the text with the values the page last used, which helps with text that only shows briefly (a message, a tooltip). The editor warns about a missing or unknown `{placeholder}` and markup that doesn't open and close in pairs. A text with a form for 1 and for other counts shows both.
+- **Save** writes only that line, updates its `// e.g.` example when the new wording no longer fits it, and shows what the text check finds. **Revert** goes back to the saved text. Names the page reads once when it loads change on the page only after a reload (the editor says so); the browser asks before a reload loses unsaved changes.
+- It edits existing text only: a new key still needs code. The mod's text isn't editable here.
+
 ## Theme
 
 The **Theme** button in the top bar cycles **Dark**, **Light** and **Auto** (follows the system's light or dark setting). Dark is the default. The choice is saved in the browser.

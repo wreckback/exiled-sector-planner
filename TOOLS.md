@@ -9,7 +9,7 @@ Node 26+ (`.nvmrc`) and git 2.39+, on Windows, Linux or macOS. No npm dependenci
 ```sh
 node tools/update.mjs    # mod -> newest release tag, extract, check, diff, record (--tag, --no-checkout, --no-fetch, --commit, --preview, --report <file>)
 node tools/extract.mjs   # rebuild the data from the mod as checked out (--web-root to write elsewhere)
-node tools/serve.mjs     # http://localhost:8765/  (--port to change, --root to serve another folder)
+node tools/serve.mjs     # http://localhost:8765/  (--port to change, --root to serve another folder, --edit for the text editor)
 node tools/release.mjs   # tag vX.Y.Z[-alpha.N|-beta.N|-rc.N]+es<mod release> (--version, --bump, --pre, --rc, --plain, --push, --dry-run)
 node tools/package.mjs   # dist/exiled-sector-planner-<tag>.zip (--tag, default: the planner tag on HEAD)
 node tools/text-check.mjs     # check web/text/*.js against app.js and index.html (errors exit 1)
@@ -29,7 +29,7 @@ node tools/text-baseline.mjs  # capture every text the page shows into baseline/
 
 ## Text tools
 
-The planner's own text is in `web/text/*.js` (see `CLAUDE.md`, Text). Two tools keep it and the code in step:
+The planner's own text is in `web/text/*.js` (see `CLAUDE.md`, Text). Two tools keep it and the code in step, and `serve.mjs --edit` edits it on the page:
 
 - **`text-check.mjs`** (`tools/lib/text-check.mjs`, also run by `release.mjs`) reads each text file in a `vm` sandbox, and the keys in use from `app.js` (key-shaped literals with a text file's prefix, and keys built in a template literal, as patterns) and `index.html` (`data-t`, `data-t-html`, `data-t-title`, `data-t-placeholder`, `data-t-aria-label`).
   - Errors: a key in use that no file has (a key counts as present with its `.one` and `.other` forms), a key written twice, a `{placeholder}` that a call with inline values (`tr('key', { … })`) doesn't fill, `.one`/`.other` with different placeholders, a text file `index.html` doesn't load (or a script tag for a missing one).
@@ -40,6 +40,10 @@ The planner's own text is in `web/text/*.js` (see `CLAUDE.md`, Text). Two tools 
   - The page gets a fixed planner version (`FIXED_VERSION`, answered for `version.js` through the browser's debugging protocol), so the output doesn't change per commit.
   - `--check` ignores what moving text changes without changing what's shown: `data-t*` attributes, `<span data-t>` holders, attribute order, `data-group`, and line breaks inside text that come from `index.html`'s layout.
   - When the output changes on purpose (a wording change), check the differences are the intended ones, then save it again without `--check`.
+- **`serve.mjs --edit`** adds the text editor to the page (`web/editor/`; the file side is `tools/lib/text-edit.mjs`). Only for the repo's own `web/` (it refuses `--root`). It never reaches users: without `--edit` nothing loads it, and `package.mjs` zips named files and `text/` only.
+  - The served `index.html` gets `editor/record.js` before `app.js` (it sets `window.ESP_EDIT`, which `textTemplate` and `idName` in `app.js` report each key and its values to) and `editor/editor.css`, `editor/text.js` and `editor/editor.js` at the end.
+  - `GET /_edit/keys` answers every key with its file, saved text and `// e.g.` example. `POST /_edit/save` (`{key, text, example}`) rewrites only that key's line (a key written over several lines is refused), replaces its example with the page's last filled-in text when the old one no longer fits (`exampleFits`, shared with `text-check`), checks that the file still runs and gives the new text (otherwise it's put back), and answers with the text check's errors and its warnings about that key. A save must come from the page itself: the `Host` and `Origin` headers have to be this server.
+  - The editor's own words are in `web/editor/text.js` (same format, outside `text-check`, since it doesn't ship).
 
 ## Extractor (tools/extract.mjs)
 
