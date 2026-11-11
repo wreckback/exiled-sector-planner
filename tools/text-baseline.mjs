@@ -2,12 +2,11 @@
 // Records every piece of text the planner page shows, to check that moving the text into files changes nothing.
 //   node tools/text-baseline.mjs                 # capture and save baseline/text-baseline.txt
 //   node tools/text-baseline.mjs --check         # capture again and compare with the saved file
-//   node tools/text-baseline.mjs --coverage      # also list inventory strings whose code never ran
 //
 // It serves web/ with serve.mjs, opens it in headless Edge or Chrome (a fresh profile, never the user's browser),
 // drives the page through fixed scenarios (tools/lib/text-baseline-page.js) and saves the text by label. The output
-// depends only on the code and the data, so the same commit always gives the same file. --browser <path> (or
-// ESP_BROWSER) picks the browser when it isn't found.
+// depends only on the code, the data and the text files: the planner's version is fixed for the capture (FIXED_VERSION),
+// so it doesn't change with each commit. --browser <path> (or ESP_BROWSER) picks the browser when it isn't found.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -20,18 +19,20 @@ const TOOL = 'text-baseline';
 const { values: opt } = parseArgs({
     options: {
         check: { type: 'boolean' },
-        coverage: { type: 'boolean' },
         out: { type: 'string', default: 'baseline/text-baseline.txt' },
         browser: { type: 'string' },
         help: { type: 'boolean', short: 'h' },
     },
 });
 if (opt.help) {
-    say('Usage: node tools/text-baseline.mjs [--check] [--coverage] [--out <file>] [--browser <path>]');
+    say('Usage: node tools/text-baseline.mjs [--check] [--out <file>] [--browser <path>]');
     say('Captures the page text into baseline/text-baseline.txt, or with --check compares a new capture with it.');
     process.exit(0);
 }
 const outFile = fromRepo(opt.out);
+// The planner version the page gets during a capture: a local build with uncommitted changes, so the footer shows the
+// "(edited)" form too (panel.version.edited).
+const FIXED_VERSION = 'v0.0.0-1-gabcdef0-dirty';
 
 // ---------------------------------------------------------------- browser
 function findBrowser() {
@@ -56,7 +57,7 @@ const freePort = () => new Promise((resolve, reject) => {
 // A minimal Chrome DevTools Protocol client over Node's built-in WebSocket.
 class Cdp {
     constructor(ws) {
-        this.ws = ws; this.next = 1; this.pending = new Map(); this.waiters = [];
+        this.ws = ws; this.next = 1; this.pending = new Map(); this.waiters = []; this.handlers = new Map();
         ws.addEventListener('message', (ev) => {
             const msg = JSON.parse(ev.data);
             if (msg.id && this.pending.has(msg.id)) {
@@ -65,6 +66,7 @@ class Cdp {
                 if (msg.error) reject(new Error(`${msg.error.message} (${msg.error.code})`)); else resolve(msg.result);
             } else if (msg.method) {
                 for (const w of this.waiters.filter((x) => x.method === msg.method)) { this.waiters.splice(this.waiters.indexOf(w), 1); w.resolve(msg.params); }
+                for (const fn of this.handlers.get(msg.method) || []) fn(msg.params);
             }
         });
     }
@@ -79,6 +81,7 @@ class Cdp {
         return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
     }
     once(method) { return new Promise((resolve) => this.waiters.push({ method, resolve })); }
+    on(method, fn) { this.handlers.set(method, [...(this.handlers.get(method) || []), fn]); }
     async evaluate(expression) {
         const r = await this.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
         if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
@@ -121,14 +124,16 @@ async function capture() {
         await cdp.send('Runtime.enable');
         await cdp.send('Browser.grantPermissions', { origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] }).catch(() => {});
         await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
-        if (opt.coverage) {
-            await cdp.send('Profiler.enable');
-            await cdp.send('Profiler.startPreciseCoverage', { callCount: true, detailed: true });
-        }
+        // version.js is answered with FIXED_VERSION instead of the served one (git describe), which changes per commit.
+        await cdp.send('Fetch.enable', { patterns: [{ urlPattern: '*/version.js*' }] });
+        cdp.on('Fetch.requestPaused', ({ requestId }) => {
+            const body = Buffer.from(`window.PLANNER_VERSION = '${FIXED_VERSION}';\n`).toString('base64');
+            cdp.send('Fetch.fulfillRequest', { requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'text/javascript; charset=utf-8' }], body }).catch(() => {});
+        });
         const pageScript = readText(join(repoRoot, 'tools', 'lib', 'text-baseline-page.js'));
         await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `${pageScript}\nwindow.TEXT_BASELINE_PRELUDE();` });
         // Two passes: the full one, then a page without file access (as in Firefox) for the branches only it has.
-        const pairs = [], coverage = [];
+        const pairs = [];
         for (const [path, run] of [['/', 'TEXT_BASELINE_RUN'], ['/?nofiles', 'TEXT_BASELINE_RUN_NOFILES']]) {
             const loaded = cdp.once('Page.loadEventFired');
             await cdp.send('Page.navigate', { url: `${origin}${path}` });
@@ -136,12 +141,8 @@ async function capture() {
             for (let i = 0; i < 100 && !(await cdp.evaluate('!!window.planner')); i++) await sleep(50);
             await sleep(300); // the first-visit toast and the art check run after load
             pairs.push(...await cdp.evaluate(`window.${run}()`));
-            if (opt.coverage) {
-                const { result } = await cdp.send('Profiler.takePreciseCoverage');
-                coverage.push(...result.filter((s) => /\/app\.js(\?|$)/.test(s.url)));
-            }
         }
-        return { pairs, coverage };
+        return { pairs };
     } finally {
         if (cdp) cdp.close();
         if (browser) browser.kill();
@@ -168,12 +169,10 @@ const sections = (text) => {
 // What moving text into text/*.js may change without changing what's shown: index.html's data-t* attributes,
 // <span data-t> holders around text next to a form field, and the order of a tag's attributes (applyText sets title
 // and placeholder after the others). Both sides are compared without them.
-// Also the footer's short planner version, which changes with every commit, and line breaks inside text that only
-// index.html's source layout put there (a line break between text and a tag reads as a space, or as nothing before a
-// closing tag), which a text file's one-line string doesn't have.
+// Also line breaks inside text that only index.html's source layout put there (a line break between text and a tag
+// reads as a space, or as nothing before a closing tag), which a text file's one-line string doesn't have.
 function normalize(text) {
     return text
-        .replace(/(Planner )v\d[^<"]*/g, '$1<planner-version>')
         // The capture breaks the line between two tags; a holder's tags go with it.
         .replace(/>\n<span data-t="[^"]*">([^<]*)<\/span>\n</g, '>$1<')
         .replace(/>\n<span data-t="[^"]*">([^<]*)<\/span>/g, '>$1')
@@ -213,45 +212,8 @@ function compare(before, after) {
     return diffs;
 }
 
-// ---------------------------------------------------------------- coverage
-// For each string in docs/text-inventory.md's app.js tables: did the code at its place in app.js run?
-function coverageReport(scripts) {
-    const src = readText(join(repoRoot, 'web', 'app.js'));
-    const lineStart = [0];
-    for (let i = 0; i < src.length; i++) if (src[i] === '\n') lineStart.push(i + 1);
-    // In each pass, the innermost range holding an offset says how often that code ran; a string counts if any pass ran it.
-    const passes = scripts.map((s) => s.functions.flatMap((f) => f.ranges));
-    const countIn = (ranges, off) => {
-        let best = null;
-        for (const r of ranges) if (r.startOffset <= off && off < r.endOffset && (!best || r.endOffset - r.startOffset < best.endOffset - best.startOffset)) best = r;
-        return best ? best.count : 0;
-    };
-    const countAt = (off) => Math.max(0, ...passes.map((r) => countIn(r, off)));
-    const inv = readText(join(repoRoot, 'docs', 'text-inventory.md'));
-    const part = inv.slice(inv.indexOf('## `app.js`'), inv.indexOf('## `index.html`'));
-    let area = '', total = 0;
-    const missed = [];
-    for (const line of part.split('\n')) {
-        const h = /^### (.+?) \(\d+\)/.exec(line);
-        if (h) { area = h[1]; continue; }
-        const m = /^\| (\d+) \|[^|]*\| `` (.*) `` \|$/.exec(line);
-        if (!m) continue;
-        total++;
-        const ln = Number(m[1]);
-        const lit = m[2].replace(/\\\|/g, '|');
-        const from = lineStart[ln - 1], to = lineStart[ln] ?? src.length;
-        const head = lit.slice(0, Math.min(lit.length, 24));
-        let off = src.indexOf(head, from);
-        if (off < 0 || off >= to + 400) off = from;
-        if (countAt(off) === 0) missed.push(`${area} · ${ln}: ${lit.slice(0, 140)}`);
-    }
-    heading(`Coverage: ${total - missed.length} of ${total} inventory strings ran`);
-    for (const m of missed) say(`  not run: ${m}`);
-    return missed;
-}
-
 // ---------------------------------------------------------------- main
-const { pairs, coverage } = await capture();
+const { pairs } = await capture();
 const text = toText(pairs);
 const errors = pairs.filter(([label]) => label.startsWith('error · '));
 for (const [label, err] of errors) warn(`${label}\n${err.split('\n').slice(0, 4).join('\n')}`);
@@ -264,9 +226,5 @@ if (opt.check) {
     mkdirSync(join(outFile, '..'), { recursive: true });
     writeFileSync(outFile, text);
     good(`Saved ${opt.out}: ${pairs.length} sections, ${text.length} characters.`);
-}
-if (opt.coverage) {
-    if (coverage.length) coverageReport(coverage);
-    else warn('No coverage for app.js was recorded.');
 }
 if (errors.length) process.exitCode = 1;

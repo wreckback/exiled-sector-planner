@@ -44,10 +44,8 @@ window.TEXT_BASELINE_KIT = () => {
     const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
     const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const settle = async () => { await tick(20); await frames(); await tick(0); };
-    const version = String(window.PLANNER_VERSION || '');
     const clean = (s) => {
-        let t = String(s ?? '');
-        if (version && version !== 'dev') t = t.split(version).join('<planner-version>');
+        const t = String(s ?? '');
         // Floating boxes are placed by pixel, and blob URLs change each run; neither is text.
         return t.replace(/ style="(?:left|top):[^"]*"/g, '').replace(/blob:[^"')\s]+/g, 'blob:…').replace(/></g, '>\n<');
     };
@@ -652,10 +650,8 @@ window.TEXT_BASELINE_RUN = async () => {
     await step('D · cap 999', () => change('cap', '999'));
     await step('D · allocate a socket', () => P.allocate(sockets[2]));
     await step('D · augmenting doctrine', () => P.socketSub(sockets[2], 'doctrine_archive_hegemony'));
-    {
-        const ids = allIds.filter((id) => /adds \d/.test(P.tooltipHtml(node(id))));
-        tooltips('D · augment', ids.slice(0, 12));
-    }
+    // The first 12 nodes (by id) in the doctrine's radius, from the planner's own state, not from tooltip wording.
+    tooltips('D · augment', [...(P.subState().doctrine?.nodes || [])].sort().slice(0, 12));
 
     // ---------------------------------------------------------------- 4. templates: a stand-in templates file
     await step('T · load build A', () => P.load(buildA));
