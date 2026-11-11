@@ -51,6 +51,7 @@ Corrected on 2026-11-11 during step 2: the first scan skipped strings nested in 
 - Second part is the place or subject, last part what it says: `tooltip.socket.click`, `toast.template.copied`, `templates.watch.observing`.
 - Whole sentences, never fragments joined in code (see "Needs reshaping" below).
 - Plurals as `.one`/`.other`: `panel.nodesCount.one: '{count} node'`.
+- A sentence holding counts that change separately is a sentence key with counted-phrase keys filled in: `optional.summary.both: 'Unticked: {gates} and {volumes}.'` with `optional.count.gates.one: '{count} gate or unlock'`, not one sentence per singular/plural combination.
 - Repeated text gets one key, used from every place (see "Repeated text").
 - `index.html` keys go in the same files as the matching `app.js` area: the Templates dialog in `templates.js`, the Ship tab in `rules.js`.
 - The exact key for each string is set in that area's migration step, reviewed with the diff.

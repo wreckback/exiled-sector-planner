@@ -14,6 +14,7 @@ On branch `text-overhaul` (off `main`).
      - `tools/text.mjs` (list, search, rename a key everywhere, find duplicates) waits until the migration is done.
      - The inventory lives in `docs/text-inventory.md`, committed on the branch, and later steps tick items off it.
      - Exact keys are set in each area's migration step, reviewed with that diff.
+     - A sentence with counts that change separately is a sentence key with counted-phrase keys filled in ("Unticked: {gates} and {volumes}." with "{count} gate or unlock" / "{count} gates or unlocks"), not one sentence per singular/plural combination (2026-11-11).
      - One text file per area (about 12), keys in the order they appear on screen, a short comment per section.
      - Keys with a `{placeholder}` or markup get a hand-written `// e.g.` comment above them showing the sentence filled with real names from the current mod data, one per variant key (`.one`/`.other`, case variants); where a placeholder holds mod text, the comment says where it comes from. The check tool warns when an example no longer matches its text.
    - Steps, one at a time: stop after each for the user's review, one commit per step (ask before committing).
