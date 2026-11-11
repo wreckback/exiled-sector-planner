@@ -4,32 +4,11 @@ Inside the planner folder or beside it. Check how the other work environment has
 
 # Now: text externalization (2026-11-10)
 
-On branch `text-overhaul` (off `main`).
+On branch `text-overhaul` (off `main`). Steps 1 to 7 are done (2026-11-11): every text the planner writes is in `web/text/*.js` (`CLAUDE.md`, Text; `CHANGELOG.md`), checked by `tools/text-check.mjs` (also in `release.mjs`), with `tools/text-baseline.mjs` to compare the page's text before and after a change (`TOOLS.md`, Text tools). `docs/text-inventory.md` records what moved and how. Left:
 
-1. **Move all user-facing text into separate files.** Goal: editing a large amount of text, by hand or by script, shouldn't hurt. English only for now, translations possible later; bundles through `tools/` possible later; the page must keep running from `file://` (no `fetch`).
-   - Design drafted (not built): `web/text/*.js` per area (pure data, one `key: 'string'` per line), loaded by `<script>` before `app.js`; `t(key, args)` with `{name}` placeholders (arguments escaped), the game's `<hl>`/`<good>`/`<bad>` markup inside strings, `.one`/`.other` plural variants, whole-sentence keys instead of concatenated fragments; `index.html` keeps only `data-t`, `data-t-title` and `data-t-placeholder` keys, filled by `applyText()`; the `#keys` shortcut list moves into the text files. Mod-derived text and node names stay in `planner-data.js`.
-   - Decided (2026-11-11):
-     - Keys are dotted, grouped by area (`tooltip.refused.hull`, `toast.template.saved`), like the mod's own strings.
-     - The check tool runs in `release.mjs`: it refuses to tag on missing keys or mismatched `{placeholders}`, and only warns about unused keys.
-     - `tools/text.mjs` (list, search, rename a key everywhere, find duplicates) waits until the migration is done.
-     - The inventory lives in `docs/text-inventory.md`, committed on the branch, and later steps tick items off it.
-     - Exact keys are set in each area's migration step, reviewed with that diff.
-     - A sentence with counts that change separately is a sentence key with counted-phrase keys filled in ("Unticked: {gates} and {volumes}." with "{count} gate or unlock" / "{count} gates or unlocks"), not one sentence per singular/plural combination (2026-11-11).
-     - One text file per area (about 12), keys in the order they appear on screen, a short comment per section.
-     - Keys with a `{placeholder}` or markup get a hand-written `// e.g.` comment above them showing the sentence filled with real names from the current mod data, one per variant key (`.one`/`.other`, case variants); where a placeholder holds mod text, the comment says where it comes from. The check tool warns when an example no longer matches its text.
-   - Steps, one at a time: stop after each for the user's review, one commit per step (ask before committing).
-     1. Inventory every literal (about 300 in `app.js`, 39 `toast(` calls, plus `index.html`), grouped by area with suggested keys. No code changes.
-     2. Capture a baseline of tooltips, stat sheet, list view and dialogs through `serve.mjs` (not the user's tab); each migrated area must give identical output.
-     3. Infrastructure (`web/text/`, `t()`, `applyText()`), tried on one small area.
-     4. Migrate `app.js`, one area per step: label constants, tooltips, rule refusals, toasts and notices, panels and stat sheet, dialogs.
-     5. Migrate `index.html`.
-     5a. Code that reads the text it shows (found 2026-11-11, after the Templates area; each its own commit, output unchanged):
-        - (Done.) The list view keys its trees by the displayed place name (`listCollapsed`, saved as `esp.listCollapsed`) and capitalises it in code: key them by volume id (`core`, a volume id, `affinity`) and show the name separately.
-        - (Done.) Words built from ids with `humanize()`, so not editable: subroutine kinds ("Only 1 doctrine per ship."), `req_*` tags ("Needs a ship with: …", `rule.fallback.requires`), gates ("Unlocked by: …", the anchor list's "In game: …"). Give each a key in `names.js` (about 30), `humanize()` only as the fallback for ids the data adds later.
-        - (Done: the capture gets a fixed planner version, the doctrine nodes come from `subState()`, and `--coverage` is gone; the baseline was saved again after checking that only the version changed.) `tools/text-baseline.mjs` and its page script read English: the footer's version is masked by the word "Planner ", and the doctrine scenario picks nodes by the tooltip wording "adds N". Mask the version by its value and pick the nodes from the subroutine data, before any wording changes on purpose.
-     6. (Done: `tools/text-check.mjs`, `tools/lib/text-check.mjs`, step 2b in `release.mjs`.) The check tool for missing, unused and mismatched keys, hooked into `release.mjs`. Keys under `name.requirement.*`, `name.gameState.*` and `name.subKind.*` are looked up by mod data id (`idName` in `app.js`), so they never appear in the code: don't count them as unused, and warn instead when the data has a `req_*` tag, `gate_*` tag or subroutine kind with no line.
-     7. Update `CLAUDE.md`, `TOOLS.md`, `README-TECHNICAL.md` and `CHANGELOG.md`.
-     8. Text review: the wording slips listed in `docs/text-inventory.md` ("Wording inconsistencies spotted"), checked against a fresh baseline.
+1. **Text review** (step 8): the wording slips listed in `docs/text-inventory.md` ("Wording inconsistencies spotted"), and whatever else reads badly now that the text is in one place. Save a baseline first, then check the differences are the intended ones.
+2. **Merge `text-overhaul` into `main`** (after the review, or before it if the review takes long). `main` has had no commits since the branch started.
+3. **Later, not now:** `tools/text.mjs` (list, search, rename a key everywhere, find duplicates), once it's clear which commands would be used.
 
 # Next: follow-ups from the PR #1 review (`node-tools`)
 

@@ -16,15 +16,30 @@ A static web planner for the ship skill tree of the Exiled Sector Starsector mod
   - The generated `planner-data.js` is committed, so each mod sync shows up as one diff.
   - History was rewritten once to drop the art, before the first push. Don't re-add `web/assets`.
 - `tools/extract.mjs` builds `web/data/planner-data.js` from the mod. It's generated, so don't hand-edit it.
-- `web/` is the whole site: `index.html`, `style.css` and `app.js`, plus `version.js` (the planner version for the footer, `'dev'` in git; see `TOOLS.md`).
+- `web/` is the whole site: `index.html`, `style.css` and `app.js`, plus `version.js` (the planner version for the footer, `'dev'` in git; see `TOOLS.md`) and `text/`, the planner's own text (see Text below).
 
 ## Tools
 
 The Node scripts in `tools/` (update, extract, serve, release, package) have their own guide: **`TOOLS.md`**. It holds the commands, the release and version rules, and how the extractor reads the mod. Read it before running or changing any of them.
 
+## Text
+
+Every text the planner writes itself is in `web/text/*.js`, one file per area (`tooltip.js`, `templates.js`, …; `common.js` holds shared words and explains the format), loaded by `<script>` tags before `app.js`. Each line is `"key": "text"`; each file adds to `window.ESP_TEXT`. Text from the mod (node and type names, effect wording, the mod's `node.block.*`, `summary.*`, `ui.stats.*` strings) stays in `planner-data.js`. The user edits the text by hand, so keep the files easy to read.
+
+- **Never put user-facing text in `app.js` or `index.html`.** Add a key to the matching text file and look it up. The only text left in code is for developers (the missing-data message, the missing-key console warning).
+- **Lookup** (top of `app.js`, before the constants):
+  - `tr(key, args)` fills `{name}` placeholders. With `args.count` and no plain key, it takes `key.one` for 1 and `key.other` otherwise. A missing key shows as the key itself, with a console warning.
+  - `trHtml(key, args)` is the same as HTML: the text is escaped, its markup (`<hl>`, `<good>`, `<bad>`, `<muted>`, `<builtIn>`, `<b>`, `<code>`, `<kbd>`) becomes HTML, values are escaped except those whose name ends in `Html`.
+  - `textTemplate(key, args)` is the raw text, for code that fills it itself (the mod-string fallbacks).
+  - `idName(group, id, fallback)` reads `name.<group>.<id>` for names keyed by mod data id (`name.requirement.req_*`, `name.gameState.gate_*`, `name.subKind.*`), falling back to `humanize` without a warning for ids a mod update adds.
+  - `applyText()` fills `index.html` from `data-t` (text), `data-t-html` (text with markup), `data-t-title`, `data-t-placeholder` and `data-t-aria-label`; it runs at start. Text next to a form field sits in a `<span data-t>`.
+- **Keys:** dotted, by area, the first part naming the file (`tooltip.socket.linked` is in `tooltip.js`), in the order things appear on screen. Whole sentences, never fragments joined in code; a sentence with counts that change separately is a sentence key with counted-phrase keys filled in (`optional.summary.both` with `optional.count.gates.one`/`.other`). Lists join with `common.listComma`/`listAnd`/`listOr`. Don't use displayed text as a lookup key or saved value (ids instead: gate conditions, the list view's tree groups).
+- **Comments:** each key with a placeholder or markup has a `// e.g.` line above it showing the sentence filled with real names and values from the current mod data (one per plural form or variant); where a placeholder holds mod text, the comment says where it comes from.
+- **Checks:** `node tools/text-check.mjs` after any change to text or to code that shows text (missing, doubled and unused keys, unfilled placeholders, outdated examples; `release.mjs` refuses on its errors). For a change meant to leave the page's output as it is, `node tools/text-baseline.mjs --check` against a baseline saved before it. See `TOOLS.md`, Text tools.
+
 ## Verifying changes
 
-The page also runs from `file://`, because data loads as a `<script>`, not via `fetch`. The Claude in Chrome extension refuses `file://`, so test through `serve.mjs`.
+The page also runs from `file://`, because data and text load as `<script>`s, not via `fetch`. The Claude in Chrome extension refuses `file://`, so test through `serve.mjs`.
 
 There is no test suite. Verify in the browser through the debug hook `window.planner` at the bottom of `app.js`. It exposes `state`, `byId`, `cam`, `pathTo`, `findPath(id, opt)`, `blockOf(id, opt)`, `problems()`, `setShip(fn)`, `setVolumeShown(id, on)`, `typesExclusive(a, b)`, `setAffinitySplit({option: count})`, `removalSet`, `allocate`, `chooseRoot`, `click(id, ctrl)`, `pick`, `load(json)`, `serialize`, `totals`, `describe`, `templateSteps`, `buildTemplate`, `mergeTemplate`, `importTemplate`, `currentNodeId`, for waypoints `waypoints()`, `toggleWaypoint(id)`, `clearWaypoints` and `routeTo(id, opt)`, and for target mode `targets` (`{mode, want, forbid, keep}`), `setTargetMode`, `setTargetKeep`, `cycleTarget(id)`, `plan()` and `applyPlan`. Ship rules can be set in a test build through `load` (the `ship` field of the serialized JSON). `window.plannerTemplatesTest(text)` shows a template file's list without the file picker, which needs a real user click. `plannerTemplatesTest.link(handle)` links a stand-in handle (an object with `name`, `queryPermission`, `getFile` and `createWritable`) to test the file watcher, and `.poll()` runs one watcher check.
 
@@ -36,7 +51,7 @@ The user often has their own build open in the same browser, and it persists in 
 
 ## Architecture (web/app.js, one IIFE)
 
-The sections run top to bottom in this order:
+The sections run top to bottom in this order, after the text lookup (see Text). Where this describes a message or label, its wording now comes from `web/text/*.js`.
 
 1. **Model:** nodes, types and connectors are built from `PLANNER_DATA`.
    - Links in `connectedTo` are symmetric, and `n.adj` is the neighbour list.
@@ -149,5 +164,5 @@ The sections run top to bottom in this order:
 ## Conventions the user asked for
 
 - **Function over looks in CSS:** system font, solid opaque panels, no shadows, gradients, transitions, rounded corners or uppercase letter-spaced labels. Colour is only for meaning: good/bad values, notable and keystone, over-cap, focus. Every page colour is a CSS variable, with light values under `:root[data-theme="light"]`, so add new ones as variables in both sets. The canvas art (glows, nebulae) was not part of that request and stays, and neither is the Full Sheet (`#statsheet`), which copies the game's stat sheet colours in the dark theme. In the light theme it keeps the game's layout in light colours (the `:root[data-theme="light"] #statsheet` rules), as the user asked for the sheet to follow the theme.
-- **Shortcuts:** the list in `#keys` in `index.html` is written by hand. Update it, and the `#help` line, whenever controls change.
+- **Shortcuts:** the Shortcuts dialog's rows are in `web/text/keys.js` (two keys per row: `keys.NAME.keys` and `keys.NAME`), each with a `<tr>` in `index.html`'s `#keys` table. Update them, and the help line (`bar.help` in `bar.js`), whenever controls change.
 - **Toggling elements:** use the `hidden` attribute. `style.css` has `[hidden]{display:none!important}` because some dialogs set `display: flex`.

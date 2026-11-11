@@ -11,6 +11,8 @@
     "extract": "node tools/extract.mjs",
     "update": "node tools/update.mjs",
     "package": "node tools/package.mjs",
-    "release": "node tools/release.mjs"
+    "release": "node tools/release.mjs",
+    "text-check": "node tools/text-check.mjs",
+    "text-baseline": "node tools/text-baseline.mjs"
   }
 }

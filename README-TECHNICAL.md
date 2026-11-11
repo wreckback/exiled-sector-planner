@@ -15,7 +15,8 @@ The mod itself:
 - `tools/mod-sync.json`: the mod release the data was last built from (written by `update.mjs`)
 - `tools/serve.mjs`: a small local web server
 - `tools/release.mjs` and `tools/package.mjs`: tag a release and build its zip
-- `web/`: the site. `data/planner-data.js` is generated. It holds none of the mod's art; see below.
+- `tools/text-check.mjs` and `tools/text-baseline.mjs`: check the text files against the code, and record the page's text to compare before and after a change
+- `web/`: the site. `data/planner-data.js` is generated. `text/` holds the planner's own text, one file per part of the page (see Edit the text). It holds none of the mod's art; see below.
 
 The tools need [Node.js](https://nodejs.org/) 26 or newer (`.nvmrc` names the version) and git 2.39 or newer, on Windows, Linux or macOS. They have no npm dependencies, so there's nothing to install. The site itself needs neither.
 
@@ -94,6 +95,25 @@ node tools/package.mjs --tag "v0.2.0-rc.1+es0.11.1-alpha"   # or no --tag for th
 ```
 
 It writes `dist/exiled-sector-planner-<tag>.zip`. The site files come from the tag itself, so any tag can be packaged, and the zip's `version.js` holds the tag, so its footer shows that version. The zip has no art: its README.txt tells users to choose their mod folder under **Show mod art**. Attach the zip to the GitHub release for that tag, marked as a pre-release for an alpha, beta or rc. The zip's README.txt says which stage it is.
+
+## Edit the text
+
+Everything the planner writes itself (buttons, tooltips, messages, dialogs, the Shortcuts list) is in `web/text/`, one file per part of the page: `tooltip.js` for the map's tooltips, `templates.js` for the Templates dialog, `toast.js` for the short messages, `names.js` for names the mod doesn't give (volumes, hull sizes, …), and so on. Open one in any text editor. The node names, effect wording and other text from the mod are in the generated `data/planner-data.js`, so change those in the mod.
+
+```js
+    // e.g. Changed 5 affinity nodes. Undo goes back.
+    "toast.affinityChanged.one": "Changed {count} affinity node. Undo goes back.",
+    "toast.affinityChanged.other": "Changed {count} affinity nodes. Undo goes back.",
+```
+
+- Change the text on the right, between the quotes. Leave the key on the left as it is.
+- `{count}`, `{name}` and the like are filled in by the planner. Move them within the sentence as you like, but keep them.
+- A key ending in `.one` is used for a count of 1, `.other` for any other count.
+- Write `\"` for a double quote inside the text. Apostrophes need nothing.
+- Some text has markup: `<hl>…</hl>` highlights, `<b>…</b>` is bold, `<muted>…</muted>` greys, `<kbd>…</kbd>` draws a key.
+- The `// e.g.` line above a key shows how it reads on the page, with real names filled in. Update it when you change the sentence.
+
+Then reload the page, and run `node tools/text-check.mjs`. It reports a placeholder that no longer gets filled, a key that went missing, and examples that no longer match. A release (`release.mjs`) refuses to tag while it reports errors.
 
 ## Theme
 

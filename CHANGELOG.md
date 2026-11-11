@@ -82,6 +82,16 @@ Everything built so far, oldest first. All of it was done on 2026-11-08, against
 
 - Node tooltips (and each option of a choice node) now have the game's "Mutually exclusive with nodes" and "Mutually exclusive with hullmods" lines (`SkillNode.describeExclusivity`), so a clash shows before either node is allocated. The nodes list is every type it clashes with. The hull mods list is the node's own hull mods plus the ones entered in Ship rules that it clashes with, since the planner can't know which hull mods the player knows (the game lists those since mod 0.12.4).
 
+## The planner's text in files (2026-11-11)
+
+On the `text-overhaul` branch. Nothing on the page reads differently; the text can now be edited by hand.
+
+- Every text the planner writes itself moved out of `app.js` and `index.html` into `web/text/*.js`, one file per part of the page, as `"key": "text"` lines with a `// e.g.` example above each one with a placeholder or markup. `index.html` keeps only `data-t*` attributes, filled at start. The Shortcuts list's rows are keys in `text/keys.js`.
+- Sentences that were built from pieces in code are whole sentences, one per variant (the tooltip's click notes, the plan status, the template load report, the change notice, the list counts), and plurals have `.one`/`.other` forms. Lists join with shared keys.
+- Code no longer reads the text it shows: gate conditions and the list view's tree groups use ids, the code reader's browser error has a flag, the hull size isn't capitalised in code, a radius keeps its article in the text, and requirement tags, game states and subroutine kinds have name lines keyed by the mod's ids.
+- `tools/text-check.mjs` checks the text files against the code (missing, doubled and unused keys, unfilled placeholders, outdated examples); `release.mjs` refuses to tag on its errors. `tools/text-baseline.mjs` records every text the page shows, to compare before and after a change; it showed the page's output unchanged after each step. `docs/text-inventory.md` lists what moved.
+- The release zip includes `text/`.
+
 ## Planner (`web/`)
 
 **Tree view**

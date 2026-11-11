@@ -1,5 +1,7 @@
 # Text inventory
 
+> **Done (2026-11-11):** every area below has moved to `web/text/*.js` (Progress). The tables and line numbers describe `app.js` and `index.html` as they were before the move (`d481d1a`), as a record. What's still in use: "Wording inconsistencies spotted", for the text review (`TODO.md`). How the text works now: `CLAUDE.md`, Text.
+
 Step 1 of the text overhaul (see `TODO.md`, "Now: text externalization"): every piece of user-facing text in `web/app.js` and `web/index.html`, grouped by area. Made on 2026-11-11 from `text-overhaul` at `d481d1a`; line numbers are from that commit and will drift as areas are migrated.
 
 What isn't here: text that comes from the mod through `planner-data.js` (node and type names, effect wording, the mod's `node.block.*`, `summary.*` and `ui.stats.*` strings). That stays where it is.
