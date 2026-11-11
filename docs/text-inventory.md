@@ -50,6 +50,13 @@ Tick an area when its migration step is committed and its output matches the bas
 - Repeated text gets one key, used from every place (see "Repeated text").
 - `index.html` keys go in the same files as the matching `app.js` area: the Templates dialog in `templates.js`, the Ship tab in `rules.js`.
 - The exact key for each string is set in that area's migration step, reviewed with the diff.
+- Keys in each file follow the order they appear on screen, with a short comment per section.
+- A key with a `{placeholder}` or markup gets a `// e.g.` comment showing the sentence filled with real names from the current mod data, one per variant key. Where a placeholder holds mod text, the comment says where it comes from:
+  ```js
+  // e.g. The way to Heavy Ballistics Integration passes Converted Fighter Bay: Requires built-in strikecraft wings only.
+  //      ({target} and {node} are skill names; {reason} is the mod's own refusal text, node.block.builtInWingsOnly)
+  'rule.wayBlocked': 'The way to {target} passes {node}: {reason}',
+  ```
 
 ## Needs reshaping before it can move
 
