@@ -1026,12 +1026,17 @@
   const NAME_CHAR = /[\x20-\x7E]/;
   const badNameChars = s => [...new Set([...String(s)].filter(c => !NAME_CHAR.test(c)))];
   const charLabel = c => (/\s|[​-‏﻿]/.test(c) || c.codePointAt(0) < 32 ? '' : `"${c}" `) + `U+${c.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`;
+  // The first five unusable characters, as a list ("é" U+00E9, …).
+  const badCharsText = bad => {
+    const list = bad.slice(0, 5).map(charLabel).join(tr('common.listComma'));
+    return bad.length > 5 ? tr('templates.name.charsMore', { chars: list }) : list;
+  };
   function templateNameProblem(name) {
     const n = name.trim();
-    if (!n) return 'Give the template a name.';
+    if (!n) return tr('templates.name.empty');
     const bad = badNameChars(n);
-    if (bad.length) return `Names can only use English letters, digits, spaces and keyboard symbols, so the game can type and show them. Remove ${bad.slice(0, 5).map(charLabel).join(', ')}${bad.length > 5 ? ', …' : ''}.`;
-    if ([...n].length > TEMPLATE_NAME_MAX) return `Names can be at most ${TEMPLATE_NAME_MAX} characters.`;
+    if (bad.length) return tr('templates.name.badChars', { chars: badCharsText(bad) });
+    if ([...n].length > TEMPLATE_NAME_MAX) return tr('templates.name.tooLong', { max: TEMPLATE_NAME_MAX });
     return null;
   }
   // Keeps a name box to the safe set as you type or paste: anything else is taken out and the status says what.
@@ -1045,7 +1050,7 @@
       input.value = [...input.value].filter(c => NAME_CHAR.test(c)).join('');
       const caret = [...before].filter(c => NAME_CHAR.test(c)).join('').length;
       try { input.setSelectionRange(caret, caret); } catch { /* not focused */ }
-      report(`Removed ${bad.slice(0, 5).map(charLabel).join(', ')}${bad.length > 5 ? ', …' : ''}: names can only use English letters, digits, spaces and keyboard symbols.`, 'err');
+      report(tr('templates.name.removed', { chars: badCharsText(bad) }), 'err');
       input.dataset.cleaned = '1'; // tells the box's own input handler to keep this message once
       return true;
     };
@@ -1057,9 +1062,9 @@
     const s = (text || '').trim();
     if (!s) return [];
     let parsed;
-    try { parsed = JSON.parse(s); } catch { throw new Error('That file is not valid JSON. No changes written.'); }
+    try { parsed = JSON.parse(s); } catch { throw new Error(tr('templates.file.notJson')); }
     const list = Array.isArray(parsed) ? parsed : parsed && Array.isArray(parsed.templates) ? parsed.templates : null;
-    if (!list) throw new Error('That file has no "templates" list. No changes written.');
+    if (!list) throw new Error(tr('templates.file.noList'));
     return list;
   }
   // Index of the template with this name and root (names are unique per root, case-insensitive, like TemplateNames).
@@ -1131,29 +1136,30 @@
   // once; it was dropped with the Copy template JSON button (see TODO.md).
   async function codeToTemplate(text) {
     const raw = String(text || '').trim();
-    if (!raw) throw new Error('Please paste a template code.');
+    if (!raw) throw new Error(tr('templates.code.empty'));
+    const invalid = () => new Error(tr('templates.code.invalid'));
     let json;
     {
       const code = raw.replace(/\s+/g, '');
       const compressed = code.startsWith(CODE_PREFIX);
-      if (!compressed && !code.startsWith(CODE_PREFIX_PLAIN)) throw new Error('Invalid template code.');
-      if (code.length > 200000) throw new Error('Invalid template code.');
+      if (!compressed && !code.startsWith(CODE_PREFIX_PLAIN)) throw invalid();
+      if (code.length > 200000) throw invalid();
       try {
         let bytes = b64urlToBytes(code.slice(CODE_PREFIX.length));
         if (compressed) {
-          if (typeof DecompressionStream !== 'function') throw new Error('This browser can\'t read codes. Try Chrome, Edge or Firefox.');
+          if (typeof DecompressionStream !== 'function') throw Object.assign(new Error(tr('templates.code.browser')), { browser: true });
           bytes = await streamBytes(bytes, new DecompressionStream('deflate-raw'));
         }
         json = new TextDecoder().decode(bytes);
       } catch (err) {
-        if (err && /browser/.test(err.message)) throw err;
-        throw new Error('Invalid template code.');
+        if (err && err.browser) throw err;
+        throw invalid();
       }
     }
     let t;
-    try { t = JSON.parse(json); } catch { throw new Error('Invalid template code.'); }
+    try { t = JSON.parse(json); } catch { throw invalid(); }
     if (!t || typeof t !== 'object' || Array.isArray(t) || !t.root || !t.name || !Array.isArray(t.steps)) {
-      throw new Error('Invalid template code.');
+      throw invalid();
     }
     return t;
   }
@@ -3851,7 +3857,7 @@
     if (!state.root) { toast(tr('common.chooseRoot')); return; }
     let name = tpl.name.value.trim();
     if (!name) { try { name = (localStorage.getItem('esp.tplName') || '').trim(); } catch { /* storage unavailable */ } }
-    if (!name || templateNameProblem(name)) name = `${byId.get(state.root).type.name} plan`;
+    if (!name || templateNameProblem(name)) name = tr('templates.defaultName', { root: byId.get(state.root).type.name });
     const code = await templateToCode(buildTemplate(name));
     try {
       await navigator.clipboard.writeText(code);
@@ -4849,18 +4855,26 @@
     const c = fileChange;
     fileNotice.box.hidden = !c;
     if (!c) return;
-    const list = (label, names) => (names.length ? ` ${label}: ${names.slice(0, 3).map(n => `"${n}"`).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}.` : '');
-    let text = `Templates file ${linkedHandle ? linkedHandle.name : ''} change detected (most likely by Starsector).` +
-      list('Changed', c.changed) + list('Added', c.added) + list('Removed', c.removed) + ' The Templates list is now up to date.';
+    // Up to three names, then "and N more".
+    const names = list => {
+      const shown = list.slice(0, 3).map(name => tr('templates.notice.quoted', { name })).join(tr('common.listComma'));
+      return list.length > 3 ? tr('templates.notice.more', { names: shown, count: list.length - 3 }) : shown;
+    };
+    const sentences = [tr('templates.notice.detected', { file: linkedHandle ? linkedHandle.name : '' })];
+    for (const [key, list] of [['templates.notice.changed', c.changed], ['templates.notice.added', c.added], ['templates.notice.removed', c.removed]]) {
+      if (list.length) sentences.push(tr(key, { names: names(list) }));
+    }
+    sentences.push(tr('templates.notice.upToDate'));
     const cur = c.current;
-    if (cur && cur.removed) text += ` "${cur.name}" was removed from the template file. Current build still loaded in the planner. Don't forget to save to preserve the build.`;
+    if (cur && cur.removed) sentences.push(tr('templates.notice.currentRemoved', { name: cur.name }));
     else if (cur) {
       const edited = state.template && templateSig() !== state.template.sig;
-      text += ` Your build from "${cur.name}" was updated (most likely by Starsector). Load the new version? It will replace your current build${edited ? ', including the edits you made since loading or saving it' : ''}. Undo brings it back.`;
+      sentences.push(tr(edited ? 'templates.notice.currentUpdatedEdited' : 'templates.notice.currentUpdated', { name: cur.name }));
     }
-    fileNotice.msg.textContent = text;
+    fileNotice.msg.textContent = sentences.join(' ');
     fileNotice.load.hidden = !(cur && !cur.removed);
-    fileNotice.dismiss.textContent = cur && !cur.removed ? 'Keep my build' : 'Dismiss';  }
+    fileNotice.dismiss.textContent = tr(cur && !cur.removed ? 'templates.notice.keep' : 'templates.notice.dismiss');
+  }
   function closeFileNotice() { fileChange = null; renderFileNotice(); }
   // One check: compare timestamp and size, and read the file only when they changed. The observer and the timer both
   // come here. A read that fails (the game halfway through writing, say) is retried shortly when the observer is in
@@ -4923,13 +4937,13 @@
     tf.watch.value = watchSecs;
     tf.watchSecsWrap.hidden = watchMode !== 'poll';
     let now;
-    if (watchMode === 'off') now = 'Manually. Use Check file in the top bar to check for changes.';
-    else if (!linkedHandle || linkedAccess !== 'granted') now = 'Starts once the file is linked and the browser allows access (after a browser restart, click Reconnect or Check file).';
-    else if (observer) now = 'The browser reports each change to the file as it happens.';
-    else if (watchMode === 'observe' && !canObserve) now = 'No file observer detected (unsupported browser). File is not being watched.';
-    else if (watchMode === 'observe' && observerBroken) now = 'Instant watching failed. File is not being watched. Relink to try again.';
-    else if (watchMode === 'observe') now = 'Starting instant watching…';
-    else now = `Checking every ${watchSecs} s.`;
+    if (watchMode === 'off') now = tr('templates.watch.off');
+    else if (!linkedHandle || linkedAccess !== 'granted') now = tr('templates.watch.waiting');
+    else if (observer) now = tr('templates.watch.observing');
+    else if (watchMode === 'observe' && !canObserve) now = tr('templates.watch.noObserver');
+    else if (watchMode === 'observe' && observerBroken) now = tr('templates.watch.failed');
+    else if (watchMode === 'observe') now = tr('templates.watch.starting');
+    else now = tr('templates.watch.polling', { seconds: watchSecs });
     tf.watchNote.textContent = now;
     checkFileBtn.hidden = !linkedHandle;
   }
@@ -4963,10 +4977,7 @@
   tf.watchMode.addEventListener('change', () => { setWatch(tf.watchMode.value); tf.watchMode.blur(); });
   tf.watch.addEventListener('change', () => setWatch(null, tf.watch.value));
   tf.watch.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); tf.watch.blur(); } });
-  tf.watchLimits.textContent = (canObserve
-    ? 'If the system stops reporting changes, reload, or relink.'
-    : 'This browser does not support File System Observer. Unable to use instant watching.') +
-    ' Watching only happens while this tab is visible.';
+  tf.watchLimits.textContent = tr(canObserve ? 'templates.watch.limits' : 'templates.watch.limitsNoObserver');
   renderWatchStatus();
   document.getElementById('tf-watch-row').hidden = !canWriteFiles; // read-only browsers can't watch the file
   document.addEventListener('visibilitychange', () => {
@@ -4993,7 +5004,7 @@
   }
   async function linkFile() {
     try {
-      const opts = { types: [{ description: 'Exiled Sector templates', accept: { 'application/json': ['.data', '.json'] } }], multiple: false };
+      const opts = { types: [{ description: tr('templates.file.pickerType'), accept: { 'application/json': ['.data', '.json'] } }], multiple: false };
       if (linkedHandle) opts.startIn = linkedHandle;
       const [h] = await window.showOpenFilePicker(opts);
       await adoptLinked(h);
@@ -5021,7 +5032,7 @@
     }
     const dir = await window.showDirectoryPicker({ id: 'esp-planner', mode: 'readwrite' });
     if (!(await isPlannerDir(dir))) {
-      throw new Error(`"${dir.name}" isn't the planner's folder. Pick the folder that holds the planner's web folder and README.`);
+      throw new Error(tr('templates.create.notPlanner', { folder: dir.name }));
     }
     await handleStore('readwrite', s => s.put(dir, 'plannerDir')).catch(() => {});
     return dir;
@@ -5038,7 +5049,7 @@
     if (testDir instanceof Event) testDir = null;
     try {
       const root = testDir || await plannerDir();
-      if (testDir && !(await isPlannerDir(root))) throw new Error(`"${root.name}" isn't the planner's folder.`);
+      if (testDir && !(await isPlannerDir(root))) throw new Error(tr('templates.create.notPlannerShort', { folder: root.name }));
       const sub = await root.getDirectoryHandle(SAVED_TEMPLATES_DIR, { create: true });
       const name = await freeFileName(sub);
       const h = await sub.getFileHandle(name, { create: true });
@@ -5046,7 +5057,7 @@
       await w.write(JSON.stringify({ v: 1, templates: [] }, null, 2));
       await w.close();
       await adoptLinked(h, !testDir);
-      exportStatus(`Created ${SAVED_TEMPLATES_DIR}\\${name} in the planner's folder and linked it.`, 'ok');
+      exportStatus(tr('templates.create.done', { path: `${SAVED_TEMPLATES_DIR}\\${name}` }), 'ok');
     } catch (err) {
       if (err && err.name === 'AbortError') return;
       exportStatus(err.message || String(err), 'err');
@@ -5081,34 +5092,34 @@
     const linked = !!linkedHandle;
     if (canWriteFiles) {
       tf.status.innerHTML = linked
-        ? `Linked: <b>${esc(linkedHandle.name)}</b>${linkedAccess === 'prompt' ? ' <span class="muted">(click Reconnect to allow access)</span>' : ''}`
-        : 'No file linked yet.';
-      tf.link.textContent = linked ? 'Link a different file…' : 'Link templates file…';
+        ? trHtml(linkedAccess === 'prompt' ? 'templates.file.linkedPrompt' : 'templates.file.linked', { file: linkedHandle.name })
+        : trHtml('templates.file.none');
+      tf.link.textContent = tr(linked ? 'templates.file.linkOther' : 'templates.file.link');
       tf.link.classList.toggle('primary', !linked);
       tf.create.hidden = !canCreateFiles;
       tf.reconnect.hidden = !(linked && linkedAccess === 'prompt');
       tf.reload.hidden = !(linked && linkedAccess === 'granted');
       tf.forget.hidden = !linked;
-      tf.note.textContent = linked ? '' : `Pick ${TEMPLATE_FILE} in your Starsector saves/common folder. The planner remembers it for next time. If the file doesn't exist yet, save any template in game first, or use "Download as a new file" below.`;
+      tf.note.textContent = linked ? '' : tr('templates.file.note', { file: TEMPLATE_FILE });
     } else {
-      tf.status.innerHTML = openedFile ? `Opened (read-only): <b>${esc(openedFile.name)}</b>` : 'No file opened.';
-      tf.link.textContent = openedFile ? 'Open a different file…' : 'Open templates file…';
+      tf.status.innerHTML = openedFile ? trHtml('templates.file.opened', { file: openedFile.name }) : trHtml('templates.file.noneOpened');
+      tf.link.textContent = tr(openedFile ? 'templates.file.openOther' : 'templates.file.open');
       tf.create.hidden = true;
       tf.reconnect.hidden = true;
       tf.reload.hidden = true;
       tf.forget.hidden = !openedFile;
-      tf.note.textContent = 'This browser can read files but not write to them.';
+      tf.note.textContent = tr('templates.file.readOnly');
     }
     renderTemplateList();
     refreshExport();
   }
   function renderTemplateList() {
     if (!fileTemplates) {
-      tf.list.innerHTML = `<p class="muted">${linkedHandle && linkedAccess === 'prompt' ? 'Reconnect to see the templates in the file.' : 'Link the file to see its templates.'}</p>`;
+      tf.list.innerHTML = `<p class="muted">${esc(tr(linkedHandle && linkedAccess === 'prompt' ? 'templates.list.reconnect' : 'templates.list.link'))}</p>`;
       return;
     }
     const usable = fileTemplates.map((t, i) => ({ t, i })).filter(({ t }) => t && typeof t === 'object' && t.root && t.name);
-    if (!usable.length) { tf.list.innerHTML = '<p class="muted">The file has no templates yet.</p>'; return; }
+    if (!usable.length) { tf.list.innerHTML = `<p class="muted">${esc(tr('templates.list.empty'))}</p>`; return; }
     const groups = new Map();
     for (const u of usable) {
       const root = currentNodeId(u.t.root);
@@ -5120,38 +5131,39 @@
     let html = '';
     for (const root of order) {
       const rn = byId.get(root);
-      html += `<div class="group">${esc(rn ? rn.type.name : root)} root${root === state.root ? ' (current)' : ''}</div><table>`;
+      html += `<div class="group">${esc(tr(root === state.root ? 'templates.list.groupCurrent' : 'templates.list.group', { root: rn ? rn.type.name : root }))}</div><table>`;
       for (const { t, i } of groups.get(root).sort((a, b) => String(a.t.name).localeCompare(String(b.t.name)))) {
         const steps = Array.isArray(t.steps) ? t.steps.length : 0;
         const hull = HULL_FROM_ENUM[t.hull] ? hullLabelFor(HULL_FROM_ENUM[t.hull]) : '';
-        html += `<tr><td>${esc(t.name)}</td><td class="num">${steps} step${steps === 1 ? '' : 's'}${hull ? ' · ' + hull : ''}</td>` +
-          `<td><button data-code="${i}" title="Copy this template as a code">Code</button> ` +
-          `<button data-load="${i}" title="Replace the current build with this template">Load</button></td></tr>`;
+        html += `<tr><td>${esc(t.name)}</td><td class="num">${esc(tr('templates.summary.steps', { count: steps }))}${hull ? ' · ' + esc(hull) : ''}</td>` +
+          `<td><button data-code="${i}" title="${esc(tr('templates.list.codeTitle'))}">${esc(tr('templates.list.code'))}</button> ` +
+          `<button data-load="${i}" title="${esc(tr('templates.list.loadTitle'))}">${esc(tr('templates.list.load'))}</button></td></tr>`;
       }
       html += '</table>';
     }
     tf.list.innerHTML = html;
   }
   function refreshExport() {
-    if (!state.root) tpl.summary.textContent = 'Choose a root.';
+    if (!state.root) tpl.summary.textContent = tr('common.chooseRoot');
     else {
       const steps = templateSteps(), anchors = Object.keys(templateAnchors()).length, marks = templateMarks().length;
-      let replaces = '';
+      // Its parts, joined with " · ".
+      const parts = [tr('templates.summary.root', { root: byId.get(state.root).type.name }), hullLabel(), tr('templates.summary.steps', { count: steps.length })];
+      if (anchors) parts.push(tr('templates.summary.anchors', { count: anchors }));
+      if (marks) parts.push(tr('templates.summary.marks', { marks }));
       const i = fileTemplates && tpl.name.value.trim() ? findTemplateIndex(fileTemplates, tpl.name.value) : -1;
       if (i >= 0) {
         const h = fileTemplates[i].hull;
-        replaces = HULL_ENUM_VALUES.has(h)
-          ? ` · replaces the ${HULL_ENUM_LABEL[h]} template of this name${h !== HULL_ENUM[state.hull] ? ' (you\'ll be asked about the hull)' : ''}`
-          : ' · replaces the template of this name';
+        parts.push(!HULL_ENUM_VALUES.has(h) ? tr('templates.summary.replacesAny')
+          : tr(h !== HULL_ENUM[state.hull] ? 'templates.summary.replacesAsk' : 'templates.summary.replaces', { hull: HULL_ENUM_LABEL[h] }));
       }
-      tpl.summary.textContent = `${byId.get(state.root).type.name} root · ${hullLabel()} · ${steps.length} step${steps.length === 1 ? '' : 's'}` +
-        (anchors ? ` · ${anchors} anchor${anchors === 1 ? '' : 's'}` : '') + (marks ? ` · ${marks} marked for integration` : '') + replaces;
+      tpl.summary.textContent = parts.join(' · ');
     }
     if (canWriteFiles) {
       tpl.save.disabled = !(linkedHandle && linkedAccess === 'granted');
-      tpl.save.textContent = linkedHandle ? `Save into ${linkedHandle.name}` : 'Save into linked file';
-      tpl.saveNote.textContent = !linkedHandle ? 'Link the templates file above to save straight into it.'
-        : linkedAccess !== 'granted' ? 'Reconnect above to save into the file.' : '';
+      tpl.save.textContent = linkedHandle ? tr('templates.save', { file: linkedHandle.name }) : tr('templates.saveLinked');
+      tpl.saveNote.textContent = !linkedHandle ? tr('templates.save.linkFirst')
+        : linkedAccess !== 'granted' ? tr('templates.save.reconnect') : '';
     } else {
       tpl.save.hidden = true;
       tpl.saveNote.textContent = '';
@@ -5184,7 +5196,7 @@
   // partner, a socket with an anchor links its exit. Returns what happened, for the status line.
   function importTemplate(t) {
     const root = currentNodeId(t.root);
-    if (!byId.has(root) || byId.get(root).tier !== 'ROOT') throw new Error(`"${t.name}" starts from an unknown root (${t.root}).`);
+    if (!byId.has(root) || byId.get(root).tier !== 'ROOT') throw new Error(tr('templates.load.unknownRoot', { name: t.name, root: t.root }));
     const entries = (Array.isArray(t.steps) ? t.steps : []).map(s => String(s).trim()).filter(Boolean).map(s => {
       const k = s.indexOf('=');
       return k < 0 ? { id: currentNodeId(s), opt: null } : { id: currentNodeId(s.slice(0, k)), opt: currentOptionId(s.slice(k + 1)) || null };
@@ -5247,18 +5259,19 @@
       changed();
       const notes = [];
       if (extraNote) notes.push(extraNote);
-      if (badNameChars(tpl.name.value).length) notes.push('its name has characters outside English letters, digits and keyboard symbols, so rename it before saving');
-      if (r.unknown.length) notes.push(`${r.unknown.length} step${r.unknown.length > 1 ? 's' : ''} not in this version of the tree`);
+      if (badNameChars(tpl.name.value).length) notes.push(tr('templates.load.badName'));
+      if (r.unknown.length) notes.push(tr('templates.load.unknown', { count: r.unknown.length }));
       if (r.refused.length) {
         const f = r.refused[0];
-        notes.push(`${r.refused.length} step${r.refused.length > 1 ? 's' : ''} refused by the node rules (${effectiveType(f.node).name}: ${f.block.text.replace(/\.$/, '')}${r.refused.length > 1 ? ', …' : ''})`);
+        notes.push(tr('templates.load.refused', { count: r.refused.length, node: effectiveType(f.node).name, reason: f.block.text.replace(/\.$/, '') }));
       }
-      if (r.unplaced.length) notes.push(`${r.unplaced.length} step${r.unplaced.length > 1 ? 's' : ''} couldn't be connected`);
-      if (r.turnedOn.length) notes.push(`showed ${r.turnedOn.join(' and ')} (Optional Volumes, Optional rules)`);
-      if (r.integrated) notes.push(`${r.integrated} node${r.integrated === 1 ? '' : 's'} integrated from the template's marks`);
-      if (r.marks > r.integrated) notes.push(`${r.marks - r.integrated} integration mark${r.marks - r.integrated === 1 ? '' : 's'} on nodes that didn't land or can't be integrated`);
-      if (used() > state.cap) notes.push(`${used()} nodes is over the ${state.cap} cap`);
-      report(`Loaded "${r.name}" (${r.taken} nodes)${notes.length ? '; ' + notes.join('; ') : ''}.`, notes.length ? '' : 'ok');
+      if (r.unplaced.length) notes.push(tr('templates.load.unplaced', { count: r.unplaced.length }));
+      if (r.turnedOn.length) notes.push(tr('templates.load.shown', { volumes: r.turnedOn.join(tr('common.listAnd')) }));
+      if (r.integrated) notes.push(tr('templates.load.integrated', { count: r.integrated }));
+      if (r.marks > r.integrated) notes.push(tr('templates.load.marksLost', { count: r.marks - r.integrated }));
+      if (used() > state.cap) notes.push(tr('templates.load.overCap', { used: used(), cap: state.cap }));
+      report(notes.length ? tr('templates.loadedNotes', { name: r.name, taken: r.taken, notes: notes.join(tr('templates.load.noteJoin')) })
+        : tr('templates.loaded', { name: r.name, taken: r.taken }), notes.length ? '' : 'ok');
       renderTemplateList();
       refreshExport();
       return true;
@@ -5270,7 +5283,7 @@
     if (!fileTemplates || (!load && !code)) return;
     if (load) { loadTemplate(fileTemplates[+load.dataset.load], exportStatus); return; }
     const t = fileTemplates[+code.dataset.code];
-    showCode(await templateToCode(t), `Code for "${t.name}"`);
+    showCode(await templateToCode(t), tr('templates.code.label', { name: t.name }));
   });
 
   // --- template codes
@@ -5283,19 +5296,19 @@
     let copied = false;
     try { await navigator.clipboard.writeText(code); copied = true; } catch { /* clipboard blocked; the box has it */ }
     codeBox.focus(); codeBox.select();
-    codeStatus(`${label} (${code.length} characters) ${copied ? 'copied to the clipboard and shown above' : 'is in the box above; copy it from there'}.`, 'ok');
+    codeStatus(tr(copied ? 'templates.code.copied' : 'templates.code.inBox', { label, length: code.length }), 'ok');
     toast(copied ? tr('toast.labelCopied', { label }) : tr('toast.clipboardBlocked'));
   }
   document.getElementById('code-copy').addEventListener('click', async () => {
-    if (!state.root) { codeStatus('Choose a root first.', 'err'); return; }
+    if (!state.root) { codeStatus(tr('common.chooseRootFirst'), 'err'); return; }
     const problem = templateNameProblem(tpl.name.value);
-    if (problem) { codeStatus(`${problem} (The code uses the template name below.)`, 'err'); tpl.name.focus(); return; }
-    showCode(await templateToCode(buildTemplate(tpl.name.value)), `Code for "${tpl.name.value.trim()}"`);
+    if (problem) { codeStatus(tr('templates.code.nameProblem', { problem }), 'err'); tpl.name.focus(); return; }
+    showCode(await templateToCode(buildTemplate(tpl.name.value)), tr('templates.code.label', { name: tpl.name.value.trim() }));
   });
   document.getElementById('code-load').addEventListener('click', async () => {
     try {
       const t = await codeToTemplate(codeBox.value);
-      const made = t.mod && D.modVersion && t.mod !== D.modVersion ? `made with mod ${t.mod}, this planner is based on ${D.modVersion}` : '';
+      const made = t.mod && D.modVersion && t.mod !== D.modVersion ? tr('templates.load.oldMod', { mod: t.mod, planner: D.modVersion }) : '';
       loadTemplate(t, codeStatus, made);
     } catch (err) { codeStatus(err.message || String(err), 'err'); }
   });
@@ -5311,7 +5324,7 @@
       if (!tpl.name.value) {
         let saved = null;
         try { saved = localStorage.getItem('esp.tplName'); } catch { /* ignore */ }
-        tpl.name.value = saved || (state.root ? `${byId.get(state.root).type.name} plan` : 'My plan');
+        tpl.name.value = saved || (state.root ? tr('templates.defaultName', { root: byId.get(state.root).type.name }) : tr('templates.defaultNameNoRoot'));
       }
       exportStatus('');
       renderTemplatesFile();
@@ -5327,15 +5340,16 @@
   // --- export
   // Common checks; returns the name to use or null after showing why not.
   function readyToExport() {
-    if (!state.root) { exportStatus('Choose a root first.', 'err'); return null; }
+    if (!state.root) { exportStatus(tr('common.chooseRootFirst'), 'err'); return null; }
     const problem = templateNameProblem(tpl.name.value);
     if (problem) { exportStatus(problem, 'err'); tpl.name.focus(); return null; }
     try { localStorage.setItem('esp.tplName', tpl.name.value.trim()); } catch { /* ignore */ }
     return tpl.name.value.trim();
   }
-  function reportMerge(result, where) {
+  function reportMerge(result, file) {
     setCurrentTemplate(result.template.name);
-    exportStatus(`${result.replaced ? 'Replaced' : 'Added'} "${result.template.name}" (${result.template.steps.length} steps) ${where}. The file now has ${result.count} template${result.count === 1 ? '' : 's'}.`, 'ok');
+    exportStatus(tr(result.replaced ? 'templates.saved.replaced' : 'templates.saved.added',
+      { name: result.template.name, steps: result.template.steps.length, file, count: result.count }), 'ok');
   }
   function download(text) {
     const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
@@ -5368,14 +5382,14 @@
     pendingSave = { name };
     if (plan.hullConflict) {
       const from = HULL_ENUM_LABEL[plan.existingHull], to = HULL_ENUM_LABEL[HULL_ENUM[state.hull]];
-      conflict.msg.textContent = `"${plan.existing.name}" is already in the templates file as a ${from} template, but the Hull size dropdown is set to ${to}.`;
-      conflict.keep.textContent = `Keep ${from}`;
-      conflict.change.textContent = `Change to ${to}`;
+      conflict.msg.textContent = tr('templates.conflict.hull', { name: plan.existing.name, from, to });
+      conflict.keep.textContent = tr('templates.conflict.keep', { hull: from });
+      conflict.change.textContent = tr('templates.conflict.change', { hull: to });
       conflict.change.hidden = false;
     } else {
       // Same name and root, same hull: ask before overwriting it.
-      conflict.msg.textContent = `A template named "${plan.existing.name}" already exists for the ${byId.get(state.root).type.name} root. Override it?`;
-      conflict.keep.textContent = 'Override';
+      conflict.msg.textContent = tr('templates.conflict.override', { name: plan.existing.name, root: byId.get(state.root).type.name });
+      conflict.keep.textContent = tr('templates.conflict.overrideButton');
       conflict.change.hidden = true;
     }
     conflict.newName.value = uniqueTemplateName(name, plan.list);
@@ -5387,13 +5401,13 @@
   // mode: 'keep' | 'change' (hull of the template being replaced) or 'new' (add under saveName, which must be free).
   async function commitSave(saveName, mode) {
     try {
-      if (!(await checkAccess(true))) { exportStatus('The browser was not allowed to write to that file.', 'err'); renderTemplatesFile(); return; }
+      if (!(await checkAccess(true))) { exportStatus(tr('templates.writeRefused'), 'err'); renderTemplatesFile(); return; }
       const text = await readLinked(); // re-read so changes the game made meanwhile aren't lost
       if (mode === 'new') {
         const problem = templateNameProblem(saveName);
         if (problem) { exportStatus(problem, 'err'); conflict.newName.focus(); return; }
         if (findTemplateIndex(parseTemplateFile(text), saveName) >= 0) {
-          exportStatus(`"${saveName.trim()}" is already used by a template on this root. Pick another name.`, 'err');
+          exportStatus(tr('templates.nameTaken', { name: saveName.trim() }), 'err');
           conflict.newName.focus();
           return;
         }
@@ -5409,7 +5423,7 @@
         linkedStamp = `${f.lastModified}:${f.size}`;
       } finally { linkedWriting = false; }
       fileTemplates = JSON.parse(result.text).templates;
-      reportMerge(result, `in ${linkedHandle.name}`);
+      reportMerge(result, linkedHandle.name);
       if (mode === 'new') {
         tpl.name.value = result.template.name; // later saves go to the new template
         try { localStorage.setItem('esp.tplName', result.template.name); } catch { /* ignore */ }
@@ -5425,12 +5439,12 @@
   conflict.change.addEventListener('click', () => { if (pendingSave) commitSave(pendingSave.name, 'change'); });
   conflict.asNew.addEventListener('click', () => { if (pendingSave) commitSave(conflict.newName.value, 'new'); });
   conflict.newName.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); conflict.asNew.click(); } });
-  conflict.cancel.addEventListener('click', () => { hideConflict(); exportStatus('Nothing was saved.'); tpl.name.focus(); });
+  conflict.cancel.addEventListener('click', () => { hideConflict(); exportStatus(tr('templates.nothingSaved')); tpl.name.focus(); });
 
   async function saveIntoLinked() {
     if (!readyToExport() || !linkedHandle) return;
     try {
-      if (!(await checkAccess(true))) { exportStatus('The browser was not allowed to write to that file.', 'err'); renderTemplatesFile(); return; }
+      if (!(await checkAccess(true))) { exportStatus(tr('templates.writeRefused'), 'err'); renderTemplatesFile(); return; }
       startSave(await readLinked());
     } catch (err) {
       exportStatus(err && err.message ? err.message : String(err), 'err');
@@ -5467,7 +5481,7 @@
     if (!name) return;
     const result = mergeTemplate('', name);
     download(result.text);
-    exportStatus(`Downloaded a new ${TEMPLATE_FILE} holding only "${name}".`, 'ok');
+    exportStatus(tr('templates.downloaded', { file: TEMPLATE_FILE, name }), 'ok');
   });
   guardNameInput(tpl.name, exportStatus);
   guardNameInput(conflict.newName, exportStatus);

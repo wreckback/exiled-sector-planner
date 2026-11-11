@@ -17,7 +17,7 @@ Tick an area when its migration step is committed and its output matches the bas
 - [x] Pickers (step 4g, `text/picker.js`; "Cancel" is `common.cancel`; the socket picker's heading reuses `name.tier.socket`, the same text). Also moved, missed by the scan: the cache's "Remove from the cache" hover text and "Add a notable by name" placeholder.
 - [x] Target mode (step 4h, `text/target.js`; "Nothing to change." reuses `toast.nothingToChange`). Also moved, missed by the scan: the hidden-volume plan failure ("{node}: {reason}") and the "(Volume)" after a node's name. The rule texts quoted mid-sentence still lose their final full stop in code.
 - [x] Ship rules and Optional rules (step 3, with their `index.html` parts: the Ship tab and the Optional rules dialog; `text/ship.js`, `text/optional.js`, shared words in `text/common.js`)
-- [ ] Templates
+- [x] Templates (step 4i, `text/templates.js`; "Choose a root first." is `common.chooseRootFirst`). Also moved, missed by the scan: the template list's group headings, step counts and Code/Load buttons, the default name "{root} plan", the summary's anchor count. The code reader no longer spots the browser error by the word "browser" in its message (a flag on the error instead).
 - [ ] Mod assets
 - [ ] `index.html` (the other sections)
 
