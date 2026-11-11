@@ -40,7 +40,7 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "templates.file.link": "Link templates file…",
     "templates.file.linkOther": "Link a different file…",
     // {file} is the game's file name.
-    // e.g. Pick exiledSector_skillTreeTemplates.json.data in your Starsector saves/common folder. …
+    // e.g. Pick exiledSector_skillTreeTemplates.json.data in your Starsector saves/common folder. The planner remembers it for next time. If the file doesn't exist yet, save any template in game first, or use "Download as a new file" below.
     "templates.file.note": "Pick {file} in your Starsector saves/common folder. The planner remembers it for next time. If the file doesn't exist yet, save any template in game first, or use \"Download as a new file\" below.",
     // The name the file picker gives the files it shows.
     "templates.file.pickerType": "Exiled Sector templates",

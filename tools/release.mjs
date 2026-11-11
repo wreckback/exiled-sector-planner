@@ -16,8 +16,9 @@
 // Which number to raise: patch for a mod sync or fixes, minor for new features, major when old share links or saved
 // builds stop loading.
 //
-// Refuses when the working tree has changes, the version isn't newer than the last release, the tag exists, or the
-// data doesn't match the mod checkout. Tags that don't look like vX.Y.Z (such as the old 0.11.1-alpha) are ignored.
+// Refuses when the working tree has changes, the version isn't newer than the last release, the tag exists, the
+// data doesn't match the mod checkout, or the text files don't fit the code (tools/text-check.mjs errors; its
+// warnings are shown). Tags that don't look like vX.Y.Z (such as the old 0.11.1-alpha) are ignored.
 // The mod checkout is --mod-root, else ESP_MOD_ROOT, else ExiledSector/ in the planner folder; without one there,
 // the data isn't checked against it.
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -25,6 +26,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fail, fromRepo, git, good, readJson, readText, repoRoot, say, toolsDir, warn } from './lib/common.mjs';
+import { checkText } from './lib/text-check.mjs';
 
 const { values: opt } = parseArgs({
     options: {
@@ -80,6 +82,13 @@ if (existsSync(join(modRoot, '.git'))) {
 const dataVersion = /"modVersion":"([^"]*)"/.exec(readText(join(repoRoot, 'web', 'data', 'planner-data.js')))?.[1] ?? '';
 if (sync.modVersion && dataVersion !== sync.modVersion) {
     fail('release', `planner-data.js is for mod ${dataVersion}, but mod-sync.json says ${sync.modVersion}. Run tools/update.mjs.`);
+}
+
+// 2b. The text files fit the code (the same check as tools/text-check.mjs): errors refuse, warnings are shown.
+const textCheck = checkText();
+for (const w of textCheck.warnings) warn(`  text: ${w}`);
+if (textCheck.errors.length) {
+    fail('release', `the text files don't fit the code (node tools/text-check.mjs):\n  ${textCheck.errors.join('\n  ')}`);
 }
 
 // 3. Existing planner tags.

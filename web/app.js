@@ -4198,7 +4198,8 @@
       if (base) pushGone(bs, g.sums, wrap);
     }
     for (const [when, g] of t.gated || []) {
-      const tpl = gameString(`summary.gated.${when}`, tr('sheet.fallback.gated', { when: GATE_NAMES[when] }));
+      // {text} stays a placeholder here: wrap() fills it with each effect below.
+      const tpl = gameString(`summary.gated.${when}`, tr('sheet.fallback.gated', { when: GATE_NAMES[when], text: '{text}' }));
       const wrap = raw => tpl.replace('{text}', raw);
       const bs = base && (base.gated.get(when)?.sums || new Map());
       for (const s of g.sums.values()) push(s, wrap, bs);
