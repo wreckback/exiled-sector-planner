@@ -3087,12 +3087,12 @@
     let html = '';
     if (n.id === state.root) {
       // The game never removes a starting root; here it's a shortcut to Reset, so warn first.
-      html += '<h4>Reset the build?</h4>';
-      html += '<button data-act="reset" class="danger">Reset build</button>';
-      html += '<button data-act="cancel">Cancel</button>';
+      html += `<h4>${esc(tr('picker.reset.heading'))}</h4>`;
+      html += `<button data-act="reset" class="danger">${esc(tr('picker.reset.button'))}</button>`;
+      html += `<button data-act="cancel">${esc(tr('common.cancel'))}</button>`;
     } else if (isChoice(n)) {
       const cur = state.choice.get(n.id);
-      html += `<h4>${esc(n.type.name)}: choose an option</h4>`;
+      html += `<h4>${esc(tr('picker.choice.heading', { node: n.type.name }))}</h4>`;
       const others = sat(n.id) ? buildEntries(n.id) : rules().list;
       for (const id of n.type.options) {
         const o = types.get(id);
@@ -3101,33 +3101,33 @@
         const b = cur === id ? null : blockOf(n, id, others);
         html += `<button data-opt="${esc(id)}" class="${cur === id ? 'current' : ''}" ${b ? 'disabled' : ''}>${iconImg(o.icon, o.name)}<span><div>${esc(o.name)}</div><div class="sub">${esc(line)}</div>${b ? `<div class="sub bad">${esc(b.text)}</div>` : ''}</span></button>`;
       }
-      if (sat(n.id)) html += `<button data-act="remove" class="danger">Remove node</button>`;
+      if (sat(n.id)) html += `<button data-act="remove" class="danger">${esc(tr('picker.removeNode'))}</button>`;
     } else if (n.tier === 'WORMHOLE' || n.tier === 'WORMHOLE_EXIT') {
       const target = jumpTarget(n);
       html += `<h4>${esc(TIER_LABEL[n.tier])}</h4>`;
-      if (target) html += `<button data-act="jump" class="current"><span><div>Jump to ${esc(placeName(target))}</div></span></button>`;
+      if (target) html += `<button data-act="jump" class="current"><span><div>${esc(tr('picker.jump', { place: placeName(target) }))}</div></span></button>`;
       if (state.root && n.id !== state.root) {
         if (sat(n.id)) {
           const count = (removalSet(n) || []).length;
-          html += `<button data-act="remove" class="danger">${n.tier === 'WORMHOLE_EXIT' ? 'Unlink anchor' : 'Remove'} (${count} node${count === 1 ? '' : 's'})</button>`;
+          html += `<button data-act="remove" class="danger">${esc(tr(n.tier === 'WORMHOLE_EXIT' ? 'picker.unlink' : 'picker.remove', { count }))}</button>`;
         } else if (switchedOff(n)) {
           html += `<div class="sub" style="padding:2px 0">${esc(hiddenText(n))}</div>`;
         } else {
           const path = routeTo(n).path;
-          html += path ? `<button data-act="alloc">Allocate (${path.length} node${path.length === 1 ? '' : 's'}${waypoints.length ? ', through the waypoints' : ''})</button>`
-            : '<div class="sub" style="padding:2px 0">Not reachable from current build.</div>';
+          html += path ? `<button data-act="alloc">${esc(tr(waypoints.length ? 'picker.allocateVia' : 'picker.allocate', { count: path.length }))}</button>`
+            : `<div class="sub" style="padding:2px 0">${esc(tr('picker.unreachable'))}</div>`;
         }
       }
     } else if (n.tier === 'SOCKET') {
       // Two collapsible sections; the one in use says what the socket holds.
       const se = state.subs.get(n.id), sd = se && SUBS.get(se.id);
       const cur = state.links.get(n.id);
-      html += `<h4>Subroutine socket</h4>`;
-      html += `<button data-section="sub" class="section${socketSection === 'sub' ? ' open' : ''}" aria-expanded="${socketSection === 'sub'}"><span><div>${socketSection === 'sub' ? '▾' : '▸'} Subroutine</div><div class="sub">${esc(sd ? sd.name : 'None socketed')}</div></span></button>`;
+      html += `<h4>${esc(TIER_LABEL.SOCKET)}</h4>`;
+      html += `<button data-section="sub" class="section${socketSection === 'sub' ? ' open' : ''}" aria-expanded="${socketSection === 'sub'}"><span><div>${socketSection === 'sub' ? '▾' : '▸'} ${esc(tr('picker.socket.subroutine'))}</div><div class="sub">${esc(sd ? sd.name : tr('picker.socket.noneSocketed'))}</div></span></button>`;
       if (socketSection === 'sub') html += `<div class="section-body">${subroutinePickerHtml(n)}</div>`;
-      html += `<button data-section="anchor" class="section${socketSection === 'anchor' ? ' open' : ''}" aria-expanded="${socketSection === 'anchor'}"><span><div>${socketSection === 'anchor' ? '▾' : '▸'} Wormhole anchor</div><div class="sub">${esc(cur ? `Linked to ${volumeName(byId.get(cur).volume)}` : 'None linked')}</div></span></button>`;
+      html += `<button data-section="anchor" class="section${socketSection === 'anchor' ? ' open' : ''}" aria-expanded="${socketSection === 'anchor'}"><span><div>${socketSection === 'anchor' ? '▾' : '▸'} ${esc(tr('picker.socket.anchor'))}</div><div class="sub">${esc(cur ? tr('picker.socket.linkedTo', { volume: volumeName(byId.get(cur).volume) }) : tr('picker.socket.noneLinked'))}</div></span></button>`;
       if (socketSection === 'anchor') html += `<div class="section-body">${anchorPickerHtml(n)}</div>`;
-      html += '<button data-act="remove" class="danger">Remove socket</button>';
+      html += `<button data-act="remove" class="danger">${esc(tr('picker.socket.remove'))}</button>`;
     }
     els.picker.innerHTML = html;
     els.picker.hidden = false;
@@ -3141,33 +3141,34 @@
     const def = e && SUBS.get(e.id);
     let html = '';
     if (def) {
-      html += `<h4>Socketed subroutine</h4><div class="sub-current">${iconImg(def.icon, def.name)}<div><div>${esc(def.name)}</div><div class="sub">${esc(subSummary(def, e, n))}</div>${def.unobtainable ? `<div class="sub bad">${UNOBTAINABLE_TEXT}</div>` : ''}</div></div>`;
+      html += `<h4>${esc(tr('picker.sub.socketed'))}</h4><div class="sub-current">${iconImg(def.icon, def.name)}<div><div>${esc(def.name)}</div><div class="sub">${esc(subSummary(def, e, n))}</div>${def.unobtainable ? `<div class="sub bad">${UNOBTAINABLE_TEXT}</div>` : ''}</div></div>`;
       if (def.kind === 'ROOT_CONDUIT') {
-        html += '<div class="sub">Affinity (rolled per item; pick the one yours shows):</div><div class="pick-row">' +
+        html += `<div class="sub">${esc(tr('picker.sub.conduitAffinity'))}</div><div class="pick-row">` +
           AFFINITY_KEYS.map(k => `<button data-aff="${k}" class="${e.aff === k ? 'current' : ''}">${esc(affinityName(k))}</button>`).join('') + '</div>';
       }
       if (def.kind === 'MODSPEC_CACHE') {
         const grants = e.grants || [];
         const sc = subState();
-        html += `<div class="sub">Notables it allocates (${grants.length} of up to ${cacheMax(def)}; rolled per item, pick the ones yours shows):</div>`;
+        html += `<div class="sub">${esc(tr('picker.sub.cacheNotables', { have: grants.length, max: cacheMax(def) }))}</div>`;
         for (const id of grants) {
           const g = byId.get(id), st = sc.granted.get(id);
-          const note = !st ? '' : st.status === 'active' ? '' : st.status === 'byPath' ? ' (idle: already allocated)' : st.status === 'duplicate' ? ' (idle: another cache allocates it)' : st.status === 'volumeOff' ? ' (inert while its volume is hidden)' : ` (inactive: ${st.block ? st.block.text : 'refused'})`;
-          html += `<button data-ungrant="${esc(id)}" title="Remove from the cache"><span><div>${esc(g ? g.type.name : id)} ×</div>${note ? `<div class="sub bad">${esc(note.trim())}</div>` : ''}</span></button>`;
+          const note = !st || st.status === 'active' ? '' : st.status === 'byPath' ? tr('picker.cache.byPath') : st.status === 'duplicate' ? tr('picker.cache.duplicate')
+            : st.status === 'volumeOff' ? tr('picker.cache.volumeOff') : tr('picker.cache.inactive', { reason: st.block ? st.block.text : tr('picker.cache.refused') });
+          html += `<button data-ungrant="${esc(id)}" title="${esc(tr('picker.cache.removeTitle'))}"><span><div>${esc(g ? g.type.name : id)} ×</div>${note ? `<div class="sub bad">${esc(note)}</div>` : ''}</span></button>`;
         }
         if (grants.length < cacheMax(def)) {
-          html += `<input id="grant-input" list="grant-list" type="text" autocomplete="off" placeholder="Add a notable by name" style="width:100%">` +
+          html += `<input id="grant-input" list="grant-list" type="text" autocomplete="off" placeholder="${esc(tr('picker.cache.addPlaceholder'))}" style="width:100%">` +
             `<datalist id="grant-list">${grantableNodes.filter(g => !grants.includes(g.id)).map(g => `<option value="${esc(grantLabel(g))}"></option>`).join('')}</datalist>`;
         }
       }
-      html += '<button data-act="unsub" class="danger">Remove subroutine</button>';
+      html += `<button data-act="unsub" class="danger">${esc(tr('picker.sub.remove'))}</button>`;
     }
-    html += `<h4>${def ? 'Subroutines (click the socketed one again to remove it)' : 'Socket a subroutine'}</h4>`;
+    html += `<h4>${esc(tr(def ? 'picker.sub.listHeading' : 'picker.sub.listHeadingEmpty'))}</h4>`;
     for (const s of SUBS.values()) {
       const current = def && s.id === def.id;
       const problem = current ? null : subLimitProblem(s, n.id);
-      const sub = current ? 'Socketed. Click to remove.' : problem || subKindText(s);
-      html += `<button data-sub="${esc(s.id)}" class="${current ? 'current' : ''}" ${problem ? 'disabled' : ''} title="${current ? 'Remove from this socket' : 'Socket into this socket'}">${iconImg(s.icon, s.name)}<span><div>${esc(s.name)}</div><div class="sub">${esc(sub)}</div>${s.unobtainable ? `<div class="sub bad">${UNOBTAINABLE_TEXT}</div>` : ''}</span></button>`;
+      const sub = current ? tr('picker.sub.current') : problem || subKindText(s);
+      html += `<button data-sub="${esc(s.id)}" class="${current ? 'current' : ''}" ${problem ? 'disabled' : ''} title="${esc(tr(current ? 'picker.sub.removeTitle' : 'picker.sub.addTitle'))}">${iconImg(s.icon, s.name)}<span><div>${esc(s.name)}</div><div class="sub">${esc(sub)}</div>${s.unobtainable ? `<div class="sub bad">${UNOBTAINABLE_TEXT}</div>` : ''}</span></button>`;
     }
     return html;
   }
@@ -3180,29 +3181,29 @@
   function subSummary(def, e, socket) {
     const sc = subState();
     const on = state.alloc.has(socket.id);
-    if (!on) return 'Inactive: the socket isn\'t allocated.';
+    if (!on) return tr('picker.summary.inactive');
     if (def.kind === 'ROOT_CONDUIT') {
       const c = sc.conduit && sc.conduit.socket === socket ? sc.conduit : null;
-      return c && c.route ? `+${5 * c.count} ${affinityName(c.aff)} affinity (${c.count} node${c.count === 1 ? '' : 's'} between the root and this socket).` : 'Grants nothing: no allocated route from the root reaches this socket.';
+      return c && c.route ? tr('picker.summary.conduit', { bonus: 5 * c.count, affinity: affinityName(c.aff), count: c.count }) : tr('picker.summary.conduitNone');
     }
     if (subLine(def, 'EVERY_AFFINITY_FLAT_PER_EMPTY_SHELL_NODE')) {
       const k = sc.shellCount.get(socket.id) || 0, silent = [...sc.silent].length;
-      return `+${k} to every affinity (${k} small nodes in its radius). ${silent} allocated small node${silent === 1 ? '' : 's'} in it grant nothing.`;
+      return tr('picker.summary.shell', { small: k, count: silent });
     }
     const gate = (def.lines || []).find(l => GATE_OF[l.effect]);
     if (gate) {
       const mine = [...sc.gated.values()].filter(g => g.socket === socket);
       const allocatedIn = [...sc.gated].filter(([id, g]) => g.socket === socket && held(id)).length;
-      return `${GATE_NAMES[GATE_OF[gate.effect]]}: ${allocatedIn} allocated node${allocatedIn === 1 ? '' : 's'} of ${mine.length} in its radius apply ×${gate.max}, live-in-combat effects only.`;
+      return tr('picker.summary.gate', { when: GATE_NAMES[GATE_OF[gate.effect]], count: allocatedIn, total: mine.length, strength: gate.max });
     }
     if (def.kind === 'DOCTRINE') {
       const d = sc.doctrine && sc.doctrine.socket === socket ? sc.doctrine : null;
-      if (!d) return 'Inactive: only one doctrine archive works per ship.';
-      return `${d.nodes.size} nodes in its radius are ${def.behaviour === 'REWRITE' ? 'rewritten' : 'augmented'}. What each gets is rolled per item, so the totals leave it out.`;
+      if (!d) return tr('picker.summary.doctrineInactive');
+      return tr(def.behaviour === 'REWRITE' ? 'picker.summary.rewritten' : 'picker.summary.augmented', { count: d.nodes.size });
     }
     if (def.kind === 'MODSPEC_CACHE') {
       const act = (e.grants || []).filter(id => sc.granted.get(id)?.status === 'active').length;
-      return `${act} notable${act === 1 ? '' : 's'} allocated for free (no path, no node slot).`;
+      return tr('picker.summary.cache', { count: act });
     }
     return def.description || '';
   }
@@ -3210,17 +3211,18 @@
   function anchorPickerHtml(n) {
     const cur = state.links.get(n.id);
     let html = '';
-    if (cur) html += `<button data-act="jump"><span><div>Jump to ${esc(placeName(byId.get(cur)))}</div></span></button>`;
+    if (cur) html += `<button data-act="jump"><span><div>${esc(tr('picker.jump', { place: placeName(byId.get(cur)) }))}</div></span></button>`;
     const taken = new Set([...state.links].filter(([s]) => s !== n.id).map(([, e]) => e));
     const list = rules().list;
     for (const ex of [...exits].sort((a, b) => volumeName(a.volume).localeCompare(volumeName(b.volume)))) {
       const hidden = switchedOff(ex);
       const block = hidden || taken.has(ex.id) || cur === ex.id ? null : blockOf(ex, null, list);
       const dis = hidden || taken.has(ex.id) || !!block;
-      const sub = hidden ? 'Hidden under Optional Volumes in Optional rules' : taken.has(ex.id) ? 'Linked to another socket' : block ? block.text :ex.gates.length ? 'In game: ' + ex.gates.map(g => humanize(g.slice(5))).join(', ') : '';
+      const sub = hidden ? tr('picker.anchor.hidden') : taken.has(ex.id) ? tr('picker.anchor.taken') : block ? block.text
+        : ex.gates.length ? tr('picker.anchor.inGame', { gates: ex.gates.map(g => humanize(g.slice(5))).join(tr('common.listComma')) }) : '';
       html += `<button data-exit="${esc(ex.id)}" class="${cur === ex.id ? 'current' : ''}" ${dis ? 'disabled' : ''}><span><div>${esc(volumeName(ex.volume))}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</span></button>`;
     }
-    if (cur) html += '<button data-act="unlink">Unlink anchor</button>';
+    if (cur) html += `<button data-act="unlink">${esc(tr('picker.anchor.unlink'))}</button>`;
     return html;
   }
   let pickerPos = { x: 0, y: 0 };

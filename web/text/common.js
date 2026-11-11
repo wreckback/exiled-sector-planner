@@ -5,6 +5,7 @@
 // A key ending in .one is used for a count of 1, .other for any other count.
 window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "common.close": "Close",
+    "common.cancel": "Cancel",
     "common.closeEsc": "Close (Esc)",
     "common.notSet": "Not set",
     "common.yes": "Yes",
