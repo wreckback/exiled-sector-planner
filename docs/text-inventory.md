@@ -25,21 +25,23 @@ Tick an area when its migration step is committed and its output matches the bas
 
 | Area | Strings |
 |---|---:|
-| Names and labels | 74 |
-| Map tooltips | 59 |
-| Rule refusals and node rules | 27 |
-| Toasts | 30 |
-| Top bar, summary panel and stat sheet | 55 |
-| Search, filter and list view | 38 |
-| Pickers | 32 |
-| Target mode | 22 |
-| Ship rules and Optional rules | 14 |
-| Templates | 94 |
-| Mod assets | 16 |
-| **`app.js` total** | **461** |
+| Names and labels | 72 |
+| Map tooltips | 69 |
+| Rule refusals and node rules | 30 |
+| Toasts | 32 |
+| Top bar, summary panel and stat sheet | 57 |
+| Search, filter and list view | 47 |
+| Pickers | 44 |
+| Target mode | 26 |
+| Ship rules and Optional rules | 15 |
+| Templates | 96 |
+| Mod assets | 17 |
+| **`app.js` total** | **505** |
 | `index.html` | about 200 (text, `title`, `placeholder`, `aria-label`) |
 
-`app.js` was scanned with a script (every string literal, then short ones checked by hand), so a few may still be missing. The baseline (step 2) and the key check (step 6) catch the rest.
+`app.js` was scanned with a script: every string literal, including the ones nested inside a template's `${…}`, kept when it reads as text (words with spaces, a sentence, or a capitalised word), then short ones checked by hand. A nested string is listed both on its own and inside the template that holds it, so the pieces of a built sentence are visible. A few may still be missing; the baseline's coverage report (step 2) and the key check (step 6) catch the rest.
+
+Corrected on 2026-11-11 during step 2: the first scan skipped strings nested in `${…}` and some sentences with a number or a colon, about 45 in all (for example "Not reachable from your allocated nodes.", the list view's mark buttons, the cache notes in the socket picker).
 
 ## Keys
 
@@ -98,7 +100,7 @@ Not changed in this work: the migration must give identical output. Listed for a
 
 ## `app.js`
 
-### Names and labels (74)
+### Names and labels (72)
 
 Key prefix: `name.*, label.*`
 
@@ -122,8 +124,8 @@ Key prefix: `name.*, label.*`
 | 40 |  | `` 'Persean League' `` |
 | 41 |  | `` 'Tri-Tachyon' `` |
 | 41 |  | `` 'Sindrian Diktat' `` |
-| 41 |  | `` '[REDACTED]' `` |
 | 41 |  | `` 'Navarchy of Tania' `` |
+| 41 |  | `` '[REDACTED]' `` |
 | 42 |  | `` 'Stargazer' `` |
 | 42 |  | `` 'Omega' `` |
 | 42 |  | `` 'Abyss' `` |
@@ -145,15 +147,14 @@ Key prefix: `name.*, label.*`
 | 776 |  | `` 'While phased' `` |
 | 776 |  | `` 'Below 50% hull' `` |
 | 776 |  | `` 'While the ship system is active' `` |
-| 899 |  | `` 'an unlock' `` |
 | 913 |  | `` 'Frigate' `` |
 | 913 |  | `` 'Destroyer' `` |
 | 913 |  | `` 'Cruiser' `` |
 | 913 |  | `` 'Capital' `` |
-| 1409 |  | `` 'frigate' `` |
-| 1409 |  | `` 'destroyer' `` |
-| 1409 |  | `` 'cruiser' `` |
-| 1409 |  | `` 'capital' `` |
+| 1409 | `hullLabel` | `` 'frigate' `` |
+| 1409 | `hullLabel` | `` 'destroyer' `` |
+| 1409 | `hullLabel` | `` 'cruiser' `` |
+| 1409 | `hullLabel` | `` 'capital' `` |
 | 1476 |  | `` 'Affinity' `` |
 | 1477 |  | `` 'Strike craft' `` |
 | 1478 |  | `` 'Weapons' `` |
@@ -164,7 +165,6 @@ Key prefix: `name.*, label.*`
 | 1483 |  | `` 'Ship system' `` |
 | 1484 |  | `` 'Combat readiness' `` |
 | 1485 |  | `` 'Logistics' `` |
-| 1462 | `totals` | `` 'Root Conduit' `` |
 | 1487 |  | `` 'Other' `` |
 | 3104 |  | `` `Doctrine (${s.behaviour === 'REWRITE' ? 'rewrites' : 'augments'} nodes in a ${s.radius.replace('_', ' ')} radius)` `` |
 | 3105 |  | `` 'Affinity for each node between the root and its socket' `` |
@@ -174,12 +174,12 @@ Key prefix: `name.*, label.*`
 | 4081 |  | `` 'While phased' `` |
 | 4081 |  | `` 'Below 50% hull' `` |
 | 4081 |  | `` 'While the ship system is active' `` |
-| 5096 |  | `` 'frigate' `` |
-| 5096 |  | `` 'destroyer' `` |
-| 5096 |  | `` 'cruiser' `` |
-| 5096 |  | `` 'capital' `` |
+| 5096 | `hullLabelFor` | `` 'frigate' `` |
+| 5096 | `hullLabelFor` | `` 'destroyer' `` |
+| 5096 | `hullLabelFor` | `` 'cruiser' `` |
+| 5096 | `hullLabelFor` | `` 'capital' `` |
 
-### Toasts (30)
+### Toasts (32)
 
 Key prefix: `toast.*`
 
@@ -189,6 +189,7 @@ Key prefix: `toast.*`
 | 363 | `allocate` | `` `That needs ${path.length} nodes; only ${Math.max(0, state.cap - used())} left under the cap.` `` |
 | 454 | `linkSocket` | `` 'Linking an anchor takes one more node; you are at the cap.' `` |
 | 506 | `setVolumeShown` | `` `${g.name}: shown.` `` |
+| 506 | `setVolumeShown` | `` ` Removed ${removed} node${removed > 1 ? 's' : ''}; Undo brings them back.` `` |
 | 506 | `setVolumeShown` | `` `${g.name}: hidden.${removed ? ` Removed ${removed} node${removed > 1 ? 's' : ''}; Undo brings them back.` : ''}` `` |
 | 553 | `toggleIntegration` | `` `${t.name} can't be integrated.` `` |
 | 554 | `toggleIntegration` | `` `Allocate ${t.name} first to integrate it.` `` |
@@ -202,6 +203,7 @@ Key prefix: `toast.*`
 | 3232 | `primaryAction` | `` 'Wormhole exits open by linking an anchor in a subroutine socket.' `` |
 | 3285 | `cycleTarget` | `` 'The starting root is always in the build.' `` |
 | 3554 | `applyPlan` | `` 'Nothing to change.' `` |
+| 3568 | `applyPlan` | `` ` and removed ${p.remove.length}` `` |
 | 3568 | `applyPlan` | `` `Allocated ${gained} node${gained === 1 ? '' : 's'}${p.remove.length ? ` and removed ${p.remove.length}` : ''}.` `` |
 | 3775 |  | `` 'Build cleared. Undo brings it back.' `` |
 | 3778 |  | `` 'Choose a root.' `` |
@@ -216,7 +218,7 @@ Key prefix: `toast.*`
 | 5220 | `showCode` | `` 'The browser blocked the clipboard; the code is in the box to copy by hand.' `` |
 | 5657 |  | `` 'The mod assets are not included with the planner. Click <b>Show mod assets</b> in the top bar to read them from your Exiled Sector folder.' `` |
 
-### Rule refusals and node rules (27)
+### Rule refusals and node rules (30)
 
 Key prefix: `rule.*`
 
@@ -224,12 +226,12 @@ Key prefix: `rule.*`
 |---:|---|---|
 | 150 |  | `` `The ${volumeName(n.volume)} volume is hidden. Enable the Optional Volumes in Optional rules.` `` |
 | 210 | `findPath` | `` `Already allocated by the ${g.def.name}. Change its notables in the socket to free it.` `` |
-| 278 | `name` | `` `Waypoint ${name(t)}: ${hiddenText(t)}` `` |
 | 279 | `name` | `` `${name(t)} opens only through an anchor linked in a subroutine socket.` `` |
 | 281 | `name` | `` `No legal way from ${name(from)} to ${name(t)}.` `` |
 | 281 | `name` | `` `No legal way to reach ${name(t)}.` `` |
 | 378 | `refusalText` | `` `The way to ${effectiveType(target).name} passes ${effectiveType(block.node).name}: ` `` |
 | 542 |  | `` `${k} story point${k === 1 ? '' : 's'}` `` |
+| 658 |  | `` "Can't be allocated on phase ships." `` |
 | 662 | `nonPhaseText` | `` 'Ship has no shields.' `` |
 | 666 | `nonPhaseText` | `` 'Ship already has front shields.' `` |
 | 667 | `nonPhaseText` | `` 'Ship already has omni-directional shields.' `` |
@@ -237,11 +239,13 @@ Key prefix: `rule.*`
 | 673 | `nonPhaseText` | `` 'Requires a non-phase hull with low base armor.' `` |
 | 675 | `nonPhaseText` | `` `${why} (${fmt(cutoff)} or less on a ${hullLabel()}; this ship has ${fmt(state.ship.armor)})` `` |
 | 678 | `nonPhaseText` | `` 'Requires built-in strikecraft wings only.' `` |
+| 686 | `hullRequirementUnmet` | `` ' required.' `` |
 | 697 | `blockOf` | `` `Not unlocked yet: needs ${unlockText(t)} (Optional rules).` `` |
 | 700 | `blockOf` | `` `Locked until ${gateText(gate).replace(/^./, c => c.toLowerCase())} (Optional rules).` `` |
 | 704 | `blockOf` | `` `Not on ${HULL_SIZE_NAMES[hull]}: only on ${listWords(sizes.map(x => HULL_SIZE_NAMES[x] \|\| x))}.` `` |
 | 710 | `blockOf` | `` 'Ship already has {hullmod} installed.' `` |
 | 715 | `blockOf` | `` 'Already have {node} allocated.' `` |
+| 725 | `blockOf` | `` 'This ship is at its logistics node limit.' `` |
 | 725 | `blockOf` | `` `${blockText('node.block.logisticsCap', 'This ship is at its logistics node limit.')} (${logisticsCap()} per ship)` `` |
 | 876 | `subLimitProblem` | `` `Only ${kindCap} ${humanize(def.kind).toLowerCase()} per ship.` `` |
 | 877 | `subLimitProblem` | `` `Only ${def.socketLimit} per ship.` `` |
@@ -249,8 +253,9 @@ Key prefix: `rule.*`
 | 894 | `unlockText` | `` 'a character stat' `` |
 | 895 | `unlockText` | `` 'a campaign flag' `` |
 | 896 | `unlockText` | `` `ship level ${c.minLevel}` `` |
+| 899 | `unlockText` | `` 'an unlock' `` |
 
-### Map tooltips (59)
+### Map tooltips (69)
 
 Key prefix: `tooltip.*`
 
@@ -260,7 +265,7 @@ Key prefix: `tooltip.*`
 | 1330 |  | `` 'Instead grants {line}' `` |
 | 1330 |  | `` 'In addition, grants {line}' `` |
 | 1330 |  | `` 'No longer grants {line}' `` |
-| 1345 | `integrationColumnsHtml` | `` ' <span class="ic-active">active</span>' `` |
+| 1332 | `grantsLine` | `` 'Sentence' `` |
 | 1356 | `integrationColumnsHtml` | `` 'Normal' `` |
 | 1356 | `integrationColumnsHtml` | `` 'Integrated' `` |
 | 1358 | `integrationColumnsHtml` | `` `<div class="ic${active ? ` ic-on-${active}` : ''}"><div class="ic-row ic-head"><div>Normal${tag('normal')}</div><div><span class="builtin">Integrated</span>${cost}${tag('integ')}</div></div>${rows}</div>` `` |
@@ -268,11 +273,12 @@ Key prefix: `tooltip.*`
 | 1369 | `integrationInlineHtml` | `` `<div class="ic-inl-head"><span class="muted">Integrated values in brackets</span>${cost}</div>` `` |
 | 1385 | `integrationInlineHtml` | `` `<div class="ic-off"><span class="builtin">▲ When integrated:</span> ${html}</div>` `` |
 | 1391 | `integrationInlineHtml` | `` `<div>${r.normal} <span class="ic-alt">(removed when integrated)</span></div>` `` |
-| 2840 | `tooltipHtml` | `` `<div class="tt-option"><div class="${cur === id ? 'on' : ''}">${esc(o.name)}${cur === id ? ' ✓' : ''}</div>${typeLines(o).map(l => `<div>${l}</div>`).join('')}${exclusivityHtml(o)}${b ? `<div class="bad">${esc(b.text)}</div>` : ''}</div>` `` |
-| 2846 | `tooltipHtml` | `` `<div class="tt-effects"><div>${e ? `Linked to <span class="hl">${esc(volumeName(byId.get(e).volume))}</span>.` : 'Install a subroutine, or an anchor.'}</div></div>` `` |
+| 2831 | `tooltipHtml` | `` ' · <span class="builtin">Integrated (preview)</span>' `` |
+| 2846 | `tooltipHtml` | `` `Linked to <span class="hl">${esc(volumeName(byId.get(e).volume))}</span>.` `` |
+| 2846 | `tooltipHtml` | `` 'Install a subroutine, or an anchor.' `` |
+| 2849 | `tooltipHtml` | `` 'another wormhole' `` |
 | 2849 | `tooltipHtml` | `` `<div class="tt-effects"><div>Leads to ${p ? `<span class="hl">${esc(effectiveType(p).name)}</span>` : 'another wormhole'}. Allocating it also allocates the other end.</div></div>` `` |
 | 2851 | `tooltipHtml` | `` `<div class="tt-effects"><div><span class="hl">${esc(volumeName(n.volume))}</span> volume's Wormhole exit. Reached by linking an anchor in a subroutine socket.</div></div>` `` |
-| 2856 | `tooltipHtml` | `` `<div class="tt-effects">${lines.map(l => `<div>${l}</div>`).join('')}</div>` `` |
 | 2860 | `tooltipHtml` | `` `<div class="tt-note">Themes:${esc([...nodeTheme].map(themeName).join(', '))}</div>` `` |
 | 2862 | `tooltipHtml` | `` `<div class="tt-note">Needs a ship with: ${esc(reqs.join(', '))}</div>` `` |
 | 2863 | `tooltipHtml` | `` `<div class="tt-note">Unlocked by: ${esc(n.gates.map(g => humanize(g.slice(5))).join(', '))}</div>` `` |
@@ -283,17 +289,26 @@ Key prefix: `tooltip.*`
 | 2879 | `tooltipHtml` | `` `<div class="tt-note">Click for options (jump${state.root && n.id !== state.root ? (allocated ? ', remove' : ', allocate') : ''}). Ctrl+click to jump to ${esc(placeName(jt))}.</div>` `` |
 | 2880 | `tooltipHtml` | `` '<div class="tt-note">Click to start from this root.</div>' `` |
 | 2881 | `tooltipHtml` | `` '<div class="tt-note">Starting root. Right-click to reset the build.</div>' `` |
+| 2884 | `tooltipHtml` | `` 'change what it holds' `` |
+| 2884 | `tooltipHtml` | `` 'socket a subroutine or link an anchor' `` |
 | 2884 | `tooltipHtml` | `` `<div class="tt-note">Click to ${state.links.get(n.id) \|\| state.subs.get(n.id) ? 'change what it holds' : 'socket a subroutine or link an anchor'}. Right-click to remove.</div>` `` |
 | 2885 | `tooltipHtml` | `` '<div class="tt-note">Click for options. Right-click to remove.</div>' `` |
 | 2886 | `tooltipHtml` | `` `<div class="tt-warn">Click to remove${gone.length > 1 ? ` (${gone.length} nodes)` : ''}.</div>` `` |
 | 2893 | `tooltipHtml` | `` ` through ${via} waypoint${via > 1 ? 's' : ''}` `` |
 | 2894 | `tooltipHtml` | `` `<div class="tt-warn">Can't be allocated${viaText}. ${esc(refusalText(n, found.block))}</div>` `` |
+| 2895 | `tooltipHtml` | `` 'Link an anchor in a subroutine socket to reach this node.' `` |
+| 2895 | `tooltipHtml` | `` 'Not reachable from your allocated nodes.' `` |
 | 2896 | `tooltipHtml` | `` `<div class="tt-warn">${path.length} node${path.length > 1 ? 's' : ''}${viaText} needed; Only ${Math.max(0, state.cap - used())} left (over cap).</div>` `` |
+| 2897 | `tooltipHtml` | `` ' and pick an option' `` |
 | 2897 | `tooltipHtml` | `` `<div class="tt-note">Click to allocate${path.length > 1 ? ` (${path.length} nodes${viaText})` : viaText}${isChoice(n) ? ' and pick an option' : ''}.</div>` `` |
+| 2900 | `tooltipHtml` | `` 'Integrated, kept while unallocated. ' `` |
 | 2900 | `tooltipHtml` | `` `<div class="tt-note">${allocated ? '' : 'Integrated, kept while unallocated. '}Alt+click or I to remove integration.</div>` `` |
 | 2901 | `tooltipHtml` | `` `<div class="tt-note">Alt+click or I to integrate (+${esc(pointsText(nextIntegrationCost()))}).</div>` `` |
 | 2905 | `tooltipHtml` | `` `<div class="tt-note">Waypoint ${wi + 1}. Shift+click delete waypoint.</div>` `` |
 | 2906 | `tooltipHtml` | `` `<div class="tt-note">Shift+click waypoint ${waypoints.length + 1}.</div>` `` |
+| 2912 | `tooltipHtml` | `` 'switch to' `` |
+| 2912 | `tooltipHtml` | `` 'allocate as' `` |
+| 2912 | `tooltipHtml` | `` ', path included' `` |
 | 2912 | `tooltipHtml` | `` `<div class="tt-note">Ctrl+click to ${sat(n.id) ? 'switch to' : 'allocate as'} ${esc(last.name)}${many ? ', path included' : ''}.</div>` `` |
 | 2921 | `radiusNotesHtml` | `` '<div class="tt-warn">Grants nothing: inside Empty Shell Axion\'s radius.</div>' `` |
 | 2923 | `radiusNotesHtml` | `` '<div class="tt-note">Inside Empty Shell Axion\'s radius: no effects granted if allocated.</div>' `` |
@@ -302,21 +317,21 @@ Key prefix: `tooltip.*`
 | 2932 | `radiusNotesHtml` | `` `<div class="tt-note">In the ${esc(d.def.name)}'s radius, but it has no ${n.tier.toLowerCase()} replacements, so it stays as it is.</div>` `` |
 | 2935 | `radiusNotesHtml` | `` `<div class="tt-note">${esc(d.def.name)} adds ${d.def.minLines === d.def.maxLines ? d.def.minLines : `${d.def.minLines}–${d.def.maxLines}`} of these lines (rolled per item, not in the totals):</div>` `` |
 | 2939 | `radiusNotesHtml` | `` `<div class="tt-note">On the Root Conduit's route: +5 ${esc(affinityName(sc.conduit.aff))} affinity.</div>` `` |
-| 2948 | `describeRange` | `` `${lo} to ${hi}` `` |
 | 2999 | `placeName` | `` `the ${volumeName(n.volume)} volume` `` |
-| 2999 | `placeName` | `` `Core (${n.id})` `` |
 | 3639 | `targetTooltipNote` | `` '<div class="tt-note">Starting root: always in the build.</div>' `` |
 | 3640 | `targetTooltipNote` | `` 'Wanted' `` |
 | 3640 | `targetTooltipNote` | `` 'Forbidden' `` |
 | 3641 | `targetTooltipNote` | `` 'Wanted' `` |
+| 3641 | `targetTooltipNote` | `` 'forbid it' `` |
 | 3641 | `targetTooltipNote` | `` 'Forbidden' `` |
+| 3641 | `targetTooltipNote` | `` 'clear it' `` |
 | 3641 | `targetTooltipNote` | `` 'mark it wanted' `` |
-| 3641 |  | `` 'forbid it' `` |
-| 3641 |  | `` 'clear it' `` |
+| 3644 | `targetTooltipNote` | `` 'Wanted' `` |
+| 3644 | `targetTooltipNote` | `` ' Right-click to clear.' `` |
 | 3644 | `targetTooltipNote` | `` `<div class="tt-note">${st ? `<b>${st}.</b> ` : ''}Click to ${next}.${st === 'Wanted' ? ' Right-click to clear.' : ''}</div>` `` |
 | 3645 | `targetTooltipNote` | `` '<div class="tt-note">On the planned path.</div>' `` |
 
-### Pickers (choice, wormhole, socket) (32)
+### Pickers (choice, wormhole, socket) (44)
 
 Key prefix: `picker.*`
 
@@ -328,25 +343,37 @@ Key prefix: `picker.*`
 | 3025 | `openPicker` | `` `<h4>${esc(n.type.name)}: choose an option</h4>` `` |
 | 3034 | `openPicker` | `` `<button data-act="remove" class="danger">Remove node</button>` `` |
 | 3038 | `openPicker` | `` `<button data-act="jump" class="current"><span><div>Jump to ${esc(placeName(target))}</div></span></button>` `` |
-| 3042 | `openPicker` | `` `<button data-act="remove" class="danger">${n.tier === 'WORMHOLE_EXIT' ? 'Unlink anchor' : 'Remove'} (${count} node${count === 1 ? '' : 's'})</button>` `` |
-| 3047 | `openPicker` | `` `<button data-act="alloc">Allocate (${path.length} node${path.length === 1 ? '' : 's'}${waypoints.length ? ', through the waypoints' : ''})</button>` `` |
+| 3042 | `openPicker` | `` 'Unlink anchor' `` |
+| 3042 | `openPicker` | `` 'Remove' `` |
+| 3047 | `openPicker` | `` ', through the waypoints' `` |
 | 3048 | `openPicker` | `` '<div class="sub" style="padding:2px 0">Not reachable from current build.</div>' `` |
 | 3055 | `openPicker` | `` `<h4>Subroutine socket</h4>` `` |
+| 3056 | `openPicker` | `` 'None socketed' `` |
 | 3056 | `openPicker` | `` `<button data-section="sub" class="section${socketSection === 'sub' ? ' open' : ''}" aria-expanded="${socketSection === 'sub'}"><span><div>${socketSection === 'sub' ? '▾' : '▸'} Subroutine</div><div class="sub">${esc(sd ? sd.name : 'None socketed')}</div></span></button>` `` |
+| 3058 | `openPicker` | `` `Linked to ${volumeName(byId.get(cur).volume)}` `` |
+| 3058 | `openPicker` | `` 'None linked' `` |
 | 3058 | `openPicker` | `` `<button data-section="anchor" class="section${socketSection === 'anchor' ? ' open' : ''}" aria-expanded="${socketSection === 'anchor'}"><span><div>${socketSection === 'anchor' ? '▾' : '▸'} Wormhole anchor</div><div class="sub">${esc(cur ? `Linked to ${volumeName(byId.get(cur).volume)}` : 'None linked')}</div></span></button>` `` |
 | 3060 | `openPicker` | `` '<button data-act="remove" class="danger">Remove socket</button>' `` |
 | 3074 | `subroutinePickerHtml` | `` `<h4>Socketed subroutine</h4><div class="sub-current">${iconImg(def.icon, def.name)}<div><div>${esc(def.name)}</div><div class="sub">${esc(subSummary(def, e, n))}</div>${def.unobtainable ? `<div class="sub bad">${UNOBTAINABLE_TEXT}</div>` : ''}</div></div>` `` |
 | 3076 | `subroutinePickerHtml` | `` '<div class="sub">Affinity (rolled per item; pick the one yours shows):</div><div class="pick-row">' `` |
 | 3082 | `subroutinePickerHtml` | `` `<div class="sub">Notables it allocates (${grants.length} of up to ${cacheMax(def)}; rolled per item, pick the ones yours shows):</div>` `` |
-| 3085 | `subroutinePickerHtml` | `` ` (inactive: ${st.block ? st.block.text : 'refused'})` `` |
-| 3090 | `subroutinePickerHtml` | `` `<datalist id="grant-list">${grantableNodes.filter(g => !grants.includes(g.id)).map(g => `<option value="${esc(grantLabel(g))}"></option>`).join('')}</datalist>` `` |
+| 3085 | `subroutinePickerHtml` | `` ' (idle: already allocated)' `` |
+| 3085 | `subroutinePickerHtml` | `` ' (idle: another cache allocates it)' `` |
+| 3085 | `subroutinePickerHtml` | `` ' (inert while its volume is hidden)' `` |
+| 3085 | `subroutinePickerHtml` | `` 'refused' `` |
 | 3093 | `subroutinePickerHtml` | `` '<button data-act="unsub" class="danger">Remove subroutine</button>' `` |
+| 3095 | `subroutinePickerHtml` | `` 'Subroutines (click the socketed one again to remove it)' `` |
+| 3095 | `subroutinePickerHtml` | `` 'Socket a subroutine' `` |
 | 3099 | `subroutinePickerHtml` | `` 'Socketed. Click to remove.' `` |
+| 3100 | `subroutinePickerHtml` | `` 'Remove from this socket' `` |
+| 3100 | `subroutinePickerHtml` | `` 'Socket into this socket' `` |
+| 3106 |  | `` 'Allocates 1 to 3 notables for free' `` |
 | 3113 | `subSummary` | `` 'Inactive: the socket isn\'t allocated.' `` |
 | 3116 | `subSummary` | `` `+${5 * c.count} ${affinityName(c.aff)} affinity (${c.count} node${c.count === 1 ? '' : 's'} between the root and this socket).` `` |
 | 3116 | `subSummary` | `` 'Grants nothing: no allocated route from the root reaches this socket.' `` |
 | 3120 | `subSummary` | `` `+${k} to every affinity (${k} small nodes in its radius). ${silent} allocated small node${silent === 1 ? '' : 's'} in it grant nothing.` `` |
 | 3126 | `subSummary` | `` `${GATE_LINES[gate.effect]}: ${allocatedIn} allocated node${allocatedIn === 1 ? '' : 's'} of ${mine.length} in its radius apply ×${gate.max}, live-in-combat effects only.` `` |
+| 3130 | `subSummary` | `` 'Inactive: only one doctrine archive works per ship.' `` |
 | 3131 | `subSummary` | `` `${d.nodes.size} nodes in its radius are ${def.behaviour === 'REWRITE' ? 'rewritten' : 'augmented'}. What each gets is rolled per item, so the totals leave it out.` `` |
 | 3135 | `subSummary` | `` `${act} notable${act === 1 ? '' : 's'} allocated for free (no path, no node slot).` `` |
 | 3143 | `anchorPickerHtml` | `` `<button data-act="jump"><span><div>Jump to ${esc(placeName(byId.get(cur)))}</div></span></button>` `` |
@@ -355,13 +382,14 @@ Key prefix: `picker.*`
 | 3150 | `anchorPickerHtml` | `` 'In game: ' `` |
 | 3153 | `anchorPickerHtml` | `` '<button data-act="unlink">Unlink anchor</button>' `` |
 
-### Target mode (22)
+### Target mode (26)
 
 Key prefix: `target.*`
 
 | Line | Function | Text |
 |---:|---|---|
 | 3461 | `computePlan` | `` 'Choose a root.' `` |
+| 3471 | `isGranted` | `` 's are' `` |
 | 3471 | `isGranted` | `` `${bad.length} forbidden node${bad.length > 1 ? 's are' : ' is'} already in the build and stay${bad.length > 1 ? '' : 's'}. Untick "Keep current build" to plan without ${bad.length > 1 ? 'them' : 'it'}.` `` |
 | 3473 | `computePlan` | `` 'Click nodes to mark them wanted.' `` |
 | 3477 | `computePlan` | `` `${targetLabel(n)} opens only through an anchor linked in a subroutine socket. Link one first.` `` |
@@ -372,6 +400,7 @@ Key prefix: `target.*`
 | 3510 | `computePlan` | `` `${targetLabel(lost)} is in a faction volume with no anchor linked to it. Link one to its exit in a subroutine socket first.` `` |
 | 3511 | `computePlan` | `` `${targetLabel(lost)} can't be reached from the root.` `` |
 | 3514 | `computePlan` | `` `No legal way to reach ${targetLabel(lost)}: every way there passes a forbidden node or one the rules refuse` `` |
+| 3515 | `computePlan` | `` ` and ${steered.length - 2} more` `` |
 | 3515 | `computePlan` | `` `, here ${steered.slice(0, 2).join(' and ')}${steered.length > 2 ? ` and ${steered.length - 2} more` : ''}.` `` |
 | 3531 | `mine` | `` `it can't be taken with ${targetLabel(n)}` `` |
 | 3532 | `computePlan` | `` `${targetLabel(n)} can't be allocated with the rest: ${p.block.text}` `` |
@@ -382,85 +411,90 @@ Key prefix: `target.*`
 | 3581 | `renderTargets` | `` 'Nothing to change.' `` |
 | 3582 | `renderTargets` | `` `Plan: ${gained} more node${gained === 1 ? '' : 's'}${p.remove.length ? `, ${p.remove.length} removed` : ''}, ${p.total} of ${state.cap} in all. ` `` |
 | 3583 | `renderTargets` | `` 'That is the fewest possible.' `` |
+| 3583 | `renderTargets` | `` ` (over ${TARGET_EXACT_MAX} wanted nodes the search is approximate)` `` |
+| 3583 | `renderTargets` | `` ' (it had to steer around refused nodes)' `` |
 | 3583 | `renderTargets` | `` `It may not be the fewest${targets.want.size > TARGET_EXACT_MAX ? ` (over ${TARGET_EXACT_MAX} wanted nodes the search is approximate)` : ' (it had to steer around refused nodes)'}.` `` |
 
-### Top bar, summary panel and stat sheet (55)
+### Top bar, summary panel and stat sheet (57)
 
 Key prefix: `bar.*, panel.*, sheet.*`
 
 | Line | Function | Text |
 |---:|---|---|
-| 1470 | `totals` | `` `${AFFINITY_NAMES[k] \|\| humanize(k)} affinity ${reached}×${st.size}` `` |
+| 1462 | `totals` | `` 'Root Conduit' `` |
 | 1498 | `previewDiffHtml` | `` '<div class="ic-was"><span class="builtin">▲ new when integrated</span></div>' `` |
 | 1500 | `previewDiffHtml` | `` `<div class="ic-was"><span class="builtin">▲</span> <span class="muted">without integration:</span> ${describe(s.effect, b.magnitude)}</div>` `` |
 | 1811 | `drawRegionLabels` | `` 'Core tree' `` |
-| 1813 | `drawRegionLabels` | `` `${count} allocated` `` |
 | 2545 | `renderChrome` | `` 'Choose a root' `` |
 | 2553 | `renderChrome` | `` `Undo, ${undoStack.length} step${undoStack.length === 1 ? '' : 's'} stored (Ctrl+Z)` `` |
 | 2555 | `renderChrome` | `` `Ship rules (${shipN})` `` |
 | 2555 | `renderChrome` | `` 'Ship rules' `` |
 | 2556 | `renderChrome` | `` `Optional rules (${storyN})` `` |
 | 2556 | `renderChrome` | `` 'Optional rules' `` |
-| 2557 | `renderChrome` | `` `Ship (${shipN})` `` |
 | 2557 | `renderChrome` | `` 'Ship' `` |
 | 2563 | `renderChrome` | `` 'Choose a root' `` |
 | 2564 | `renderChrome` | `` `${waypoints.length} waypoint${waypoints.length === 1 ? '' : 's'}: click a node to start pathing. Shift+click an existing waypoint to drop it, Esc to clear.` `` |
 | 2570 | `renderPanel` | `` `${used()} of ${state.cap} nodes` `` |
-| 2574 | `renderPanel` | `` `<div class="aff" style="border-color:${rgba(AFFINITY_COLOURS[k], 0.4)}"><div class="n" style="color:${rgba(AFFINITY_COLOURS[k], 1)}">${v}</div><div class="t">${AFFINITY_NAMES[k]} affinity</div></div>` `` |
 | 2597 | `renderPanel` | `` '<div class="empty">Pick one of the three roots near the center to start.</div>' `` |
 | 2614 | `renderPanel` | `` 'Other' `` |
-| 2628 | `renderPanel` | `` `${s.sources} node${s.sources > 1 ? 's' : ''} + affinity` `` |
-| 2628 | `renderPanel` | `` `${s.sources} node${s.sources > 1 ? 's' : ''}` `` |
 | 2637 | `renderPanel` | `` `Grants <span class="hl">${esc(hullModName(hm))}</span>.` `` |
 | 2640 | `renderPanel` | `` `<div class="stat-group"><h3>Other effects</h3>${[...extras].map(e => `<div class="stat-line">${e}</div>`).join('')}</div>` `` |
 | 2645 | `renderPanel` | `` `<div class="stat-group"><h3>For the first ${esc(secs)} seconds after deployment</h3>` `` |
-| 2646 | `renderPanel` | `` `<div class="stat-line">${describe(s.effect, s.magnitude)}<span class="src">${s.sources} node${s.sources > 1 ? 's' : ''}</span></div>` `` |
 | 2652 | `renderPanel` | `` '<div class="stat-line muted">Nothing: none of their effects are read live in combat.</div>' `` |
 | 2653 | `renderPanel` | `` `<div class="stat-line muted">${g.nodes} allocated node${g.nodes === 1 ? '' : 's'} in its radius give these instead of their usual effects.</div></div>` `` |
 | 2656 | `renderPanel` | `` `<div class="stat-group"><h3>Subroutines</h3>${subLines.join('')}</div>` `` |
 | 2659 | `renderPanel` | `` '<div class="stat-group"><h3>Affinity thresholds reached</h3>' `` |
 | 2663 | `renderPanel` | `` '<div class="empty">No effects yet. Click a glowing node next to your root.</div>' `` |
-| 2673 | `renderPanel` | `` ` · ${volumeName(byId.get(e).volume)} anchor` `` |
-| 2673 | `renderPanel` | `` ' · empty' `` |
 | 2676 | `renderPanel` | `` ' <span class="builtin">Integrated</span>' `` |
 | 2676 | `renderPanel` | `` ' <span class="builtin">Integrated (preview)</span>' `` |
+| 2677 | `renderPanel` | `` 'Alt+click to integrate or remove' `` |
 | 2678 | `renderPanel` | `` '<div class="empty">No notables or keystones allocated yet.</div>' `` |
 | 2691 | `problemsHtml` | `` `<div class="rule-problems"><h3>${problems.size} illegal node${problems.size === 1 ? '' : 's'}</h3>` `` |
 | 2692 | `problemsHtml` | `` `<p class="muted">Illegal build</p>${rows}</div>` `` |
+| 2720 | `updateAffNote` | `` 's are' `` |
 | 2720 | `updateAffNote` | `` `These add up to ${sum}; ${n} affinity node${n === 1 ? ' is' : 's are'} allocated.` `` |
 | 2757 | `renderInteg` | `` `<span class="muted">Integrated:</span> <b class="builtin">${k}</b> of ${able.length + kept} · <b>${storyPointCost(k)}</b> story point${storyPointCost(k) === 1 ? '' : 's'}` `` |
 | 2764 | `renderInteg` | `` `${kept} kept on removed node${kept === 1 ? '' : 's'}.` `` |
 | 2765 | `renderInteg` | `` `Preview: all ${able.length} integrated, ${pointsText(storyPointCost(able.length))}. Totals and the stat sheet show changes; build unchanged.` `` |
+| 2800 |  | `` `${MOD_GIT.ahead} commit${MOD_GIT.ahead === 1 ? '' : 's'} after release ${MOD_GIT.release}` `` |
+| 2800 |  | `` 'no release tag' `` |
+| 2800 |  | `` `branch ${MOD_GIT.branch} at` `` |
+| 2800 |  | `` ', with uncommitted changes' `` |
 | 2800 |  | `` `Exiled Sector ${D.modVersion \|\| 'unknown'} (mod_info.json), ${MOD_GIT.release ? `${MOD_GIT.ahead} commit${MOD_GIT.ahead === 1 ? '' : 's'} after release ${MOD_GIT.release}` : 'no release tag'}, ${MOD_GIT.branch ? `branch ${MOD_GIT.branch} at` : 'commit'} ${MOD_GIT.commit}${MOD_GIT.dirty ? ', with uncommitted changes' : ''}` `` |
 | 2801 |  | `` `Exiled Sector ${D.modVersion \|\| 'unknown'}` `` |
 | 2802 |  | `` `Exiled Sector ${modVersionShort} · Planner ${plannerVersionShort}` `` |
+| 2823 | `exclusivityHtml` | `` 'Mutually exclusive with hullmods' `` |
+| 2824 | `exclusivityHtml` | `` 'Mutually exclusive with nodes' `` |
 | 4056 | `renderThemeButton` | `` 'Dark' `` |
 | 4056 | `renderThemeButton` | `` 'Light' `` |
 | 4057 | `renderThemeButton` | `` `Theme: Auto (${name[theme]})` `` |
 | 4057 | `renderThemeButton` | `` `Theme: ${name[theme]}` `` |
 | 4088 | `statSheet` | `` 'Nodes' `` |
 | 4105 | `statSheet` | `` 'For the first {seconds} seconds after deployment: {text}' `` |
-| 4113 | `wrap` | `` `${when}: {text}` `` |
 | 4135 | `sheetTabHtml` | `` `<div class="gs-tabhead"><span class="muted">The in-game stat sheet. Hover over the effects to see source(s).</span>` `` |
+| 4136 | `sheetTabHtml` | `` 'Full Sheet' `` |
 | 4152 | `renderSheet` | `` '<div class="gs-col"><p class="gs-empty">Pick one of the three roots near the center to start.</p></div>' `` |
 | 4168 | `renderSheet` | `` `${root ? root.type.name : ''} \u00b7 ${hull.charAt(0).toUpperCase() + hull.slice(1)} \u00b7 ${state.alloc.size + 1}/${state.cap} nodes` `` |
+| 4194 | `showSheetTip` | `` 'Sources' `` |
+| 4195 | `showSheetTip` | `` ' class="builtin" title="Integrated"' `` |
 | 5731 |  | `` `Mod data: ${modVersionLong}. Planner: ${PLANNER_VERSION}.` `` |
 
-### Search, filter and list view (38)
+### Search, filter and list view (47)
 
 Key prefix: `search.*, filter.*, list.*`
 
 | Line | Function | Text |
 |---:|---|---|
 | 3829 |  | `` 'Core' `` |
-| 3829 |  | `` `${volumeName(n.volume)} volume` `` |
+| 3851 | `searchResultsHtml` | `` 'that search and filter' `` |
+| 3851 | `searchResultsHtml` | `` 'that filter' `` |
+| 3851 | `searchResultsHtml` | `` 'that search' `` |
 | 3851 | `searchResultsHtml` | `` `<div class="empty">No nodes match ${filterCount() && searchTerms.length ? 'that search and filter' : filterCount() ? 'that filter' : 'that search'}.</div>` `` |
-| 3855 |  | `` 'affinity nodes' `` |
-| 3856 | `searchResultsHtml` | `` ` for ${filterParts.join(' or ')}` `` |
-| 3857 | `searchResultsHtml` | `` `<div class="search-head">${searchOrder.length} match${searchOrder.length === 1 ? '' : 'es'}${esc(themesText)}` `` |
+| 3854 | `searchResultsHtml` | `` 'all of the themes' `` |
+| 3854 | `searchResultsHtml` | `` 'any of the themes' `` |
+| 3854 | `searchResultsHtml` | `` 'the theme' `` |
+| 3855 | `searchResultsHtml` | `` 'affinity nodes' `` |
 | 3858 | `searchResultsHtml` | `` `${state.root ? `, ${have} allocated` : ''}. Click one to jump to it.</div>` `` |
-| 3877 | `updateSearchTab` | `` `Search (${searchOrder.length})` `` |
-| 3968 | `renderFilterButton` | `` `Filter (${k})` `` |
 | 3968 | `renderFilterButton` | `` 'Filter' `` |
 | 3979 | `renderThemeFilter` | `` `<div class="theme-head"><b>Filter</b></div>` `` |
 | 3980 | `renderThemeFilter` | `` `<p class="filter-affinity"><label title="Highlight every affinity node (the Low / Mid / High choice nodes)"><input type="checkbox" id="filter-affinity"${showAffinity ? ' checked' : ''}> Show affinity nodes <span class="muted">${affinityNodeCount}</span></label></p>` `` |
@@ -473,12 +507,20 @@ Key prefix: `search.*, filter.*, list.*`
 | 4243 | `listRowHtml` | `` `Paired with ${n.pairedWith}` `` |
 | 4244 | `listRowHtml` | `` `Linked to ${s}` `` |
 | 4245 | `listRowHtml` | `` `Themes: ${[...themes].map(themeName).join(', ')}` `` |
+| 4255 | `listRowHtml` | `` 'Clear the mark' `` |
+| 4255 | `listRowHtml` | `` 'Mark wanted: the plan reaches it' `` |
+| 4256 | `listRowHtml` | `` 'Clear the mark' `` |
+| 4256 | `listRowHtml` | `` 'Mark forbidden: the plan avoids it' `` |
+| 4257 | `listRowHtml` | `` 'Wanted' `` |
+| 4257 | `listRowHtml` | `` 'Forbidden' `` |
 | 4267 |  | `` 'Affinity nodes' `` |
 | 4278 | `affRowHtml` | `` `<div class="tr">${k} affinity node${k === 1 ? '' : 's'}</div>` `` |
-| 4305 | `renderList` | `` `Build (${buildSize})` `` |
 | 4311 | `renderList` | `` 'Click a node to see it on the map.' `` |
 | 4313 | `renderList` | `` 'Target mode: mark nodes Desired or Forbidden (clicking a node cycles its mark, as on the map), then Allocate.' `` |
 | 4314 | `renderList` | `` 'Click a node to see it on the map.' `` |
+| 4336 | `groupRank` | `` 'Show' `` |
+| 4336 | `groupRank` | `` 'Hide' `` |
+| 4347 | `renderList` | `` ' matching the search and Filter' `` |
 | 4349 | `renderList` | `` `, ${inCollapsed} in collapsed trees` `` |
 | 4352 | `renderList` | `` 'No build yet.' `` |
 | 4353 | `renderList` | `` `${total} of ${buildSize} allocated nodes${filtered} (${affCount} affinity)${collapsedNote}` `` |
@@ -491,7 +533,7 @@ Key prefix: `search.*, filter.*, list.*`
 | 4373 | `setView` | `` 'Skill tree map (L)' `` |
 | 4373 | `setView` | `` 'List view of every non-affinity node (L)' `` |
 
-### Ship rules and Optional rules (14)
+### Ship rules and Optional rules (15)
 
 Key prefix: `ship.*, optional.*`
 
@@ -499,20 +541,21 @@ Key prefix: `ship.*, optional.*`
 |---:|---|---|
 | 4493 | `problemSummary` | `` ` ${problems} illegal allocated node${problems === 1 ? '' : 's'}.` `` |
 | 4505 | `renderShipPane` | `` `Low-armor nodes need ${fmt(evalExpr(cut.cutoff, 1))} or less on a ${hullLabel()} (only Critical Point Refit for now).` `` |
-| 4509 | `renderShipPane` | `` `<span class="chip" title="${esc(`${hullModName(h)} (${h}). ` + (hits.length ? 'Refuses ' + hits.map(t => t.name).join(', ') : 'No node clashes with this hullmod'))}">${esc(hullModLabel(h))} <button data-rm="${esc(h)}" title="Remove" aria-label="Remove ${esc(hullModName(h))}">×</button></span>` `` |
+| 4509 | `renderShipPane` | `` 'Refuses ' `` |
+| 4509 | `renderShipPane` | `` 'No node clashes with this hullmod' `` |
 | 4510 | `renderShipPane` | `` '<span class="muted">None listed.</span>' `` |
 | 4512 | `renderShipPane` | `` `Limit: ${logisticsCap()} logistics notables and keystones. Some items add slots in game.` `` |
 | 4514 | `renderShipPane` | `` `${n} ship rule${n === 1 ? '' : 's'} set.${problemSummary()}` `` |
-| 4528 | `renderStory` | `` `<label><input type="checkbox" data-gate="${esc(g)}"> ${esc(gateText(g))} <span class="muted">(${gateCounts.get(g)} node${gateCounts.get(g) > 1 ? 's' : ''})</span></label>` `` |
-| 4534 | `gateRow` | `` `<label><input type="checkbox" data-volgroup="${esc(t.id)}"> ${esc(t.name)} <span class="muted">(${count} node${count === 1 ? '' : 's'})</span></label>` `` |
 | 4535 | `gateRow` | `` `<div class="vol-gates" data-for="${esc(t.id)}"><span class="muted">Game state reached:</span>${gates.map(gateRow).join('')}</div>` `` |
 | 4536 | `renderStory` | `` '<span class="muted">None in this mod version.</span>' `` |
-| 4559 | `renderStory` | `` `${n} gate${n === 1 ? ' or unlock' : 's or unlocks'}` `` |
+| 4559 | `renderStory` | `` ' or unlock' `` |
+| 4559 | `renderStory` | `` 's or unlocks' `` |
 | 4560 | `renderStory` | `` `${hv} optional volume toggle${hv === 1 ? '' : 's'}` `` |
-| 4561 | `renderStory` | `` `${parts.length ? `Unticked: ${parts.join(' and ')}.` : 'Everything is ticked.'}${problemSummary()}` `` |
+| 4561 | `renderStory` | `` `Unticked: ${parts.join(' and ')}.` `` |
+| 4561 | `renderStory` | `` 'Everything is ticked.' `` |
 | 4608 | `addHullMod` | `` `No node clashes with "${raw}", so it doesn't change anything. Pick one from the list.` `` |
 
-### Templates (file, codes, save, load) (94)
+### Templates (file, codes, save, load) (96)
 
 Key prefix: `templates.*`
 
@@ -531,14 +574,14 @@ Key prefix: `templates.*`
 | 1100 | `codeToTemplate` | `` 'Invalid template code.' `` |
 | 1104 | `codeToTemplate` | `` 'Invalid template code.' `` |
 | 1106 | `codeToTemplate` | `` 'Invalid template code.' `` |
-| 3781 |  | `` `${byId.get(state.root).type.name} plan` `` |
-| 4785 | `renderFileNotice` | `` ` ${label}: ${names.slice(0, 3).map(n => `"${n}"`).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}.` `` |
+| 4785 | `renderFileNotice` | `` ` and ${names.length - 3} more` `` |
 | 4786 | `renderFileNotice` | `` `Templates file ${linkedHandle ? linkedHandle.name : ''} change detected (most likely by Starsector).` `` |
 | 4787 | `renderFileNotice` | `` 'Changed' `` |
 | 4787 | `renderFileNotice` | `` 'Added' `` |
 | 4787 | `renderFileNotice` | `` 'Removed' `` |
 | 4787 | `renderFileNotice` | `` ' The Templates list is now up to date.' `` |
 | 4789 | `renderFileNotice` | `` ` "${cur.name}" was removed from the template file. Current build still loaded in the planner. Don't forget to save to preserve the build.` `` |
+| 4792 | `list` | `` ', including the edits you made since loading or saving it' `` |
 | 4792 | `list` | `` ` Your build from "${cur.name}" was updated (most likely by Starsector). Load the new version? It will replace your current build${edited ? ', including the edits you made since loading or saving it' : ''}. Undo brings it back.` `` |
 | 4796 | `renderFileNotice` | `` 'Keep my build' `` |
 | 4796 | `renderFileNotice` | `` 'Dismiss' `` |
@@ -556,6 +599,7 @@ Key prefix: `templates.*`
 | 4957 | `plannerDir` | `` `"${dir.name}" isn't the planner's folder. Pick the folder that holds the planner's web folder and README.` `` |
 | 4974 | `createTemplatesFile` | `` `"${root.name}" isn't the planner's folder.` `` |
 | 4982 | `createTemplatesFile` | `` `Created ${SAVED_TEMPLATES_DIR}\\${name} in the planner's folder and linked it.` `` |
+| 5017 | `renderTemplatesFile` | `` ' <span class="muted">(click Reconnect to allow access)</span>' `` |
 | 5017 | `renderTemplatesFile` | `` `Linked: <b>${esc(linkedHandle.name)}</b>${linkedAccess === 'prompt' ? ' <span class="muted">(click Reconnect to allow access)</span>' : ''}` `` |
 | 5018 | `renderTemplatesFile` | `` 'No file linked yet.' `` |
 | 5019 | `renderTemplatesFile` | `` 'Link a different file…' `` |
@@ -566,16 +610,15 @@ Key prefix: `templates.*`
 | 5028 | `renderTemplatesFile` | `` 'Open a different file…' `` |
 | 5028 | `renderTemplatesFile` | `` 'Open templates file…' `` |
 | 5033 | `renderTemplatesFile` | `` 'This browser can read files but not write to them.' `` |
+| 5040 | `renderTemplateList` | `` 'Reconnect to see the templates in the file.' `` |
+| 5040 | `renderTemplateList` | `` 'Link the file to see its templates.' `` |
 | 5044 | `renderTemplateList` | `` '<p class="muted">The file has no templates yet.</p>' `` |
-| 5056 | `renderTemplateList` | `` `<div class="group">${esc(rn ? rn.type.name : root)} root${root === state.root ? ' (current)' : ''}</div><table>` `` |
-| 5060 | `renderTemplateList` | `` `<tr><td>${esc(t.name)}</td><td class="num">${steps} step${steps === 1 ? '' : 's'}${hull ? ' · ' + hull : ''}</td>` `` |
 | 5061 | `renderTemplateList` | `` `<td><button data-code="${i}" title="Copy this template as a code">Code</button> ` `` |
 | 5062 | `renderTemplateList` | `` `<button data-load="${i}" title="Replace the current build with this template">Load</button></td></tr>` `` |
 | 5069 | `refreshExport` | `` 'Choose a root.' `` |
+| 5077 | `refreshExport` | `` ' (you\'ll be asked about the hull)' `` |
 | 5077 | `refreshExport` | `` ` · replaces the ${HULL_ENUM_LABEL[h]} template of this name${h !== HULL_ENUM[state.hull] ? ' (you\'ll be asked about the hull)' : ''}` `` |
 | 5078 | `refreshExport` | `` ' · replaces the template of this name' `` |
-| 5080 | `refreshExport` | `` `${byId.get(state.root).type.name} root · ${hullLabel()} · ${steps.length} step${steps.length === 1 ? '' : 's'}` `` |
-| 5081 | `refreshExport` | `` ` · ${anchors} anchor${anchors === 1 ? '' : 's'}` `` |
 | 5081 | `refreshExport` | `` ` · ${marks} marked for integration` `` |
 | 5085 | `refreshExport` | `` `Save into ${linkedHandle.name}` `` |
 | 5085 | `refreshExport` | `` 'Save into linked file' `` |
@@ -592,14 +635,17 @@ Key prefix: `templates.*`
 | 5193 | `loadTemplate` | `` `${used()} nodes is over the ${state.cap} cap` `` |
 | 5194 | `loadTemplate` | `` `Loaded "${r.name}" (${r.taken} nodes)${notes.length ? '; ' + notes.join('; ') : ''}.` `` |
 | 5206 |  | `` `Code for "${t.name}"` `` |
+| 5219 | `showCode` | `` 'copied to the clipboard and shown above' `` |
+| 5219 | `showCode` | `` 'is in the box above; copy it from there' `` |
 | 5219 | `showCode` | `` `${label} (${code.length} characters) ${copied ? 'copied to the clipboard and shown above' : 'is in the box above; copy it from there'}.` `` |
 | 5223 |  | `` 'Choose a root first.' `` |
 | 5225 |  | `` `${problem} (The code uses the template name below.)` `` |
 | 5226 |  | `` `Code for "${tpl.name.value.trim()}"` `` |
 | 5231 |  | `` `made with mod ${t.mod}, this planner is based on ${D.modVersion}` `` |
-| 5247 | `toggleExport` | `` `${byId.get(state.root).type.name} plan` `` |
 | 5247 | `toggleExport` | `` 'My plan' `` |
 | 5263 | `readyToExport` | `` 'Choose a root first.' `` |
+| 5271 | `reportMerge` | `` 'Replaced' `` |
+| 5271 | `reportMerge` | `` 'Added' `` |
 | 5271 | `reportMerge` | `` `${result.replaced ? 'Replaced' : 'Added'} "${result.template.name}" (${result.template.steps.length} steps) ${where}. The file now has ${result.count} template${result.count === 1 ? '' : 's'}.` `` |
 | 5304 | `startSave` | `` `"${plan.existing.name}" is already in the templates file as a ${from} template, but the Hull size dropdown is set to ${to}.` `` |
 | 5305 | `startSave` | `` `Keep ${from}` `` |
@@ -608,12 +654,11 @@ Key prefix: `templates.*`
 | 5311 | `startSave` | `` 'Override' `` |
 | 5323 | `commitSave` | `` 'The browser was not allowed to write to that file.' `` |
 | 5329 | `commitSave` | `` `"${saveName.trim()}" is already used by a template on this root. Pick another name.` `` |
-| 5345 | `commitSave` | `` `in ${linkedHandle.name}` `` |
 | 5361 |  | `` 'Nothing was saved.' `` |
 | 5366 | `saveIntoLinked` | `` 'The browser was not allowed to write to that file.' `` |
 | 5403 |  | `` `Downloaded a new ${TEMPLATE_FILE} holding only "${name}".` `` |
 
-### Mod assets (16)
+### Mod assets (17)
 
 Key prefix: `assets.*`
 
@@ -628,6 +673,7 @@ Key prefix: `assets.*`
 | 5610 | `renderArt` | `` `Allow the planner to read the mod folder "${artHandle ? artHandle.name : ''}" again, to show the mod's assets` `` |
 | 5611 | `renderArt` | `` 'Show the mod\'s assets, read from your own Exiled Sector folder' `` |
 | 5613 | `renderArt` | `` 'Reading the assets…' `` |
+| 5614 | `renderArt` | `` ` (Exiled Sector ${esc(artInfo.version)})` `` |
 | 5614 | `renderArt` | `` `Showing the assets from <b>${esc(artInfo.folder)}</b>${artInfo.version ? ` (Exiled Sector ${esc(artInfo.version)})` : ''}, ${artInfo.count} images.` `` |
 | 5615 | `renderArt` | `` `Permission to read <b>${esc(artHandle.name)}</b> must be regranted. Click Reconnect.` `` |
 | 5616 | `renderArt` | `` 'No mod folder chosen. Showing placeholders.' `` |
