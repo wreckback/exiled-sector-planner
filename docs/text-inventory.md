@@ -10,7 +10,7 @@ Tick an area when its migration step is committed and its output matches the bas
 
 - [x] Names and labels (step 4a, `text/names.js`; also the socket picker's "Allocates 1 to 3 notables for free" (3106), which is one of the subroutine kinds). The gate conditions are ids now (`GATE_OF`), not text. Left in code: the missing-data message (line 10), shown before any text could load.
 - [x] Map tooltips (step 4b, `text/tooltip.js`; also the Effects tab's "Grants …" line, which is the same text, and the story point count, now `label.storyPoints` in `names.js`). New helper `trHtml()` for text with markup. Also moved, missed by the scan: the inline view's "normal"/"integrated" in brackets and the " and " joining a doctrine modifier's effects.
-- [ ] Rule refusals and node rules
+- [x] Rule refusals and node rules (step 4c, `text/rules.js`; list joiners ", ", " and ", " or " in `common.js`). Also the waypoint's hidden-volume refusal ("Waypoint …: …"), missed by the scan. The fallbacks for the mod's `node.block.*`/`node.requires.*` strings moved too; the mod has all of them today, so none shows. The mod's gate wording is still lowercased in code to fit "Locked until …".
 - [ ] Toasts
 - [ ] Top bar, summary panel and stat sheet
 - [ ] Search, filter and list view

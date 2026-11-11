@@ -187,7 +187,7 @@
   const OPTIONAL_VOLUMES = D.optionalVolumes || [];
   const volumeToggleOf = new Map(OPTIONAL_VOLUMES.flatMap(g => g.volumes.map(v => [v, g])));
   const volumeHidden = v => { const g = volumeToggleOf.get(v); return !!g && state.hiddenVolumes.has(g.id); };
-  const hiddenText = n => `The ${volumeName(n.volume)} volume is hidden. Enable the Optional Volumes in Optional rules.`;
+  const hiddenText = n => tr('rule.volumeHidden', { volume: volumeName(n.volume) });
   // Nodes in a hidden volume: they can't be allocated or travelled through.
   function switchedOff(n) {
     return volumeHidden(n.volume);
@@ -247,7 +247,7 @@
   function findPath(target, option = null, remembered = false) {
     if (!state.root || sat(target.id) || switchedOff(target)) return { path: null, block: null };
     const g = subState().granted.get(target.id);
-    if (g && g.status === 'active') return { path: null, block: { kind: 'granted', node: target, text: `Already allocated by the ${g.def.name}. Change its notables in the socket to free it.` } };
+    if (g && g.status === 'active') return { path: null, block: { kind: 'granted', node: target, text: tr('rule.granted', { item: g.def.name }) } };
     if (target.tier === 'WORMHOLE_EXIT' && !partnerOf(target)) return { path: null, block: null };
     let path = searchPath(target, true);
     if (!path) {
@@ -315,10 +315,10 @@
     const at = waypoints.indexOf(target);
     for (const t of [...(at >= 0 ? waypoints.slice(0, at) : waypoints), target]) {
       if (!have.has(t.id)) {
-        if (switchedOff(t)) return { path: null, block: { text: `Waypoint ${name(t)}: ${hiddenText(t)}` } };
-        if (t.tier === 'WORMHOLE_EXIT' && !partnerOf(t)) return { path: null, block: { text: `${name(t)} opens only through an anchor linked in a subroutine socket.` } };
+        if (switchedOff(t)) return { path: null, block: { text: tr('rule.waypointHidden', { node: name(t), reason: hiddenText(t) }) } };
+        if (t.tier === 'WORMHOLE_EXIT' && !partnerOf(t)) return { path: null, block: { text: tr('rule.exitNeedsAnchor', { node: name(t) }) } };
         const seg = segmentPath(from, t, have);
-        if (!seg) return { path: null, block: { text: from ? `No legal way from ${name(from)} to ${name(t)}.` : `No legal way to reach ${name(t)}.` } };
+        if (!seg) return { path: null, block: { text: from ? tr('rule.noWayFrom', { from: name(from), node: name(t) }) : tr('rule.noWay', { node: name(t) }) } };
         for (const id of seg) { have.add(id); order.push(id); }
       }
       from = t;
@@ -415,8 +415,8 @@
   }
   // "Can't allocate X: reason", or, when the refusal is on the way there, which node and why.
   function refusalText(target, block) {
-    const where = block.node && block.node !== target ? `The way to ${effectiveType(target).name} passes ${effectiveType(block.node).name}: ` : '';
-    return where + block.text;
+    if (!block.node || block.node === target) return block.text;
+    return tr('rule.wayPasses', { target: effectiveType(target).name, node: effectiveType(block.node).name, reason: block.text });
   }
   function deallocate(n) {
     if (n.tier === 'WORMHOLE_EXIT') { const s = linkedSocketOf(n.id); if (s) { unlinkSocket(byId.get(s)); return; } }
@@ -695,27 +695,27 @@
     return s;
   }
   const blockText = (key, fallback, args) => fill(S[key] || fallback, args || {});
-  const nonPhaseText = () => blockText('node.requires.req_non_phase_hull', "Can't be allocated on phase ships.");
+  const nonPhaseText = () => blockText('node.requires.req_non_phase_hull', tr('rule.fallback.nonPhase'));
   // Effects that refuse some ships (each SkillEffect's blockAllocationReason). The extractor marks them with `blocks`;
   // tools/update.mjs flags any it marks that this table doesn't know.
   const EFFECT_BLOCKS = {
-    REMOVE_SHIELD: s => s.shield != null && !hasShields(s.shield) ? blockText('node.block.noShields', 'Ship has no shields.') : null,
+    REMOVE_SHIELD: s => s.shield != null && !hasShields(s.shield) ? blockText('node.block.noShields', tr('rule.fallback.noShields')) : null,
     SHIELD_UPKEEP_AT_LOW_SPEED_PERCENT: s => EFFECT_BLOCKS.REMOVE_SHIELD(s),
     DYNAMIC_GRID_ENERGY_WEAPON_BONUS_PERCENT: s => EFFECT_BLOCKS.REMOVE_SHIELD(s),
     CREATE_FRONT_SHIELD_IF_NONE: s => s.shield === 'PHASE' ? nonPhaseText() : null,
-    CONVERT_SHIELD_TO_FRONT: s => s.shield === 'FRONT' ? blockText('node.block.hasFrontShield', 'Ship already has front shields.') : s.shield === 'PHASE' ? nonPhaseText() : null,
-    CONVERT_SHIELD_TO_OMNI: s => s.shield === 'OMNI' ? blockText('node.block.hasOmniShield', 'Ship already has omni-directional shields.') : s.shield === 'PHASE' ? nonPhaseText() : null,
-    PHASE_ANCHOR_EMERGENCY_DIVE: s => s.phaseHull === false ? blockText('node.block.phaseHull', 'Requires a phase hull.') : null,
+    CONVERT_SHIELD_TO_FRONT: s => s.shield === 'FRONT' ? blockText('node.block.hasFrontShield', tr('rule.fallback.frontShield')) : s.shield === 'PHASE' ? nonPhaseText() : null,
+    CONVERT_SHIELD_TO_OMNI: s => s.shield === 'OMNI' ? blockText('node.block.hasOmniShield', tr('rule.fallback.omniShield')) : s.shield === 'PHASE' ? nonPhaseText() : null,
+    PHASE_ANCHOR_EMERGENCY_DIVE: s => s.phaseHull === false ? blockText('node.block.phaseHull', tr('rule.fallback.phaseHull')) : null,
     ARMOR_FLAT_FOR_LOW_BASE_ARMOR: s => {
       // LowBaseArmorBonus.fits: a non-phase hull with base armor at or under its hull size's cutoff.
       const args = D.effects.ARMOR_FLAT_FOR_LOW_BASE_ARMOR?.hullArgs?.[HULL_ENUM[state.hull]];
       const cutoff = args ? evalExpr(args.cutoff, 1) : NaN;
-      const why = blockText('node.block.lowBaseArmor', 'Requires a non-phase hull with low base armor.');
+      const why = blockText('node.block.lowBaseArmor', tr('rule.fallback.lowArmor'));
       if (s.phaseHull === true) return why;
-      if (state.ship.armor != null && !(state.ship.armor <= cutoff)) return `${why} (${fmt(cutoff)} or less on a ${hullLabel()}; this ship has ${fmt(state.ship.armor)})`;
+      if (state.ship.armor != null && !(state.ship.armor <= cutoff)) return tr('rule.lowArmorDetail', { reason: why, cutoff: fmt(cutoff), hull: hullLabel(), armor: fmt(state.ship.armor) });
       return null;
     },
-    REMOVE_ALL_FIGHTER_BAYS: () => state.ship.builtInWings === false ? blockText('node.block.builtInWingsOnly', 'Requires built-in strikecraft wings only.') : null,
+    REMOVE_ALL_FIGHTER_BAYS: () => state.ship.builtInWings === false ? blockText('node.block.builtInWingsOnly', tr('rule.fallback.builtInWings')) : null,
   };
   function hullRequirementUnmet(tag) {
     const sh = state.ship;
@@ -723,10 +723,11 @@
       : tag === 'req_non_phase_hull' ? sh.shield === 'PHASE'
       : tag === 'req_system_charges' ? sh.charges === false
       : tag === 'req_modules' ? sh.modules === false : false;
-    return unmet ? blockText('node.requires.' + tag, humanize(tag.slice(4)) + ' required.') : null;
+    return unmet ? blockText('node.requires.' + tag, tr('rule.fallback.requires', { requirement: humanize(tag.slice(4)) })) : null;
   }
   const HULL_SIZE_NAMES = { FRIGATE: tr('name.hull.frigate.plural'), DESTROYER: tr('name.hull.destroyer.plural'), CRUISER: tr('name.hull.cruiser.plural'), CAPITAL_SHIP: tr('name.hull.capital.plural') };
-  const listWords = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+  // "a, b and c"
+  const listWords = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(tr('common.listComma')) + tr('common.listAnd') + a[a.length - 1];
 
   // Why `n` (as `optionId`, for choice nodes) can't be allocated after the entries in `list`, or null.
   // Same order as NodeEligibility.check: locked, hull size, hull requirements, hull mods, other nodes, effects, logistics.
@@ -734,25 +735,26 @@
     const sh = state.ship;
     const e = entryFor(n, optionId);
     for (const t of [e.declared, e.effective]) {
-      if (sh.lockedTypes.has(t.id)) return { kind: 'locked', text: `Not unlocked yet: needs ${unlockText(t)} (Optional rules).` };
+      if (sh.lockedTypes.has(t.id)) return { kind: 'locked', text: tr('rule.notUnlocked', { unlock: unlockText(t) }) };
     }
     const gate = n.gates.find(g => sh.lockedGates.has(g));
-    if (gate) return { kind: 'locked', text: `Locked until ${gateText(gate).replace(/^./, c => c.toLowerCase())} (Optional rules).` };
+    // The mod's gate wording, lowercased to fit inside the sentence.
+    if (gate) return { kind: 'locked', text: tr('rule.lockedUntil', { gate: gateText(gate).replace(/^./, c => c.toLowerCase()) }) };
     const hull = HULL_ENUM[state.hull];
     for (const t of [e.declared, e.effective]) {
       const sizes = t.requiredHullSizes || [];
-      if (sizes.length && !sizes.includes(hull)) return { kind: 'hull', text: `Not on ${HULL_SIZE_NAMES[hull]}: only on ${listWords(sizes.map(x => HULL_SIZE_NAMES[x] || x))}.` };
+      if (sizes.length && !sizes.includes(hull)) return { kind: 'hull', text: tr('rule.hullSize', { hull: HULL_SIZE_NAMES[hull], hulls: listWords(sizes.map(x => HULL_SIZE_NAMES[x] || x)) }) };
     }
     const tags = new Set([...n.tags, ...(e.declared.tags || []), ...(optionId ? e.effective.tags || [] : [])]);
     for (const tag of tags) { const why = hullRequirementUnmet(tag); if (why) return { kind: 'ship', text: why }; }
     for (const t of [e.declared, e.effective]) {
       for (const h of typeRules(t).exclusiveAndOwn) {
-        if (shipHasHullMod(h)) return { kind: 'ship', text: blockText('node.block.hullModInstalled', 'Ship already has {hullmod} installed.', { hullmod: hullModName(h) }) };
+        if (shipHasHullMod(h)) return { kind: 'ship', text: blockText('node.block.hullModInstalled', textTemplate('rule.fallback.hullModInstalled', {}), { hullmod: hullModName(h) }) };
       }
     }
     for (const other of list) {
       if (other.node !== n && entriesExclusive(e, other)) {
-        return { kind: 'conflict', with: other.node, text: blockText('node.block.typeAllocated', 'Already have {node} allocated.', { node: other.effective.name }) };
+        return { kind: 'conflict', with: other.node, text: blockText('node.block.typeAllocated', textTemplate('rule.fallback.typeAllocated', {}), { node: other.effective.name }) };
       }
     }
     const shield = currentShield(list);
@@ -762,7 +764,7 @@
       if (why) return { kind: 'ship', text: why };
     }
     if (isLogistics(e.effective) && list.filter(x => isLogistics(x.effective)).length >= logisticsCap()) {
-      return { kind: 'logistics', text: `${blockText('node.block.logisticsCap', 'This ship is at its logistics node limit.')} (${logisticsCap()} per ship)` };
+      return { kind: 'logistics', text: tr('rule.logisticsDetail', { reason: blockText('node.block.logisticsCap', tr('rule.fallback.logisticsCap')), limit: logisticsCap() }) };
     }
     return null;
   }
@@ -919,8 +921,8 @@
   function subLimitProblem(def, socketId) {
     const others = [...state.subs].filter(([s]) => s !== socketId).map(([, e]) => SUBS.get(e.id)).filter(Boolean);
     const kindCap = D.subroutineKinds && D.subroutineKinds[def.kind] ? D.subroutineKinds[def.kind].perShip : null;
-    if (kindCap != null && others.filter(o => o.kind === def.kind).length >= kindCap) return `Only ${kindCap} ${humanize(def.kind).toLowerCase()} per ship.`;
-    if (def.socketLimit && others.filter(o => o.id === def.id).length >= def.socketLimit) return `Only ${def.socketLimit} per ship.`;
+    if (kindCap != null && others.filter(o => o.kind === def.kind).length >= kindCap) return tr('rule.subKindLimit', { count: kindCap, kind: humanize(def.kind).toLowerCase() });
+    if (def.socketLimit && others.filter(o => o.id === def.id).length >= def.socketLimit) return tr('rule.subLimit', { count: def.socketLimit });
     return null;
   }
   const affinityName = k => AFFINITY_NAMES[k] || humanize(k);
@@ -936,13 +938,13 @@
   }
   function unlockText(t) {
     const parts = (t.unlockConditions || []).map(c => {
-      if (c.type === 'blueprint') return `the ${hullModName(c.id || c.key)} blueprint`;
-      if (c.type === 'characterStat') return humanize(String(c.statId || c.key || 'a character stat').replace(/^has_/, ''));
-      if (c.type === 'memoryFlag') return humanize(String(c.key || 'a campaign flag').replace(/^\$/, '').replace(/([a-z])([A-Z])/g, '$1 $2'));
-      if (c.type === 'minShipLevel') return `ship level ${c.minLevel}`;
+      if (c.type === 'blueprint') return tr('rule.unlock.blueprint', { hullmod: hullModName(c.id || c.key) });
+      if (c.type === 'characterStat') return humanize(String(c.statId || c.key || tr('rule.unlock.characterStat')).replace(/^has_/, ''));
+      if (c.type === 'memoryFlag') return humanize(String(c.key || tr('rule.unlock.campaignFlag')).replace(/^\$/, '').replace(/([a-z])([A-Z])/g, '$1 $2'));
+      if (c.type === 'minShipLevel') return tr('rule.unlock.shipLevel', { level: c.minLevel });
       return humanize(String(c.type));
     });
-    return parts.length ? parts.join(' or ') : 'an unlock';
+    return parts.length ? parts.join(tr('common.listOr')) : tr('rule.unlock.any');
   }
 
   // ------------------------------------------------------------------ template export
