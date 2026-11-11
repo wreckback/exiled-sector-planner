@@ -4,12 +4,23 @@ Inside the planner folder or beside it. Check how the other work environment has
 
 # Now: text externalization (2026-11-10)
 
-Starts on a separate branch off `main`.
+On branch `text-overhaul` (off `main`).
 
 1. **Move all user-facing text into separate files.** Goal: editing a large amount of text, by hand or by script, shouldn't hurt. English only for now, translations possible later; bundles through `tools/` possible later; the page must keep running from `file://` (no `fetch`).
    - Design drafted (not built): `web/text/*.js` per area (pure data, one `key: 'string'` per line), loaded by `<script>` before `app.js`; `t(key, args)` with `{name}` placeholders (arguments escaped), the game's `<hl>`/`<good>`/`<bad>` markup inside strings, `.one`/`.other` plural variants, whole-sentence keys instead of concatenated fragments; `index.html` keeps only `data-t`, `data-t-title` and `data-t-placeholder` keys, filled by `applyText()`; the `#keys` shortcut list moves into the text files. Mod-derived text and node names stay in `planner-data.js`.
-   - Steps: inventory every literal (about 300 in `app.js`, 39 `toast(` calls, plus `index.html`); capture a baseline of tooltips, stat sheet, list view and dialogs through `serve.mjs` (not the user's tab) and require identical output after each migrated area; infrastructure; migrate `app.js` by area (label constants, tooltips, rule refusals, toasts and notices, panels and stat sheet, dialogs); migrate `index.html`; a check tool for missing, unused and mismatched keys; update `CLAUDE.md`, `TOOLS.md`, `README-TECHNICAL.md` and `CHANGELOG.md`.
-   - Undecided, ask the user: which task goes first, the key style (dotted keys by area was suggested), whether the check tool runs in `release.mjs`, whether to build `tools/text.mjs` (list, search, rename a key everywhere, find duplicates), and the branch name.
+   - Decided (2026-11-11):
+     - Keys are dotted, grouped by area (`tooltip.refused.hull`, `toast.template.saved`), like the mod's own strings.
+     - The check tool runs in `release.mjs`: it refuses to tag on missing keys or mismatched `{placeholders}`, and only warns about unused keys.
+     - `tools/text.mjs` (list, search, rename a key everywhere, find duplicates) waits until the migration is done.
+     - The inventory lives in `docs/text-inventory.md`, committed on the branch, and later steps tick items off it.
+   - Steps, one at a time: stop after each for the user's review, one commit per step (ask before committing).
+     1. Inventory every literal (about 300 in `app.js`, 39 `toast(` calls, plus `index.html`), grouped by area with suggested keys. No code changes.
+     2. Capture a baseline of tooltips, stat sheet, list view and dialogs through `serve.mjs` (not the user's tab); each migrated area must give identical output.
+     3. Infrastructure (`web/text/`, `t()`, `applyText()`), tried on one small area.
+     4. Migrate `app.js`, one area per step: label constants, tooltips, rule refusals, toasts and notices, panels and stat sheet, dialogs.
+     5. Migrate `index.html`.
+     6. The check tool for missing, unused and mismatched keys, hooked into `release.mjs`.
+     7. Update `CLAUDE.md`, `TOOLS.md`, `README-TECHNICAL.md` and `CHANGELOG.md`.
 
 # Next: follow-ups from the PR #1 review (`node-tools`)
 
