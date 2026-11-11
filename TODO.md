@@ -10,6 +10,15 @@ On branch `text-overhaul` (off `main`). Steps 1 to 7 are done (2026-11-11): ever
 2. **Merge `text-overhaul` into `main`** (after the review, or before it if the review takes long). `main` has had no commits since the branch started.
 3. **Later, not now:** `tools/text.mjs` (list, search, rename a key everywhere, find duplicates), once it's clear which commands would be used.
 
+# Now: test the text editor on the other machine (2026-11-11)
+
+The text editor (`node tools/serve.mjs --edit`, branch `text-editor`; `TOOLS.md`, Text tools) was built and tested on this machine only, in headless Edge. On the other work environment, in a real browser:
+
+1. Start `node tools/serve.mjs --edit` and open the page: the Text editor panel shows at the bottom left, with no errors in the browser console.
+2. Pick a text from `index.html` (a toolbar button) and a built one (a panel line or a tooltip), type, and check that the page changes as you type. Then Revert.
+3. Save a change, check with `git diff` that only that line (and its `// e.g.` line, if the wording left it behind) changed, then run `node tools/text-check.mjs`. Undo the change with `git checkout -- web/text`.
+4. Check that the page without `--edit`, and the release zip, show no editor.
+
 # Next: follow-ups from the PR #1 review (`node-tools`)
 
 From the code review of PR #1 (2026-11-09). Already fixed in `4fe0eaa`: `/dist/` in `.gitignore`, `update.mjs --commit` commits only `SyncFiles`, and `git()` allows 64 MB of output. The rest, with the suggested fix for each. Suggested order: 1 and 2 in one commit, then 3 and 6. After each, check that `extract.mjs` output is byte-identical apart from `generated` and that `update.mjs` gives the same report, on Windows and under WSL (item 2 is a Linux problem).
