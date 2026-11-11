@@ -3374,7 +3374,7 @@
   }
   function setTargetKeep(on) { targets.keep = on; targetsChanged(); }
 
-  const targetLabel = n => `${effectiveType(n).name}${n.volume !== 'core' ? ` (${volumeName(n.volume)})` : ''}`;
+  const targetLabel = n => (n.volume !== 'core' ? tr('target.label.volume', { node: effectiveType(n).name, volume: volumeName(n.volume) }) : effectiveType(n).name);
   const preferredOption = n => (isChoice(n) ? state.choice.get(n.id) || defaultOption(n) : null);
   const SHIELD_CHANGERS = new Set(['REMOVE_SHIELD', 'CREATE_FRONT_SHIELD_IF_NONE', 'CONVERT_SHIELD_TO_FRONT', 'CONVERT_SHIELD_TO_OMNI']);
 
@@ -3530,7 +3530,7 @@
   // { ok, text, add (node ids in allocation order), remove, options, total, exact } or { ok: false, text, ... }.
   function computePlan() {
     const fail = (text, extra) => ({ ok: false, text, add: [], remove: [], ...extra });
-    if (!state.root) return fail('Choose a root.');
+    if (!state.root) return fail(tr('common.chooseRoot'));
     const keep = targets.keep;
     const granted = subState().granted;
     const isGranted = id => granted.get(id)?.status === 'active';
@@ -3540,13 +3540,13 @@
     const notes = [];
     if (keep) {
       const bad = [...targets.forbid].filter(id => base.has(id));
-      if (bad.length) notes.push(`${bad.length} forbidden node${bad.length > 1 ? 's are' : ' is'} already in the build and stay${bad.length > 1 ? '' : 's'}. Untick "Keep current build" to plan without ${bad.length > 1 ? 'them' : 'it'}.`);
+      if (bad.length) notes.push(tr('target.forbiddenInBuild', { count: bad.length }));
     }
-    if (!targets.want.size) return { ok: true, text: 'Click nodes to mark them wanted.', add: [], remove: [], options: new Map(), notes };
+    if (!targets.want.size) return { ok: true, text: tr('target.markWanted'), add: [], remove: [], options: new Map(), notes };
     const wanted = [...targets.want].map(id => byId.get(id)).filter(n => n.id !== state.root && !base.has(n.id) && !isGranted(n.id));
     for (const n of wanted) {
-      if (switchedOff(n)) return fail(`${targetLabel(n)}: ${hiddenText(n)}`);
-      if (n.tier === 'WORMHOLE_EXIT' && !partnerOf(n)) return fail(`${targetLabel(n)} opens only through an anchor linked in a subroutine socket. Link one first.`);
+      if (switchedOff(n)) return fail(tr('target.hidden', { node: targetLabel(n), reason: hiddenText(n) }));
+      if (n.tier === 'WORMHOLE_EXIT' && !partnerOf(n)) return fail(tr('target.exitNeedsAnchor', { node: targetLabel(n) }));
     }
     // Nodes the rules refuse against the base, whatever else the plan adds.
     const refused = new Map();
@@ -3563,10 +3563,11 @@
         const u = g.units[g.unitOf.get(n.id)];
         if (!u.blocked) continue;
         const m = u.members.find(x => targets.forbid.has(x.id) || avoid.has(x.id) || refused.has(x.id));
-        const why = targets.forbid.has(m.id) ? 'you forbade it' : (refused.get(m.id) || avoid.get(m.id)).text;
-        return fail(m === n ? `${targetLabel(n)} can't be allocated: ${why}` : `${targetLabel(n)} takes ${targetLabel(m)} with it, and ${why.replace(/\.$/, '')}.`);
+        const why = targets.forbid.has(m.id) ? tr('target.youForbade') : (refused.get(m.id) || avoid.get(m.id)).text;
+        return fail(m === n ? tr('target.cantAllocate', { node: targetLabel(n), reason: why })
+          : tr('target.takesWith', { node: targetLabel(n), other: targetLabel(m), reason: why.replace(/\.$/, '') }));
       }
-      if (!T.length) return { ok: true, text: 'Every wanted node is already in the build.', add: [], remove: [], options: new Map(), notes };
+      if (!T.length) return { ok: true, text: tr('target.allIn'), add: [], remove: [], options: new Map(), notes };
       const exact = T.length <= TARGET_EXACT_MAX;
       const found = exact ? steinerExact(g, T) : steinerGreedy(g, T);
       if (!found) {
@@ -3579,12 +3580,12 @@
         const all = new Set([0]), q2 = [0];
         for (let i = 0; i < q2.length; i++) for (const b of open.out[q2[i]]) if (!all.has(b)) { all.add(b); q2.push(b); }
         if (!all.has(open.unitOf.get(lost.id))) {
-          return fail(lost.volume !== 'core' && !switchedOff(lost) ?`${targetLabel(lost)} is in a faction volume with no anchor linked to it. Link one to its exit in a subroutine socket first.`
-            : `${targetLabel(lost)} can't be reached from the root.`);
+          return fail(tr(lost.volume !== 'core' && !switchedOff(lost) ? 'target.noAnchor' : 'target.unreachable', { node: targetLabel(lost) }));
         }
-        const steered = [...avoid].map(([id, a]) => `${targetLabel(byId.get(id))} (${a.text.replace(/\.$/, '')})`);
-        return fail(`No legal way to reach ${targetLabel(lost)}: every way there passes a forbidden node or one the rules refuse` +
-          (steered.length ? `, here ${steered.slice(0, 2).join(' and ')}${steered.length > 2 ? ` and ${steered.length - 2} more` : ''}.` : '.'));
+        const steered = [...avoid].map(([id, a]) => tr('target.steeredItem', { node: targetLabel(byId.get(id)), reason: a.text.replace(/\.$/, '') }));
+        if (!steered.length) return fail(tr('target.noWay', { node: targetLabel(lost) }));
+        const named = steered.slice(0, 2).join(tr('common.listAnd'));
+        return fail(tr('target.noWayHere', { node: targetLabel(lost), steered: steered.length > 2 ? tr('target.steeredMore', { list: named, count: steered.length - 2 }) : named }));
       }
       const chosen = pruneTree(g, found, T);
       const order = planOrder(g, chosen);
@@ -3600,8 +3601,8 @@
           else if (p.block.with && added.has(p.block.with.id) && !targets.want.has(p.block.with.id)) culprit = p.block.with;
           else if (p.block.kind === 'logistics') culprit = list.find(e => mine(e) && isLogistics(e.effective))?.node || null;
           else if (p.block.kind === 'ship') culprit = [...list].reverse().find(e => mine(e) && typeEffectNames(e.effective).some(x => SHIELD_CHANGERS.has(x)))?.node || null;
-          if (culprit) avoid.set(culprit.id, { text: culprit === n ? p.block.text : `it can't be taken with ${targetLabel(n)}` });
-          else stop = `${targetLabel(n)} can't be allocated with the rest: ${p.block.text}`;
+          if (culprit) avoid.set(culprit.id, { text: culprit === n ? p.block.text : tr('target.cantTakeWith', { node: targetLabel(n) }) });
+          else stop = tr('target.cantWithRest', { node: targetLabel(n), reason: p.block.text });
           break;
         }
         options.set(n.id, p.option);
@@ -3613,10 +3614,10 @@
       const remove = keep ? [] : [...state.alloc].filter(id => !added.has(id));
       const total = (keep ? used() : 1) + add.length;
       const plan = { add, remove, options, total, exact: exact && !avoid.size, notes };
-      if (total > state.cap) return { ...plan, ok: false, text: `${total} nodes needed, ${total - state.cap} over the cap of ${state.cap}.` };
+      if (total > state.cap) return { ...plan, ok: false, text: tr('target.overCap', { total, over: total - state.cap, cap: state.cap }) };
       return { ...plan, ok: true, text: '' };
     }
-    return fail(`No legal plan found after steering around ${TARGET_RETRIES} refused nodes.`);
+    return fail(tr('target.retries', { count: TARGET_RETRIES }));
   }
   function applyPlan() {
     const p = currentPlan();
@@ -3645,14 +3646,16 @@
     tgt.btn.setAttribute('aria-pressed', String(targets.mode));
     if (!targets.mode) return;
     tgt.keep.checked = targets.keep;
-    tgt.counts.textContent = `${targets.want.size} wanted · ${targets.forbid.size} forbidden.`;
+    tgt.counts.textContent = tr('target.counts', { wanted: targets.want.size, forbidden: targets.forbid.size });
     const p = currentPlan();
     const gained = p.add.filter(id => !state.alloc.has(id)).length;
     let text;
-    if (!p.ok) text = `Not possible. ${p.text}`;
-    else if (!gained && !p.remove.length) text = p.text || 'Nothing to change.';
-    else text = `Plan: ${gained} more node${gained === 1 ? '' : 's'}${p.remove.length ? `, ${p.remove.length} removed` : ''}, ${p.total} of ${state.cap} in all. ` +
-      (p.exact ? 'That is the fewest possible.' : `It may not be the fewest${targets.want.size > TARGET_EXACT_MAX ? ` (over ${TARGET_EXACT_MAX} wanted nodes the search is approximate)` : ' (it had to steer around refused nodes)'}.`);
+    if (!p.ok) text = tr('target.notPossible', { reason: p.text });
+    else if (!gained && !p.remove.length) text = p.text || tr('toast.nothingToChange');
+    else {
+      text = tr(p.remove.length ? 'target.planRemoved' : 'target.plan', { count: gained, removed: p.remove.length, total: p.total, cap: state.cap }) + ' ' +
+        (p.exact ? tr('target.exact') : targets.want.size > TARGET_EXACT_MAX ? tr('target.approxMany', { max: TARGET_EXACT_MAX }) : tr('target.approxSteered'));
+    }
     if (p.notes && p.notes.length) text += ' ' + p.notes.join(' ');
     tgt.status.textContent = text;
     tgt.status.classList.toggle('bad', !p.ok);

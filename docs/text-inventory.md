@@ -15,7 +15,7 @@ Tick an area when its migration step is committed and its output matches the bas
 - [x] Top bar, summary panel and stat sheet (step 4e, `text/bar.js`, `text/panel.js`, `text/sheet.js`; the map's region labels in `names.js`). Also moved, missed by the scan: the Notables tab's "(unobtainable)", the Full Sheet button's hover text. The "Root Conduit" source label now comes from the mod data (the subroutine's own name, the same text). The Full Sheet's hull size uses `name.hull.*` instead of capitalising in code.
 - [x] Search, filter and list view (step 4f, `text/search.js`, `text/filter.js`, `text/list.js`). Also moved, missed by the scan: the Search tab's "Search (12)", the Build button's "Build (23)", the "allocated"/"integrated" row tags. The list's collapsed trees are still remembered by their place name (`esp.listCollapsed`), so renaming a place forgets that tree's collapsed state once.
 - [x] Pickers (step 4g, `text/picker.js`; "Cancel" is `common.cancel`; the socket picker's heading reuses `name.tier.socket`, the same text). Also moved, missed by the scan: the cache's "Remove from the cache" hover text and "Add a notable by name" placeholder.
-- [ ] Target mode
+- [x] Target mode (step 4h, `text/target.js`; "Nothing to change." reuses `toast.nothingToChange`). Also moved, missed by the scan: the hidden-volume plan failure ("{node}: {reason}") and the "(Volume)" after a node's name. The rule texts quoted mid-sentence still lose their final full stop in code.
 - [x] Ship rules and Optional rules (step 3, with their `index.html` parts: the Ship tab and the Optional rules dialog; `text/ship.js`, `text/optional.js`, shared words in `text/common.js`)
 - [ ] Templates
 - [ ] Mod assets
