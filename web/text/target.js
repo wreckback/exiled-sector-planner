@@ -6,6 +6,17 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     // e.g. Ballistic Mastery (Hegemony)
     "target.label.volume": "{node} ({volume})",
 
+    // The Targets bar.
+    "target.bar.label": "Target Mode",
+    "target.bar.heading": "Targets",
+    "target.bar.intro": "Clicking cycles a node between three modes: wanted - forbidden - normal. Right-click sets it to normal.",
+    "target.bar.keep": "Keep current build",
+    "target.bar.keepTitle": "On: add to the nodes you have. Off: reallocate from root.",
+    "target.bar.apply": "Allocate",
+    "target.bar.clear": "Clear marks",
+    "target.bar.done": "Done",
+    "target.bar.doneTitle": "Leave target mode (Esc or T). The marks are kept.",
+
     // e.g. 3 wanted · 1 forbidden.
     "target.counts": "{wanted} wanted · {forbidden} forbidden.",
 

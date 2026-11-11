@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Exiled Sector Planner</title>
+<title data-t="bar.pageTitle"></title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,77 +11,77 @@
 
 <header id="topbar">
   <div class="brand">
-    <span class="brand-title">Exiled Sector</span>
-    <span class="brand-sub">Skill Tree Planner</span>
+    <span class="brand-title" data-t="bar.brand"></span>
+    <span class="brand-sub" data-t="bar.brandSub"></span>
   </div>
 
   <div class="bar-group" id="root-group">
-    <span class="label">Root</span>
-    <span id="root-name" class="value muted">Choose a root</span>
+    <span class="label" data-t="bar.root"></span>
+    <span id="root-name" class="value muted" data-t="bar.chooseRoot"></span>
   </div>
 
-  <div class="bar-group" id="tpl-group" hidden title="Click to open Templates.">
-    <span class="label">Template</span>
+  <div class="bar-group" id="tpl-group" hidden data-t-title="bar.template.title">
+    <span class="label" data-t="bar.template"></span>
     <span id="tpl-current" class="value"></span>
-    <span id="tpl-edited" class="muted" hidden>(edited)</span>
+    <span id="tpl-edited" class="muted" hidden data-t="bar.template.edited"></span>
   </div>
 
   <div class="bar-group">
-    <span class="label">Nodes</span>
-    <span class="value"><span id="used">0</span> / <input id="cap" type="number" min="1" max="999" value="60" title="Node cap (mod default is 60)"></span>
+    <span class="label" data-t="bar.nodes"></span>
+    <span class="value"><span id="used">0</span> / <input id="cap" type="number" min="1" max="999" value="60" data-t-title="bar.cap.title"></span>
   </div>
 
   <div class="bar-group">
-    <label class="label" for="hull">Hull Size</label>
+    <label class="label" for="hull" data-t="bar.hull"></label>
     <select id="hull">
-      <option value="frigate">Frigate</option>
-      <option value="destroyer">Destroyer</option>
-      <option value="cruiser" selected>Cruiser</option>
-      <option value="capitalShip">Capital</option>
+      <option value="frigate" data-t="name.hull.frigate"></option>
+      <option value="destroyer" data-t="name.hull.destroyer"></option>
+      <option value="cruiser" selected data-t="name.hull.cruiser"></option>
+      <option value="capitalShip" data-t="name.hull.capital"></option>
     </select>
   </div>
 
   <div class="bar-group search">
-    <input id="search" type="search" placeholder="Search nodes…" autocomplete="off">
+    <input id="search" type="search" data-t-placeholder="bar.search.placeholder" autocomplete="off">
     <span id="search-count" class="muted"></span>
-    <button id="btn-themes" title="Filter nodes by the theme tags" aria-haspopup="true" aria-expanded="false" aria-pressed="false" aria-controls="theme-filter">Filter</button>
+    <button id="btn-themes" data-t-title="filter.button.title" aria-haspopup="true" aria-expanded="false" aria-pressed="false" aria-controls="theme-filter" data-t="filter.button"></button>
   </div>
 
   <div class="bar-group actions">
-    <button id="btn-view" title="List view of every non-affinity node (L)" aria-pressed="false" aria-controls="listview">List</button>
-    <button id="btn-fit">Center</button>
-    <button id="btn-undo" title="Undo, 0 steps stored (Ctrl+Z)">Undo</button>
-    <button id="btn-reset" title="Reset build">Reset</button>
-    <button id="btn-targets" title="Mark nodes wanted or forbidden, then calculate the most efficient path (T)" aria-pressed="false" aria-controls="targets">Target Mode</button>
-    <button id="btn-code" class="primary" title="Copy the current template into clipboard. Load with Templates → Load code">Copy code</button>
-    <button id="btn-ship" aria-controls="panel-ship">Ship rules</button>
-    <button id="btn-story" aria-haspopup="dialog" aria-controls="story">Optional rules</button>
-    <button id="btn-export" title="Import and export templates" aria-haspopup="dialog" aria-controls="export">Templates</button>
-    <button id="btn-checkfile" title="Check the linked templates file for changes the game made (also reconnects it after a browser restart)" hidden>Check file</button>
-    <button id="btn-art" aria-haspopup="dialog" aria-controls="art">Show mod assets</button>
-    <button id="btn-panel" title="Show or hide summary (S)">Summary</button>
-    <button id="btn-theme">Theme: Dark</button>
-    <button id="btn-keys" aria-haspopup="dialog" aria-controls="keys">Shortcuts</button>
+    <button id="btn-view" data-t-title="list.view.listTitle" aria-pressed="false" aria-controls="listview" data-t="list.view.list"></button>
+    <button id="btn-fit" data-t="bar.center"></button>
+    <button id="btn-undo" data-t="bar.undoButton"></button>
+    <button id="btn-reset" data-t-title="bar.reset.title" data-t="bar.reset"></button>
+    <button id="btn-targets" data-t-title="bar.targets.title" aria-pressed="false" aria-controls="targets" data-t="bar.targets"></button>
+    <button id="btn-code" class="primary" data-t-title="bar.copyCode.title" data-t="bar.copyCode"></button>
+    <button id="btn-ship" aria-controls="panel-ship" data-t="bar.shipRules"></button>
+    <button id="btn-story" aria-haspopup="dialog" aria-controls="story" data-t="bar.optionalRules"></button>
+    <button id="btn-export" data-t-title="bar.templates.title" aria-haspopup="dialog" aria-controls="export" data-t="bar.templates"></button>
+    <button id="btn-checkfile" data-t-title="bar.checkFile.title" hidden data-t="bar.checkFile"></button>
+    <button id="btn-art" aria-haspopup="dialog" aria-controls="art" data-t="assets.button.show"></button>
+    <button id="btn-panel" data-t-title="bar.summary.title" data-t="bar.summary"></button>
+    <button id="btn-theme"></button>
+    <button id="btn-keys" aria-haspopup="dialog" aria-controls="keys" data-t="bar.shortcuts"></button>
   </div>
 </header>
 
 <aside id="panel">
   <div class="panel-head">
-    <h2>Build summary</h2>
+    <h2 data-t="panel.heading"></h2>
     <span id="panel-sub" class="muted"></span>
   </div>
   <div id="affinity"></div>
   <div id="aff-mix" hidden>
     <div class="aff-mix-row">
-      <span><span class="muted">Affinity nodes:</span> <b id="aff-count">0</b></span>
-      <span class="aff-all"><span class="muted">All to</span>
-        <button data-all="low_tech_affinity" title="Set every allocated affinity node to Low Tech">Low</button><button data-all="midline_affinity" title="Set every allocated affinity node to Midline">Mid</button><button data-all="high_tech_affinity" title="Set every allocated affinity node to High Tech">High</button></span>
+      <span><span class="muted" data-t="panel.affMix.count"></span> <b id="aff-count">0</b></span>
+      <span class="aff-all"><span class="muted" data-t="panel.affMix.allTo"></span>
+        <button data-all="low_tech_affinity" data-t-title="panel.affMix.lowTitle" data-t="panel.affMix.low"></button><button data-all="midline_affinity" data-t-title="panel.affMix.midTitle" data-t="panel.affMix.mid"></button><button data-all="high_tech_affinity" data-t-title="panel.affMix.highTitle" data-t="panel.affMix.high"></button></span>
     </div>
     <div class="aff-mix-row">
-      <label>Low <input data-mix="low_tech_affinity" type="number" min="0" step="1"></label>
-      <label>Mid <input data-mix="midline_affinity" type="number" min="0" step="1"></label>
-      <label>High <input data-mix="high_tech_affinity" type="number" min="0" step="1"></label>
-      <button id="aff-apply" title="Change affinity nodes to this split (Enter)">Apply</button>
+      <label><span data-t="panel.affMix.low"></span> <input data-mix="low_tech_affinity" type="number" min="0" step="1"></label>
+      <label><span data-t="panel.affMix.mid"></span> <input data-mix="midline_affinity" type="number" min="0" step="1"></label>
+      <label><span data-t="panel.affMix.high"></span> <input data-mix="high_tech_affinity" type="number" min="0" step="1"></label>
+      <button id="aff-apply" data-t-title="panel.affMix.applyTitle" data-t="panel.affMix.apply"></button>
     </div>
     <div id="aff-note" class="muted"></div>
   </div>
@@ -89,23 +89,23 @@
     <div class="aff-mix-row">
       <span id="integ-summary"></span>
       <span class="aff-all">
-        <button id="integ-all">Integrate all nodes</button><button id="integ-none">Remove all integrations</button></span>
+        <button id="integ-all" data-t="panel.integ.all"></button><button id="integ-none" data-t="panel.integ.none"></button></span>
     </div>
     <div class="aff-mix-row">
-      <label title="See stats as if every allocated node were integrated. No changes to the build"><input id="integ-preview" type="checkbox"> Preview all integrated</label>
-      <label title="On: a removed node stays integrated (SP increase). Off: removing a node removes its integration"><input id="integ-keep" type="checkbox"> Keep when removed</label>
+      <label data-t-title="panel.integ.previewTitle"><input id="integ-preview" type="checkbox"> <span data-t="panel.integ.previewLabel"></span></label>
+      <label data-t-title="panel.integ.keepTitle"><input id="integ-keep" type="checkbox"> <span data-t="panel.integ.keepLabel"></span></label>
     </div>
     <div class="aff-mix-row">
-      <label title="How tooltips and the list view show a node's integrated effects next to its normal ones">Integrated effects <select id="integ-view"><option value="inline">Inline</option><option value="columns">Side by side</option></select></label>
+      <label data-t-title="panel.integ.viewTitle"><span data-t="panel.integ.viewLabel"></span> <select id="integ-view"><option value="inline" data-t="panel.integ.viewInline"></option><option value="columns" data-t="panel.integ.viewColumns"></option></select></label>
     </div>
     <div id="integ-note" class="muted"></div>
   </div>
   <div class="panel-tabs">
-    <button data-tab="stats" class="active">Effects</button>
-    <button data-tab="sheet" title="The effects in the in-game stat sheet's sections, with a Full Sheet view">Stats</button>
-    <button data-tab="nodes">Notables &amp; keystones</button>
-    <button data-tab="ship" id="tab-ship">Ship</button>
-    <button data-tab="search" id="tab-search" hidden>Search</button>
+    <button data-tab="stats" class="active" data-t="panel.tab.stats"></button>
+    <button data-tab="sheet" data-t-title="panel.tab.sheet.title" data-t="panel.tab.sheet"></button>
+    <button data-tab="nodes" data-t="panel.tab.nodes"></button>
+    <button data-tab="ship" id="tab-ship" data-t="panel.tab.ship"></button>
+    <button data-tab="search" id="tab-search" hidden data-t="panel.tab.search"></button>
   </div>
   <div id="panel-body"></div>
   <div id="panel-ship" hidden>
@@ -153,51 +153,51 @@
 </aside>
 
 <div id="banner" hidden></div>
-<div id="targets" role="region" aria-label="Target Mode" hidden>
-  <div><b>Targets</b> <span class="muted">Clicking cycles a node between three modes: wanted - forbidden - normal. Right-click sets it to normal.</span></div>
+<div id="targets" role="region" data-t-aria-label="target.bar.label" hidden>
+  <div><b data-t="target.bar.heading"></b> <span class="muted" data-t="target.bar.intro"></span></div>
   <div><span id="targets-counts"></span> <span id="targets-status" role="status"></span></div>
   <div class="export-actions">
-    <label title="On: add to the nodes you have. Off: reallocate from root."><input id="targets-keep" type="checkbox" checked> Keep current build</label>
-    <button id="targets-apply" class="primary">Allocate</button>
-    <button id="targets-clear">Clear marks</button>
-    <button id="targets-done" title="Leave target mode (Esc or T). The marks are kept.">Done</button>
+    <label data-t-title="target.bar.keepTitle"><input id="targets-keep" type="checkbox" checked> <span data-t="target.bar.keep"></span></label>
+    <button id="targets-apply" class="primary" data-t="target.bar.apply"></button>
+    <button id="targets-clear" data-t="target.bar.clear"></button>
+    <button id="targets-done" data-t-title="target.bar.doneTitle" data-t="target.bar.done"></button>
   </div>
 </div>
 <div id="file-notice" role="alertdialog" aria-labelledby="file-notice-msg" hidden>
   <p id="file-notice-msg"></p>
   <div class="export-actions">
-    <button id="fn-load" class="primary">Load the new version</button>
-    <button id="fn-open">Show templates</button>
-    <button id="fn-dismiss">Dismiss</button>
+    <button id="fn-load" class="primary" data-t="templates.notice.load"></button>
+    <button id="fn-open" data-t="templates.notice.open"></button>
+    <button id="fn-dismiss" data-t="templates.notice.dismiss"></button>
   </div>
 </div>
-<section id="listview" aria-label="Node list" hidden>
+<section id="listview" data-t-aria-label="list.label" hidden>
   <div class="lv-bar">
-    <span class="lv-modes" role="group" aria-label="Which list">
-      <button type="button" data-mode="all" aria-pressed="true" title="Every node except affinity nodes">All nodes</button>
-      <button type="button" data-mode="build" aria-pressed="false" title="The nodes allocated in the current build, with affinity nodes counted per tech">Build</button>
+    <span class="lv-modes" role="group" data-t-aria-label="list.modes.label">
+      <button type="button" data-mode="all" aria-pressed="true" data-t-title="list.mode.allTitle" data-t="list.mode.all"></button>
+      <button type="button" data-mode="build" aria-pressed="false" data-t-title="list.mode.buildTitle"></button>
     </span>
     <span id="listview-count" class="muted"></span>
     <span id="listview-hint" class="muted lv-hint"></span>
-    <label>Sort <select id="listview-sort">
-      <option value="name">Name (A to Z)</option>
-      <option value="tree">Skill tree</option>
-      <option value="order">Order taken</option>
+    <label><span data-t="list.sort"></span> <select id="listview-sort">
+      <option value="name" data-t="list.sort.name"></option>
+      <option value="tree" data-t="list.sort.tree"></option>
+      <option value="order" data-t="list.sort.order"></option>
     </select></label>
     <span id="listview-groups" class="lv-groups" hidden>
-      <button id="lv-collapse-all">Collapse all</button>
-      <button id="lv-expand-all">Expand all</button>
+      <button id="lv-collapse-all" data-t="list.collapseAll"></button>
+      <button id="lv-expand-all" data-t="list.expandAll"></button>
     </span>
   </div>
   <div id="listview-body"></div>
 </section>
-<div id="theme-filter" role="group" aria-label="Filter" hidden></div>
+<div id="theme-filter" role="group" data-t-aria-label="filter.heading" hidden></div>
 <div id="statsheet" role="dialog" aria-modal="true" aria-labelledby="statsheet-title" hidden>
   <div class="gs-bar">
-    <h2 id="statsheet-title">Stats</h2>
+    <h2 id="statsheet-title" data-t="sheet.title"></h2>
     <span id="statsheet-sub" class="gs-sub"></span>
-    <button id="statsheet-side" title="Back to the Stats tab in the summary panel">Side Panel</button>
-    <button id="statsheet-close" title="Close (Esc)">Close</button>
+    <button id="statsheet-side" data-t-title="sheet.sideTitle" data-t="sheet.side"></button>
+    <button id="statsheet-close" data-t-title="common.closeEsc" data-t="common.close"></button>
   </div>
   <div id="statsheet-body" class="gs gs-full"></div>
 </div>
@@ -208,44 +208,44 @@
 
 <div id="export" role="dialog" aria-modal="true" aria-labelledby="export-title" hidden>
   <div class="keys-head">
-    <h2 id="export-title">Templates</h2>
-    <button id="export-close" title="Close (Esc)">Close</button>
+    <h2 id="export-title" data-t="templates.title"></h2>
+    <button id="export-close" data-t-title="common.closeEsc" data-t="common.close"></button>
   </div>
   <div class="keys-body">
-    <p>The game keeps skill tree templates for every save in one file, <code>exiledSector_skillTreeTemplates.json.data</code>, in the <code>saves/common</code> folder of your Starsector directory. It re-reads that file whenever the skill tree opens, so changes show up while the game is running.</p>
+    <p data-t-html="templates.intro"></p>
 
-    <h3>Templates file</h3>
+    <h3 data-t="templates.fileHeading"></h3>
     <p id="tf-status"></p>
     <div class="export-actions">
-      <button id="tf-link" class="primary">Link templates file…</button>
-      <button id="tf-create" hidden title="Make an empty templates file in the planner's savedTemplates folder and link it">Create templates file…</button>
-      <button id="tf-reconnect" hidden>Reconnect</button>
-      <button id="tf-reload" hidden>Reload</button>
-      <button id="tf-forget" hidden>Forget</button>
+      <button id="tf-link" class="primary" data-t="templates.file.link"></button>
+      <button id="tf-create" hidden data-t-title="templates.createTitle" data-t="templates.create"></button>
+      <button id="tf-reconnect" hidden data-t="common.reconnect"></button>
+      <button id="tf-reload" hidden data-t="templates.reload"></button>
+      <button id="tf-forget" hidden data-t="common.forget"></button>
     </div>
     <p id="tf-note" class="muted"></p>
     <div id="tf-watch-row">
-      <p><label for="tf-watch-mode">Detect changes from the game:</label>
+      <p><label for="tf-watch-mode" data-t="templates.watch.label"></label>
         <select id="tf-watch-mode">
-          <option value="observe">Instantly (file observer)</option>
-          <option value="poll">Every few seconds</option>
-          <option value="off">Manually</option>
+          <option value="observe" data-t="templates.watch.observe"></option>
+          <option value="poll" data-t="templates.watch.poll"></option>
+          <option value="off" data-t="templates.watch.manual"></option>
         </select></p>
-      <p id="tf-watch-secs"><label for="tf-watch">Check every</label> <input id="tf-watch" type="number" min="1" max="600" step="1" value="2"> seconds</p>
+      <p id="tf-watch-secs"><label for="tf-watch" data-t="templates.watch.every"></label> <input id="tf-watch" type="number" min="1" max="600" step="1" value="2"> <span data-t="templates.watch.seconds"></span></p>
       <p id="tf-watch-note"></p>
       <p id="tf-watch-limits" class="muted"></p>
     </div>
 
-    <h3>Import</h3>
-    <div id="tf-list"><p class="muted">Link the file to see its templates.</p></div>
+    <h3 data-t="templates.importHeading"></h3>
+    <div id="tf-list"><p class="muted" data-t="templates.list.link"></p></div>
 
-    <h3>Export this build</h3>
-    <p><label for="tpl-name">Template name</label><br>
+    <h3 data-t="templates.exportHeading"></h3>
+    <p><label for="tpl-name" data-t="templates.nameLabel"></label><br>
       <input id="tpl-name" type="text" maxlength="32" autocomplete="off" style="width:100%"></p>
     <p id="tpl-summary" class="muted"></p>
 
     <div class="export-actions">
-      <button id="tpl-save" class="primary">Save into linked file</button>
+      <button id="tpl-save" class="primary" data-t="templates.saveLinked"></button>
     </div>
     <p id="tpl-save-note" class="muted"></p>
 
@@ -255,29 +255,29 @@
         <button id="tpl-keep" class="primary"></button>
         <button id="tpl-change"></button>
       </div>
-      <p><label for="tpl-newname">Or save as a new template named</label><br>
+      <p><label for="tpl-newname" data-t="templates.conflict.newNameLabel"></label><br>
         <input id="tpl-newname" type="text" maxlength="32" autocomplete="off" style="width:100%"></p>
       <div class="export-actions">
-        <button id="tpl-asnew">Save as new template</button>
-        <button id="tpl-cancel">Cancel</button>
+        <button id="tpl-asnew" data-t="templates.conflict.asNew"></button>
+        <button id="tpl-cancel" data-t="common.cancel"></button>
       </div>
     </div>
 
-    <h3>Share as code</h3>
-    <p class="muted">A code holds one template as text. Loading a code works like loading a template from a file; save it into the templates file afterwards to use it in game.</p>
+    <h3 data-t="templates.codeHeading"></h3>
+    <p class="muted" data-t="templates.codeIntro"></p>
     <div class="export-actions">
-      <button id="code-copy">Copy code for current build</button>
+      <button id="code-copy" data-t="templates.code.copyButton"></button>
     </div>
-    <p><label for="code-box">Template code</label><br>
-      <textarea id="code-box" rows="3" spellcheck="false" autocomplete="off" placeholder="Paste code here (starts with ES1.)"></textarea></p>
+    <p><label for="code-box" data-t="templates.code.boxLabel"></label><br>
+      <textarea id="code-box" rows="3" spellcheck="false" autocomplete="off" data-t-placeholder="templates.code.placeholder"></textarea></p>
     <div class="export-actions">
-      <button id="code-load">Load code</button>
+      <button id="code-load" data-t="templates.code.loadButton"></button>
     </div>
     <p id="code-status" role="status"></p>
 
-    <h3>Other ways to export</h3>
+    <h3 data-t="templates.otherHeading"></h3>
     <div class="export-actions">
-      <button id="tpl-new">Download as a new file</button>
+      <button id="tpl-new" data-t="templates.download"></button>
     </div>
     <input id="tpl-file" type="file" accept=".data,.json,application/json" hidden>
     <p id="tpl-status" role="status"></p>
@@ -286,18 +286,18 @@
 
 <div id="art" role="dialog" aria-modal="true" aria-labelledby="art-title" hidden>
   <div class="keys-head">
-    <h2 id="art-title">Mod assets</h2>
-    <button id="art-close" title="Close (Esc)">Close</button>
+    <h2 id="art-title" data-t="assets.title"></h2>
+    <button id="art-close" data-t-title="common.closeEsc" data-t="common.close"></button>
   </div>
   <div class="keys-body">
-    <p>None of Exiled Sector's assets are included in this planner. To view the assets in the planner, set the mod folder's path.</p>
+    <p data-t="assets.intro"></p>
 
-    <h3>Mod folder</h3>
+    <h3 data-t="assets.folderHeading"></h3>
     <p id="art-status"></p>
     <div class="export-actions">
-      <button id="art-choose" class="primary">Choose mod folder…</button>
-      <button id="art-reconnect" hidden>Reconnect</button>
-      <button id="art-forget" hidden>Forget</button>
+      <button id="art-choose" class="primary" data-t="assets.choose"></button>
+      <button id="art-reconnect" hidden data-t="common.reconnect"></button>
+      <button id="art-forget" hidden data-t="common.forget"></button>
     </div>
     <p id="art-note"></p>
     <p id="art-browser" class="muted"></p>
@@ -352,65 +352,62 @@
 
 <div id="keys" role="dialog" aria-modal="true" aria-labelledby="keys-title" hidden>
   <div class="keys-head">
-    <h2 id="keys-title">Shortcuts</h2>
-    <button id="keys-close" title="Close (Esc)">Close</button>
+    <h2 id="keys-title" data-t="keys.title"></h2>
+    <button id="keys-close" data-t-title="common.closeEsc" data-t="common.close"></button>
   </div>
   <div class="keys-body">
-    <h3>Keyboard</h3>
+    <h3 data-t="keys.keyboard"></h3>
     <table>
-      <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd></td><td>Pan (hold to keep moving)</td></tr>
-      <tr><td><kbd>Page Up</kbd></td><td>Zoom in (hold to keep zooming)</td></tr>
-      <tr><td><kbd>Page Down</kbd></td><td>Zoom out (hold to keep zooming)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> <span class="muted">(<kbd>Cmd</kbd>+<kbd>Z</kbd> on Mac)</span></td><td>Undo the last change</td></tr>
-      <tr><td><kbd>Home</kbd></td><td>Re-center on the core tree</td></tr>
-      <tr><td><kbd>S</kbd></td><td>Show or hide the summary panel</td></tr>
-      <tr><td><kbd>T</kbd></td><td>Toggle target mode on/off</td></tr>
-      <tr><td><kbd>L</kbd></td><td>Switch between the map and the list view</td></tr>
-      <tr><td><kbd>I</kbd></td><td>Integrate / Remove Integration</td></tr>
-      <tr><td><kbd>/</kbd></td><td>Jump to the search box</td></tr>
-      <tr><td><kbd>?</kbd></td><td>Show or hide this list</td></tr>
-      <tr><td><kbd>Esc</kbd></td><td>Close this list, the Filter list, the full stat sheet or the option/anchor picker, clear waypoints, or leave target mode</td></tr>
+      <tr><td data-t-html="keys.pan.keys"></td><td data-t-html="keys.pan"></td></tr>
+      <tr><td data-t-html="keys.zoomIn.keys"></td><td data-t-html="keys.zoomIn"></td></tr>
+      <tr><td data-t-html="keys.zoomOut.keys"></td><td data-t-html="keys.zoomOut"></td></tr>
+      <tr><td data-t-html="keys.undo.keys"></td><td data-t-html="keys.undo"></td></tr>
+      <tr><td data-t-html="keys.home.keys"></td><td data-t-html="keys.home"></td></tr>
+      <tr><td data-t-html="keys.panel.keys"></td><td data-t-html="keys.panel"></td></tr>
+      <tr><td data-t-html="keys.targets.keys"></td><td data-t-html="keys.targets"></td></tr>
+      <tr><td data-t-html="keys.list.keys"></td><td data-t-html="keys.list"></td></tr>
+      <tr><td data-t-html="keys.integrate.keys"></td><td data-t-html="keys.integrate"></td></tr>
+      <tr><td data-t-html="keys.search.keys"></td><td data-t-html="keys.search"></td></tr>
+      <tr><td data-t-html="keys.help.keys"></td><td data-t-html="keys.help"></td></tr>
+      <tr><td data-t-html="keys.escape.keys"></td><td data-t-html="keys.escape"></td></tr>
     </table>
-    <p class="muted">Keys don't work while you're typing in the search, cap or hull fields.</p>
+    <p class="muted" data-t="keys.typingNote"></p>
 
-    <h3>In the search box</h3>
+    <h3 data-t="keys.searchBox"></h3>
     <table>
-      <tr><td><kbd>Esc</kbd></td><td>Clear the search and exit</td></tr>
-    </table>
-
-    <h3>Mouse</h3>
-    <table>
-      <tr><td>Left-click a node</td><td>Allocate it, mapping the shortest path</td></tr>
-      <tr><td>Left-click an allocated affinity node or socket</td><td>Open its picker (switch option, change anchor)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+click an affinity or other choice node <span class="muted">(<kbd>Cmd</kbd>+click on Mac)</span></td><td>Allocate all nodes up to that path with the previously chosen option</td></tr>
-      <tr><td><kbd>Shift</kbd>+click a node</td><td>Add it as the next waypoint, or drop it if it already is one. The next node allocation then goes through the waypoints in order (the shortest legal path from each waypoint to the next). Can force a longer, specific route. <kbd>Esc</kbd> clears waypoints</td></tr>
-      <tr><td><kbd>Alt</kbd>+click an allocated notable or keystone <span class="muted">(<kbd>Option</kbd>+click on Mac)</span></td><td>Integrate / Remove Integration. Works in summary and list view</td></tr>
-      <tr><td>Right-click an allocated node</td><td>Remove node</td></tr>
-      <tr><td>Right-click your starting root</td><td>Reset build</td></tr>
-      <tr><td>Click a wormhole or linked wormhole exit</td><td>Menu: jump to the other end, or allocate/remove</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+click a wormhole, linked socket or linked exit <span class="muted">(<kbd>Cmd</kbd>+click on Mac)</span></td><td>Jump to the linked wormhole</td></tr>
-      <tr><td>Click a tree's name (when zoomed out)</td><td>Zoom into that tree</td></tr>
-      <tr><td>In target mode: left-click a node</td><td>Cycle between Desired-Forbidden-Clear (the root cannot be targeted)</td></tr>
-      <tr><td>In target mode: right-click a node</td><td>Clear its mark</td></tr>
-      <tr><td>Drag</td><td>Pan</td></tr>
-      <tr><td>Scroll wheel</td><td>Zoom toward the cursor</td></tr>
+      <tr><td data-t-html="keys.searchEscape.keys"></td><td data-t-html="keys.searchEscape"></td></tr>
     </table>
 
-    <h3>Touch</h3>
+    <h3 data-t="keys.mouse"></h3>
     <table>
-      <tr><td>Tap a node</td><td>Show its tooltip</td></tr>
-      <tr><td>Tap the same node again</td><td>Act on it (left-click)</td></tr>
-      <tr><td>Tap your starting root twice</td><td>Reset build</td></tr>
-      <tr><td>Drag</td><td>Pan</td></tr>
-      <tr><td>Pinch</td><td>Zoom</td></tr>
+      <tr><td data-t-html="keys.click.keys"></td><td data-t-html="keys.click"></td></tr>
+      <tr><td data-t-html="keys.clickChoice.keys"></td><td data-t-html="keys.clickChoice"></td></tr>
+      <tr><td data-t-html="keys.ctrlChoice.keys"></td><td data-t-html="keys.ctrlChoice"></td></tr>
+      <tr><td data-t-html="keys.waypoint.keys"></td><td data-t-html="keys.waypoint"></td></tr>
+      <tr><td data-t-html="keys.altIntegrate.keys"></td><td data-t-html="keys.altIntegrate"></td></tr>
+      <tr><td data-t-html="keys.rightClick.keys"></td><td data-t-html="keys.rightClick"></td></tr>
+      <tr><td data-t-html="keys.rightRoot.keys"></td><td data-t-html="keys.rightRoot"></td></tr>
+      <tr><td data-t-html="keys.wormhole.keys"></td><td data-t-html="keys.wormhole"></td></tr>
+      <tr><td data-t-html="keys.ctrlJump.keys"></td><td data-t-html="keys.ctrlJump"></td></tr>
+      <tr><td data-t-html="keys.treeName.keys"></td><td data-t-html="keys.treeName"></td></tr>
+      <tr><td data-t-html="keys.targetClick.keys"></td><td data-t-html="keys.targetClick"></td></tr>
+      <tr><td data-t-html="keys.targetRight.keys"></td><td data-t-html="keys.targetRight"></td></tr>
+      <tr><td data-t-html="keys.drag.keys"></td><td data-t-html="keys.drag"></td></tr>
+      <tr><td data-t-html="keys.wheel.keys"></td><td data-t-html="keys.wheel"></td></tr>
+    </table>
+
+    <h3 data-t="keys.touch"></h3>
+    <table>
+      <tr><td data-t-html="keys.tap.keys"></td><td data-t-html="keys.tap"></td></tr>
+      <tr><td data-t-html="keys.tapAgain.keys"></td><td data-t-html="keys.tapAgain"></td></tr>
+      <tr><td data-t-html="keys.tapRoot.keys"></td><td data-t-html="keys.tapRoot"></td></tr>
+      <tr><td data-t-html="keys.touchDrag.keys"></td><td data-t-html="keys.touchDrag"></td></tr>
+      <tr><td data-t-html="keys.pinch.keys"></td><td data-t-html="keys.pinch"></td></tr>
     </table>
   </div>
 </div>
 
-<div id="help">
-  <b>Click</b> allocate · <b>Shift+click</b> set waypoint · <b>Right-click</b> remove · <b>Alt+click</b>/<b>I</b> integrate · <b>T</b> target mode · <b>L</b> list view ·
-  <b>Drag</b>/<b>arrows</b> pan · <b>Wheel</b>/<b>PgUp</b>/<b>PgDn</b> zoom · <b>?</b> all shortcuts
-</div>
+<div id="help" data-t-html="bar.help"></div>
 
 <script src="version.js"></script>
 <script src="data/planner-data.js"></script>
@@ -432,6 +429,7 @@
 <script src="text/assets.js"></script>
 <script src="text/ship.js"></script>
 <script src="text/optional.js"></script>
+<script src="text/keys.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

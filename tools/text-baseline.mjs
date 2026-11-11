@@ -168,7 +168,9 @@ const sections = (text) => {
 // What moving text into text/*.js may change without changing what's shown: index.html's data-t* attributes,
 // <span data-t> holders around text next to a form field, and the order of a tag's attributes (applyText sets title
 // and placeholder after the others). Both sides are compared without them.
-// Also the footer's short planner version, which changes with every commit.
+// Also the footer's short planner version, which changes with every commit, and line breaks inside text that only
+// index.html's source layout put there (a line break between text and a tag reads as a space, or as nothing before a
+// closing tag), which a text file's one-line string doesn't have.
 function normalize(text) {
     return text
         .replace(/(Planner )v\d[^<"]*/g, '$1<planner-version>')
@@ -178,6 +180,10 @@ function normalize(text) {
         .replace(/<span data-t="[^"]*">([^<]*)<\/span>\n</g, '$1<')
         .replace(/<span data-t="[^"]*">([^<]*)<\/span>/g, '$1')
         .replace(/ data-t(?:-[a-z-]+)?="[^"]*"/g, '')
+        // Source line breaks inside text (after the holders are gone, so their own breaks aren't mistaken for these).
+        .replace(/[ \t]*\n[ \t]*/g, '\n')
+        .replace(/([^>\s])\n(?=<\/)/g, '$1')
+        .replace(/([^>\s])\n(?=<)/g, '$1 ')
         .replace(/<([a-zA-Z][\w-]*)((?:\s+[^\s=>/]+(?:="[^"]*")?)+)\s*>/g, (_, tag, attrs) => {
             const list = [...attrs.matchAll(/\s+([^\s=>/]+)(?:="([^"]*)")?/g)].map((m) => m[0].trim());
             return `<${tag} ${list.sort().join(' ')}>`;

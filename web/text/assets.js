@@ -10,6 +10,11 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     // e.g. Allow the planner to read the mod folder "ExiledSector" again, to show the mod's assets
     "assets.button.reconnectTitle": "Allow the planner to read the mod folder \"{folder}\" again, to show the mod's assets",
 
+    // The dialog.
+    "assets.title": "Mod assets",
+    "assets.intro": "None of Exiled Sector's assets are included in this planner. To view the assets in the planner, set the mod folder's path.",
+    "assets.folderHeading": "Mod folder",
+
     // The dialog's status line.
     "assets.status.reading": "Reading the assets…",
     // ({count} is how many of the planner's images the folder has.)

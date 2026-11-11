@@ -2,17 +2,40 @@
 // rule problems and the footer. (How these files work: see common.js. <muted>…</muted> greys, <builtIn>…</builtIn> is
 // the story point green.)
 window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
+    "panel.heading": "Build summary",
     // Next to "Build summary".
     // e.g. 23 of 60 nodes
     "panel.nodesUsed": "{used} of {cap} nodes",
     // The affinity tiles. {affinity} is Low Tech, Midline or High Tech (names.js).
     // e.g. High Tech affinity
     "panel.affinityTile": "{affinity} affinity",
+    // The affinity nodes block: set them all to one tech, or to a split of the three.
+    "panel.affMix.count": "Affinity nodes:",
+    "panel.affMix.allTo": "All to",
+    "panel.affMix.low": "Low",
+    "panel.affMix.mid": "Mid",
+    "panel.affMix.high": "High",
+    "panel.affMix.lowTitle": "Set every allocated affinity node to Low Tech",
+    "panel.affMix.midTitle": "Set every allocated affinity node to Midline",
+    "panel.affMix.highTitle": "Set every allocated affinity node to High Tech",
+    "panel.affMix.apply": "Apply",
+    "panel.affMix.applyTitle": "Change affinity nodes to this split (Enter)",
     // Under the affinity split boxes when they don't add up.
     // e.g. These add up to 30; 35 affinity nodes are allocated.
     "panel.affMix.mismatch.one": "These add up to {sum}; {count} affinity node is allocated.",
     "panel.affMix.mismatch.other": "These add up to {sum}; {count} affinity nodes are allocated.",
 
+    // The integration block's buttons and settings.
+    "panel.integ.all": "Integrate all nodes",
+    "panel.integ.none": "Remove all integrations",
+    "panel.integ.previewLabel": "Preview all integrated",
+    "panel.integ.previewTitle": "See stats as if every allocated node were integrated. No changes to the build",
+    "panel.integ.keepLabel": "Keep when removed",
+    "panel.integ.keepTitle": "On: a removed node stays integrated (SP increase). Off: removing a node removes its integration",
+    "panel.integ.viewLabel": "Integrated effects",
+    "panel.integ.viewTitle": "How tooltips and the list view show a node's integrated effects next to its normal ones",
+    "panel.integ.viewInline": "Inline",
+    "panel.integ.viewColumns": "Side by side",
     // The integration block. {countHtml} and {pointsHtml} are the numbers, in bold.
     // e.g. Integrated: 3 of 9 · 7 story points
     "panel.integ.summary.one": "<muted>Integrated:</muted> {countHtml} of {total} · {pointsHtml} story point",
@@ -27,6 +50,12 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     // Before a root is chosen (also in the Full Sheet).
     "panel.pickRoot": "Pick one of the three roots near the center to start.",
 
+    // The tabs. (Search shows only while searching; see search.js for its count.)
+    "panel.tab.stats": "Effects",
+    "panel.tab.sheet": "Stats",
+    "panel.tab.sheet.title": "The effects in the in-game stat sheet's sections, with a Full Sheet view",
+    "panel.tab.nodes": "Notables & keystones",
+    "panel.tab.search": "Search",
     // The Ship tab's label, with how many ship rules are set.
     "panel.tab.ship": "Ship",
     // e.g. Ship (3)

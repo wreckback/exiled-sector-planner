@@ -19,7 +19,7 @@ Tick an area when its migration step is committed and its output matches the bas
 - [x] Ship rules and Optional rules (step 3, with their `index.html` parts: the Ship tab and the Optional rules dialog; `text/ship.js`, `text/optional.js`, shared words in `text/common.js`)
 - [x] Templates (step 4i, `text/templates.js`; "Choose a root first." is `common.chooseRootFirst`). Also moved, missed by the scan: the template list's group headings, step counts and Code/Load buttons, the default name "{root} plan", the summary's anchor count. The code reader no longer spots the browser error by the word "browser" in its message (a flag on the error instead).
 - [x] Mod assets (step 4j, `text/assets.js`). The status line with and without a version is now two whole sentences.
-- [ ] `index.html` (the other sections)
+- [x] `index.html` (the other sections; step 5). New keys in the area files, the Shortcuts dialog in `text/keys.js` (two keys per row: the keys, then what they do). Text with markup uses `data-t-html` (`trHtml`, which now also takes `<code>` and `<kbd>`). Text that code sets at start (the Undo hover text, the theme button, the Build button's count) has no key in the HTML.
 
 Already keyed for later areas: the shield names (`ship.shield.*`, also `SHIELDS` in `app.js`, Names step) and `common.*` (Close, Not set, Yes, No, Tick all, Untick all).
 

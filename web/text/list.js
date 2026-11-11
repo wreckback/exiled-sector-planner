@@ -7,6 +7,18 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "list.view.listTitle": "List view of every non-affinity node (L)",
     "list.view.mapTitle": "Skill tree map (L)",
 
+    // The list's own bar.
+    "list.label": "Node list",
+    "list.modes.label": "Which list",
+    "list.mode.all": "All nodes",
+    "list.mode.allTitle": "Every node except affinity nodes",
+    "list.mode.buildTitle": "The nodes allocated in the current build, with affinity nodes counted per tech",
+    "list.sort": "Sort",
+    "list.sort.name": "Name (A to Z)",
+    "list.sort.tree": "Skill tree",
+    "list.sort.order": "Order taken",
+    "list.collapseAll": "Collapse all",
+    "list.expandAll": "Expand all",
     // The Build button, with how many nodes the build has.
     // e.g. Build (23)
     "list.mode.build": "Build ({n})",

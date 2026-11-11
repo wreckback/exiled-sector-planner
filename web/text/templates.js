@@ -1,6 +1,36 @@
 // Templates: the Templates dialog (the linked templates file, saving, codes), the notice when the game changes the
 // file, and loading a template. (How these files work: see common.js. <b>…</b> is bold, <muted>…</muted> greys.)
 window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
+    // The dialog, top to bottom.
+    "templates.title": "Templates",
+    "templates.intro": "The game keeps skill tree templates for every save in one file, <code>exiledSector_skillTreeTemplates.json.data</code>, in the <code>saves/common</code> folder of your Starsector directory. It re-reads that file whenever the skill tree opens, so changes show up while the game is running.",
+    "templates.fileHeading": "Templates file",
+    "templates.create": "Create templates file…",
+    "templates.createTitle": "Make an empty templates file in the planner's savedTemplates folder and link it",
+    "templates.reload": "Reload",
+    "templates.watch.label": "Detect changes from the game:",
+    "templates.watch.observe": "Instantly (file observer)",
+    "templates.watch.poll": "Every few seconds",
+    "templates.watch.manual": "Manually",
+    "templates.watch.every": "Check every",
+    "templates.watch.seconds": "seconds",
+    "templates.importHeading": "Import",
+    "templates.exportHeading": "Export this build",
+    "templates.nameLabel": "Template name",
+    "templates.conflict.newNameLabel": "Or save as a new template named",
+    "templates.conflict.asNew": "Save as new template",
+    "templates.codeHeading": "Share as code",
+    "templates.codeIntro": "A code holds one template as text. Loading a code works like loading a template from a file; save it into the templates file afterwards to use it in game.",
+    "templates.code.copyButton": "Copy code for current build",
+    "templates.code.boxLabel": "Template code",
+    "templates.code.placeholder": "Paste code here (starts with ES1.)",
+    "templates.code.loadButton": "Load code",
+    "templates.otherHeading": "Other ways to export",
+    "templates.download": "Download as a new file",
+    // The notice's buttons (with Keep my build / Dismiss below).
+    "templates.notice.load": "Load the new version",
+    "templates.notice.open": "Show templates",
+
     // The templates file.
     // e.g. Linked: exiledSector_skillTreeTemplates.json.data
     "templates.file.linked": "Linked: <b>{file}</b>",

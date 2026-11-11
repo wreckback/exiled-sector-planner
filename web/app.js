@@ -30,19 +30,21 @@
   function tr(key, args = {}) {
     return textTemplate(key, args).replace(/\{(\w+)\}/g, (m, k) => (k in args ? String(args[k]) : m));
   }
-  // The same as HTML: the text's game markup (<hl>, <good>, <bad>, <muted>, <builtIn>) and <b> become HTML, everything
-  // else is escaped, values too, except a value whose name ends in Html, which is put in as it is.
+  // The same as HTML: the text's game markup (<hl>, <good>, <bad>, <muted>, <builtIn>) and <b>, <code>, <kbd> become
+  // HTML, everything else is escaped, values too, except a value whose name ends in Html, which is put in as it is.
   function trHtml(key, args = {}) {
     const html = textTemplate(key, args).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/&lt;(good|bad|hl|muted|builtIn)&gt;/g, (_, c) => `<span class="${c.toLowerCase()}">`)
       .replace(/&lt;\/(good|bad|hl|muted|builtIn)&gt;/g, '</span>')
-      .replace(/&lt;(\/?)b&gt;/g, '<$1b>');
+      .replace(/&lt;(\/?)(b|code|kbd)&gt;/g, '<$1$2>');
     return html.replace(/\{(\w+)\}/g, (m, k) => (!(k in args) ? m : k.endsWith('Html') ? String(args[k])
       : String(args[k]).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')));
   }
-  // index.html names its text by key: data-t (the element's text), data-t-title, data-t-placeholder, data-t-aria-label.
+  // index.html names its text by key: data-t (the element's text), data-t-html (text with markup, as trHtml),
+  // data-t-title, data-t-placeholder, data-t-aria-label.
   function applyText(root = document) {
     for (const el of root.querySelectorAll('[data-t]')) el.textContent = tr(el.dataset.t);
+    for (const el of root.querySelectorAll('[data-t-html]')) el.innerHTML = trHtml(el.dataset.tHtml);
     for (const attr of ['title', 'placeholder', 'aria-label']) {
       for (const el of root.querySelectorAll(`[data-t-${attr}]`)) el.setAttribute(attr, tr(el.getAttribute(`data-t-${attr}`)));
     }

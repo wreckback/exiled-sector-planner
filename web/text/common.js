@@ -6,6 +6,8 @@
 window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "common.close": "Close",
     "common.cancel": "Cancel",
+    "common.reconnect": "Reconnect",
+    "common.forget": "Forget",
     "common.closeEsc": "Close (Esc)",
     "common.notSet": "Not set",
     "common.yes": "Yes",

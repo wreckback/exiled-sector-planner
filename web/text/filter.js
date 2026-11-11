@@ -1,6 +1,7 @@
 // The Filter: the top bar button and its popover of theme tags. (How these files work: see common.js.)
 window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "filter.button": "Filter",
+    "filter.button.title": "Filter nodes by the theme tags",
     // With how many entries are ticked.
     // e.g. Filter (2)
     "filter.button.set": "Filter ({n})",
