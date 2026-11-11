@@ -180,6 +180,8 @@ function normalize(text) {
         .replace(/<span data-t="[^"]*">([^<]*)<\/span>\n</g, '$1<')
         .replace(/<span data-t="[^"]*">([^<]*)<\/span>/g, '$1')
         .replace(/ data-t(?:-[a-z-]+)?="[^"]*"/g, '')
+        // The list view's tree headings: a group id now, the shown name before (text overhaul 5a).
+        .replace(/ data-group="[^"]*"/g, '')
         // Source line breaks inside text (after the holders are gone, so their own breaks aren't mistaken for these).
         .replace(/[ \t]*\n[ \t]*/g, '\n')
         .replace(/([^>\s])\n(?=<\/)/g, '$1')

@@ -4305,7 +4305,8 @@
   try { const v = localStorage.getItem('esp.listSort'); listSortMode = v === 'tree' || v === 'order' ? v : 'name'; } catch { /* storage unavailable */ }
   listSort.value = listSortMode;
   let listCursor = -1;
-  // Trees collapsed in the Skill tree sort, by their place name ("Hegemony volume").
+  // Trees collapsed in the Skill tree sort, by group id: a volume id ("core", "hegemony"), or "affinity" for the Build
+  // list's affinity rows. Not by the shown name, so renaming a place in the text files keeps them collapsed.
   const listCollapsed = new Set();
   try { for (const p of JSON.parse(localStorage.getItem('esp.listCollapsed') || '[]')) listCollapsed.add(p); } catch { /* storage unavailable */ }
   const saveCollapsed = () => { try { localStorage.setItem('esp.listCollapsed', JSON.stringify([...listCollapsed])); } catch { /* storage unavailable */ } };
@@ -4350,7 +4351,7 @@
   try { listMode = localStorage.getItem('esp.listMode') === 'build' ? 'build' : 'all'; } catch { /* storage unavailable */ }
   const listModeBtns = [...document.querySelectorAll('#listview [data-mode]')];
   const listHint = document.getElementById('listview-hint');
-  const nodeEntry = (n, order) => ({ place: shortPlace(n), core: n.volume === 'core', rank: TIER_RANK[n.tier] ?? 3, name: listName(n), order, count: 1, html: () => listRowHtml(n) });
+  const nodeEntry = (n, order) => ({ group: n.volume, place: shortPlace(n), core: n.volume === 'core', rank: TIER_RANK[n.tier] ?? 3, name: listName(n), order, count: 1, html: () => listRowHtml(n) });
   function affRowHtml(g) {
     const k = g.nodes.length, t = g.type;
     const lines = typeEffects(t).map(e => `<div>${describe(e.effect, e.magnitude * k)}</div>`);
@@ -4374,7 +4375,7 @@
       aff.set(t.id, g);
     });
     for (const g of aff.values()) {
-      out.push({ place: AFF_GROUP, affinity: true, rank: AFF_ORDER.indexOf(g.type.id), name: g.type.name, order: g.order, count: g.nodes.length, html: () => affRowHtml(g) });
+      out.push({ group: 'affinity', place: AFF_GROUP, affinity: true, rank: AFF_ORDER.indexOf(g.type.id), name: g.type.name, order: g.order, count: g.nodes.length, html: () => affRowHtml(g) });
     }
     return out;
   }
@@ -4394,27 +4395,27 @@
     const byName = (a, b) => nameCollator.compare(a.name, b.name) || nameCollator.compare(a.place, b.place);
     let html = '', visible = 0;
     if (sortMode === 'tree') {
+      // Groups by id; each shows its place name as written in the text files.
       const groups = new Map();
       for (const e of entries) {
-        if (!groups.has(e.place)) groups.set(e.place, { core: !!e.core, affinity: !!e.affinity, list: [] });
-        groups.get(e.place).list.push(e);
+        if (!groups.has(e.group)) groups.set(e.group, { place: e.place, core: !!e.core, affinity: !!e.affinity, list: [] });
+        groups.get(e.group).list.push(e);
       }
-      // Affinity first (build list), then the core as one tree, then the volumes.
+      // Affinity first (build list), then the core as one tree, then the volumes by their shown name.
       const groupRank = g => (g.affinity ? 0 : g.core ? 1 : 2);
-      const ordered = [...groups].sort(([a, ga], [b, gb]) => groupRank(ga) - groupRank(gb)
-        || nameCollator.compare(a, b));
-      for (const [place, g] of ordered) {
+      const ordered = [...groups].sort(([, ga], [, gb]) => groupRank(ga) - groupRank(gb)
+        || nameCollator.compare(ga.place, gb.place));
+      for (const [id, g] of ordered) {
         g.list.sort((a, b) => a.rank - b.rank || byName(a, b));
         const n = g.list.reduce((a, e) => a + e.count, 0);
-        const collapsed = listCollapsed.has(place);
+        const collapsed = listCollapsed.has(id);
         if (!collapsed) visible += n;
-        const cap = place.charAt(0).toUpperCase() + place.slice(1);
         // Each tree's heading collapses or expands it (remembered in esp.listCollapsed).
-        html += `<h3 class="lv-group"><button type="button" data-group="${esc(place)}" aria-expanded="${!collapsed}" title="${esc(tr(collapsed ? 'list.group.show' : 'list.group.hide'))}">` +
-          `<span class="lv-caret">${collapsed ? '▸' : '▾'}</span> ${esc(cap)} <span class="muted">${n}</span></button></h3>` +
+        html += `<h3 class="lv-group"><button type="button" data-group="${esc(id)}" aria-expanded="${!collapsed}" title="${esc(tr(collapsed ? 'list.group.show' : 'list.group.hide'))}">` +
+          `<span class="lv-caret">${collapsed ? '▸' : '▾'}</span> ${esc(g.place)} <span class="muted">${n}</span></button></h3>` +
           (collapsed ? '' : g.list.map(e => e.html()).join(''));
       }
-      listGroupsShown = ordered.map(([place]) => place);
+      listGroupsShown = ordered.map(([id]) => id);
     } else {
       entries.sort(sortMode === 'order' ? (a, b) => a.order - b.order : (a, b) => (a.affinity && b.affinity ? a.rank - b.rank : 0) || byName(a, b));
       html = entries.map(e => e.html()).join('');
@@ -4466,11 +4467,11 @@
   listBody.addEventListener('click', e => {
     const head = e.target.closest('[data-group]');
     if (head) {
-      const place = head.dataset.group;
-      if (listCollapsed.has(place)) listCollapsed.delete(place); else listCollapsed.add(place);
+      const id = head.dataset.group;
+      if (listCollapsed.has(id)) listCollapsed.delete(id); else listCollapsed.add(id);
       saveCollapsed();
       renderList();
-      const again = [...listBody.querySelectorAll('[data-group]')].find(b => b.dataset.group === place);
+      const again = [...listBody.querySelectorAll('[data-group]')].find(b => b.dataset.group === id);
       if (again) again.focus();
       return;
     }

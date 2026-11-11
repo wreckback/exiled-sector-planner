@@ -24,7 +24,7 @@ On branch `text-overhaul` (off `main`).
      4. Migrate `app.js`, one area per step: label constants, tooltips, rule refusals, toasts and notices, panels and stat sheet, dialogs.
      5. Migrate `index.html`.
      5a. Code that reads the text it shows (found 2026-11-11, after the Templates area; each its own commit, output unchanged):
-        - The list view keys its trees by the displayed place name (`listCollapsed`, saved as `esp.listCollapsed`) and capitalises it in code: key them by volume id (`core`, a volume id, `affinity`) and show the name separately.
+        - (Done.) The list view keys its trees by the displayed place name (`listCollapsed`, saved as `esp.listCollapsed`) and capitalises it in code: key them by volume id (`core`, a volume id, `affinity`) and show the name separately.
         - Words built from ids with `humanize()`, so not editable: subroutine kinds ("Only 1 doctrine per ship."), `req_*` tags ("Needs a ship with: …", `rule.fallback.requires`), gates ("Unlocked by: …", the anchor list's "In game: …"). Give each a key in `names.js` (about 30), `humanize()` only as the fallback for ids the data adds later.
         - `tools/text-baseline.mjs` and its page script read English: the footer's version is masked by the word "Planner ", and the doctrine scenario picks nodes by the tooltip wording "adds N". Mask the version by its value and pick the nodes from the subroutine data, before any wording changes on purpose.
      6. The check tool for missing, unused and mismatched keys, hooked into `release.mjs`.
