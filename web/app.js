@@ -335,7 +335,7 @@
     return { path: order.reverse(), options };
   }
   function toggleWaypoint(n) {
-    if (n.id === state.root) { toast('Every path starts from the root, so it can\'t be a waypoint.'); return; }
+    if (n.id === state.root) { toast(tr('toast.waypointRoot')); return; }
     const i = waypoints.indexOf(n);
     if (i >= 0) waypoints.splice(i, 1); else waypoints.push(n);
     waypointsChanged();
@@ -400,7 +400,7 @@
     const found = routeTo(target, option || null, remembered);
     const path = found.path;
     if (!path) { if (found.block) toast(refusalText(target, found.block)); return false; }
-    if (used() + path.length > state.cap) { toast(`That needs ${path.length} nodes; only ${Math.max(0, state.cap - used())} left under the cap.`); return false; }
+    if (used() + path.length > state.cap) { toast(tr('toast.overCap', { needed: path.length, left: Math.max(0, state.cap - used()) })); return false; }
     pushUndo();
     const at = waypoints.indexOf(target);
     waypoints = at >= 0 ? waypoints.slice(at + 1) : [];
@@ -491,7 +491,7 @@
     if (switchedOff(exit)) { toast(hiddenText(exit)); return; }
     const current = state.links.get(socket.id);
     if (current === exit.id) return;
-    if (!current && used() + 1 > state.cap) { toast('Linking an anchor takes one more node; you are at the cap.'); return; }
+    if (!current && used() + 1 > state.cap) { toast(tr('toast.linkAtCap')); return; }
     const b = blockOf(exit, null, buildEntries());
     if (b) { toast(b.text); return; }
     pushUndo();
@@ -543,7 +543,7 @@
     pushUndo();
     if (on) state.hiddenVolumes.delete(id); else state.hiddenVolumes.add(id);
     const removed = on ? 0 : pruneSwitchedOff();
-    toast(on ? `${g.name}: shown.` : `${g.name}: hidden.${removed ? ` Removed ${removed} node${removed > 1 ? 's' : ''}; Undo brings them back.` : ''}`);
+    toast(tr(on ? 'toast.volumeShown' : removed ? 'toast.volumeHiddenRemoved' : 'toast.volumeHidden', removed && !on ? { volume: g.name, count: removed } : { volume: g.name }));
     changed();
   }
   function resetBuild() {
@@ -590,8 +590,8 @@
       changed();
       return;
     }
-    if (!integrable(t)) { toast(`${t.name} can't be integrated.`); return; }
-    if (!state.alloc.has(n.id)) { toast(`Allocate ${t.name} first to integrate it.`); return; }
+    if (!integrable(t)) { toast(tr('toast.cantIntegrate', { node: t.name })); return; }
+    if (!state.alloc.has(n.id)) { toast(tr('toast.allocateToIntegrate', { node: t.name })); return; }
     pushUndo();
     state.integrated.add(n.id);
     changed();
@@ -2777,7 +2777,7 @@
     const moved = setAffinitySplit(targets);
     for (const i of affMix.inputs) i.blur();
     renderAffMix();
-    if (moved) toast(`Changed ${moved} affinity node${moved === 1 ? '' : 's'}. Undo goes back.`);
+    if (moved) toast(tr('toast.affinityChanged', { count: moved }));
   }
   for (const i of affMix.inputs) {
     i.addEventListener('input', updateAffNote);
@@ -2818,8 +2818,8 @@
     if (integPreview) notes.push(`Preview: all ${able.length} integrated, ${pointsText(storyPointCost(able.length))}. Totals and the stat sheet show changes; build unchanged.`);
     integEl.note.textContent = notes.join(' ');
   }
-  integEl.all.addEventListener('click', () => { const c = setAllIntegrated(true); if (c) toast(`Integrated ${c} node${c === 1 ? '' : 's'}.`); });
-  integEl.none.addEventListener('click', () => { const c = setAllIntegrated(false); if (c) toast(`Removed ${c} integration${c === 1 ? '' : 's'}.`); });
+  integEl.all.addEventListener('click', () => { const c = setAllIntegrated(true); if (c) toast(tr('toast.integratedAll', { count: c })); });
+  integEl.none.addEventListener('click', () => { const c = setAllIntegrated(false); if (c) toast(tr('toast.integrationsRemoved', { count: c })); });
   integEl.preview.addEventListener('change', () => setIntegPreview(integEl.preview.checked));
   integEl.keep.addEventListener('change', () => setKeepIntegration(integEl.keep.checked));
   integEl.view.addEventListener('change', () => setIntegView(integEl.view.value));
@@ -2827,7 +2827,7 @@
   // After a hull or ship rules change: say so when allocated nodes newly break a rule.
   function warnNewProblems(before) {
     const now = rules().problems.size;
-    if (now > before) toast(`${now} illegal allocated node${now === 1 ? '' : 's'}.`);
+    if (now > before) toast(tr('ship.problemCount', { count: now }));
   }
   // The planner's version (version.js): a release tag like v0.2.0-alpha.3+es0.11.1-alpha, `git describe` output when
   // served locally (that tag plus -<commits>-g<hash>, and -dirty for uncommitted changes), or "dev". The footer shows
@@ -3221,7 +3221,7 @@
     const input = document.getElementById('grant-input');
     if (!input) return;
     const id = grantByLabel.get(input.value.trim().toLowerCase());
-    if (!id) { toast('Pick a notable from the list.'); return; }
+    if (!id) { toast(tr('toast.pickNotable')); return; }
     const e = state.subs.get(n.id);
     setGrants(n, [...(e.grants || []), id]);
     reopenPicker(n);
@@ -3253,7 +3253,7 @@
     else if (b.dataset.act === 'alloc') allocate(n);
     else if (b.dataset.act === 'unlink') unlinkSocket(n);
     else if (b.dataset.act === 'remove') deallocate(n);
-    else if (b.dataset.act === 'reset') { closePicker(); resetBuild(); toast('Build cleared. Undo brings it back.'); return; }
+    else if (b.dataset.act === 'reset') { closePicker(); resetBuild(); toast(tr('toast.buildCleared')); return; }
     closePicker();
   });
 
@@ -3272,7 +3272,7 @@
     // Ctrl/Cmd+click on a choice node: use the option last picked for that node type, skipping the picker.
     if (quick && isChoice(n)) {
       const opt = lastChoice.get(n.type.id);
-      if (!opt) { toast('Pick an option once; Ctrl+click then reuses it.'); openPicker(n, sx, sy); return; }
+      if (!opt) { toast(tr('toast.pickOptionFirst')); openPicker(n, sx, sy); return; }
       if (sat(n.id)) setChoice(n, opt);
       else if (routeTo(n, opt, true).path) allocate(n, opt, true);
       return;
@@ -3289,7 +3289,7 @@
       // A choice node is refused only when every option is; the picker then shows each option's reason.
       if (found.block && isChoice(n) && found.block.node === n) { openPicker(n, sx, sy); return; }
       if (found.block) toast(refusalText(n, found.block));
-      else if (n.tier === 'WORMHOLE_EXIT') toast('Wormhole exits open by linking an anchor in a subroutine socket.');
+      else if (n.tier === 'WORMHOLE_EXIT') toast(tr('toast.exitsNeedAnchor'));
       return;
     }
     if (isChoice(n)) { openPicker(n, sx, sy); return; }
@@ -3342,7 +3342,7 @@
     refreshList();
   }
   function cycleTarget(n) {
-    if (n.id === state.root) { toast('The starting root is always in the build.'); return; }
+    if (n.id === state.root) { toast(tr('toast.rootAlwaysIn')); return; }
     if (targets.want.has(n.id)) { targets.want.delete(n.id); targets.forbid.add(n.id); }
     else if (targets.forbid.has(n.id)) targets.forbid.delete(n.id);
     else targets.want.add(n.id);
@@ -3611,7 +3611,7 @@
     if (!p.ok) { toast(p.text); return; }
     const before = new Set(state.alloc);
     const gained = p.add.filter(id => !before.has(id)).length;
-    if (!gained && !p.remove.length) { toast(p.text || 'Nothing to change.'); return; }
+    if (!gained && !p.remove.length) { toast(p.text || tr('toast.nothingToChange')); return; }
     pushUndo();
     if (targets.keep) for (const id of p.add) state.alloc.add(id);
     else state.alloc = new Set(p.add);
@@ -3625,7 +3625,7 @@
     targets.mode = false;
     planCache = null;
     changed();
-    toast(`Allocated ${gained} node${gained === 1 ? '' : 's'}${p.remove.length ? ` and removed ${p.remove.length}` : ''}.`);
+    toast(tr(p.remove.length ? 'toast.planAppliedRemoved' : 'toast.planApplied', { count: gained, removed: p.remove.length }));
   }
   function renderTargets() {
     tgt.bar.hidden = !targets.mode;
@@ -3830,19 +3830,19 @@
   });
   document.getElementById('btn-fit').addEventListener('click', frameCore);
   els.undo.addEventListener('click', undo);
-  document.getElementById('btn-reset').addEventListener('click', () => { if (state.root || state.alloc.size) { resetBuild(); toast('Build cleared. Undo brings it back.'); } });
+  document.getElementById('btn-reset').addEventListener('click', () => { if (state.root || state.alloc.size) { resetBuild(); toast(tr('toast.buildCleared')); } });
   // Copy code: the build as a template code (the same as Templates → Copy code), named after the template name field.
   document.getElementById('btn-code').addEventListener('click', async () => {
-    if (!state.root) { toast('Choose a root.'); return; }
+    if (!state.root) { toast(tr('common.chooseRoot')); return; }
     let name = tpl.name.value.trim();
     if (!name) { try { name = (localStorage.getItem('esp.tplName') || '').trim(); } catch { /* storage unavailable */ } }
     if (!name || templateNameProblem(name)) name = `${byId.get(state.root).type.name} plan`;
     const code = await templateToCode(buildTemplate(name));
     try {
       await navigator.clipboard.writeText(code);
-      toast(`Code for "${name}" copied. Load it with Templates → Load code.`);
+      toast(tr('toast.codeCopied', { name }));
     } catch {
-      toast('', `Copy this code:<br><input style="width:min(560px,80vw);margin-top:6px" readonly value="${esc(code)}" onfocus="this.select()">`);
+      toast('', `${esc(tr('toast.copyThisCode'))}<br><input style="width:min(560px,80vw);margin-top:6px" readonly value="${esc(code)}" onfocus="this.select()">`);
       setTimeout(() => els.toast.querySelector('input')?.focus(), 0);
     }
   });
@@ -4925,17 +4925,17 @@
   // also ask the browser for access, so after a browser restart it reconnects the file too.
   const checkFileBtn = document.getElementById('btn-checkfile');
   async function checkFileNow() {
-    if (!linkedHandle) { toast('Link the templates file in Templates first.'); return; }
+    if (!linkedHandle) { toast(tr('toast.linkFirst')); return; }
     try {
-      if (!(await checkAccess(true))) { toast('The browser wasn\'t allowed to read the templates file.'); renderWatchStatus(); return; }
+      if (!(await checkAccess(true))) { toast(tr('toast.readRefused')); renderWatchStatus(); return; }
       const before = linkedText, noticeBefore = fileChange;
       const text = await readLinked();
       if (!exportEl.hidden) renderTemplatesFile();
       scheduleWatch();
       const n = fileTemplates ? fileTemplates.length : 0;
-      if (before == null) toast(`Connected to ${linkedHandle.name}: ${n} template${n === 1 ? '' : 's'}. Changes from now on are noticed.`);
-      else if (text === before) toast('No changes in the templates file since the last check.');
-      else if (fileChange === noticeBefore) toast('The templates file was rewritten, but its templates are the same.');
+      if (before == null) toast(tr('toast.connected', { file: linkedHandle.name, count: n }));
+      else if (text === before) toast(tr('toast.noChanges'));
+      else if (fileChange === noticeBefore) toast(tr('toast.rewrittenSame'));
     } catch (err) { toast(err.message || String(err)); }
   }
   checkFileBtn.addEventListener('click', () => { checkFileNow(); checkFileBtn.blur(); });
@@ -5272,7 +5272,7 @@
     try { await navigator.clipboard.writeText(code); copied = true; } catch { /* clipboard blocked; the box has it */ }
     codeBox.focus(); codeBox.select();
     codeStatus(`${label} (${code.length} characters) ${copied ? 'copied to the clipboard and shown above' : 'is in the box above; copy it from there'}.`, 'ok');
-    toast(copied ? `${label} copied.` : 'The browser blocked the clipboard; the code is in the box to copy by hand.');
+    toast(copied ? tr('toast.labelCopied', { label }) : tr('toast.clipboardBlocked'));
   }
   document.getElementById('code-copy').addEventListener('click', async () => {
     if (!state.root) { codeStatus('Choose a root first.', 'err'); return; }
@@ -5709,7 +5709,7 @@
     renderArt();
     let told = false;
     try { told = localStorage.getItem('esp.artHint') === '1'; localStorage.setItem('esp.artHint', '1'); } catch { /* storage unavailable */ }
-    if (!told) toast('', 'The mod assets are not included with the planner. Click <b>Show mod assets</b> in the top bar to read them from your Exiled Sector folder.');
+    if (!told) toast('', trHtml('toast.assetsHint'));
   })();
   // Testing: link(handle) reads a stand-in folder handle (getDirectoryHandle, getFileHandle, values, queryPermission,
   // name) as if it had been picked, without remembering it.

@@ -11,6 +11,7 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "common.no": "No",
     "common.tickAll": "Tick all",
     "common.untickAll": "Untick all",
+    "common.chooseRoot": "Choose a root.",
 
     // Joining a list of names: "a, b and c", or alternatives "a or b". Keep the spaces.
     "common.listComma": ", ",
