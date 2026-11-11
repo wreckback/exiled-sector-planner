@@ -8,7 +8,7 @@ What isn't here: text that comes from the mod through `planner-data.js` (node an
 
 Tick an area when its migration step is committed and its output matches the baseline.
 
-- [ ] Names and labels (`app.js`)
+- [x] Names and labels (step 4a, `text/names.js`; also the socket picker's "Allocates 1 to 3 notables for free" (3106), which is one of the subroutine kinds). The gate conditions are ids now (`GATE_OF`), not text. Left in code: the missing-data message (line 10), shown before any text could load.
 - [ ] Map tooltips
 - [ ] Rule refusals and node rules
 - [ ] Toasts

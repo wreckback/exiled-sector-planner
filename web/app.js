@@ -41,12 +41,13 @@
   const ICON_INSET = 0.9;
   const TIER_SIZE = { SMALL: 1, NOTABLE: 1, KEYSTONE: 1, WORMHOLE: 1.3, WORMHOLE_EXIT: 1.3, ROOT: 2.5, SOCKET: 1.2 };
   const TIER_LABEL = {
-    SMALL: 'Node', NOTABLE: 'Notable', KEYSTONE: 'Keystone', WORMHOLE: 'Wormhole',
-    WORMHOLE_EXIT: 'Wormhole exit', ROOT: 'Root', SOCKET: 'Subroutine socket',
+    SMALL: tr('name.tier.small'), NOTABLE: tr('name.tier.notable'), KEYSTONE: tr('name.tier.keystone'), WORMHOLE: tr('name.tier.wormhole'),
+    WORMHOLE_EXIT: tr('name.tier.wormholeExit'), ROOT: tr('name.tier.root'), SOCKET: tr('name.tier.socket'),
   };
   const ROOT_COLOURS = { root_low_tech: [255, 125, 62], root_midline: [255, 212, 112], root_high_tech: [89, 157, 255] };
   const AFFINITY_COLOURS = { LOW_TECH_AFFINITY_FLAT: [226, 154, 72], MIDLINE_AFFINITY_FLAT: [156, 207, 150], HIGH_TECH_AFFINITY_FLAT: [140, 228, 255] };
-  const AFFINITY_NAMES = { LOW_TECH_AFFINITY_FLAT: 'Low Tech', MIDLINE_AFFINITY_FLAT: 'Midline', HIGH_TECH_AFFINITY_FLAT: 'High Tech' };
+  const AFFINITY_NAMES = { LOW_TECH_AFFINITY_FLAT: tr('name.affinity.lowTech'), MIDLINE_AFFINITY_FLAT: tr('name.affinity.midline'), HIGH_TECH_AFFINITY_FLAT: tr('name.affinity.highTech') };
+  const AFFINITY_STATS = { LOW_TECH_AFFINITY_FLAT: tr('name.affinity.lowTech.stat'), MIDLINE_AFFINITY_FLAT: tr('name.affinity.midline.stat'), HIGH_TECH_AFFINITY_FLAT: tr('name.affinity.highTech.stat') };
   const ROOT_AFFINITY = { root_low_tech: 'low_tech', root_midline: 'midline', root_high_tech: 'high_tech' };
   const GLOW = [120, 200, 255];
   const DULL = [150, 150, 150];
@@ -62,10 +63,11 @@
   const STORY_GREEN = [140, 255, 150];
   const UNALLOCATED_ALPHA = 0.45;
   const VOLUME_NAMES = {
-    core: 'Core', luddic: 'Luddic', pirate: 'Pirate', hegemony: 'Hegemony', persean_league: 'Persean League',
-    tritachyon: 'Tri-Tachyon', sindrian_dictat: 'Sindrian Diktat', REDACTED: '[REDACTED]', tania: 'Navarchy of Tania',
-    stargazer: 'Stargazer', omega: 'Omega', abyss: 'Abyss', shrouded: 'Shrouded', nightcross: 'Nightcross',
-    kesteven: 'Kesteven', exotech: 'Exotech', enigma: 'Enigma', threat: 'Threat',
+    core: tr('name.volume.core'), luddic: tr('name.volume.luddic'), pirate: tr('name.volume.pirate'), hegemony: tr('name.volume.hegemony'),
+    persean_league: tr('name.volume.persean_league'), tritachyon: tr('name.volume.tritachyon'), sindrian_dictat: tr('name.volume.sindrian_dictat'),
+    REDACTED: tr('name.volume.REDACTED'), tania: tr('name.volume.tania'), stargazer: tr('name.volume.stargazer'), omega: tr('name.volume.omega'),
+    abyss: tr('name.volume.abyss'), shrouded: tr('name.volume.shrouded'), nightcross: tr('name.volume.nightcross'), kesteven: tr('name.volume.kesteven'),
+    exotech: tr('name.volume.exotech'), enigma: tr('name.volume.enigma'), threat: tr('name.volume.threat'),
   };
   const STAR_COLOURS = {
     star_yellow: '#fff2b8', star_orange: '#ffc27a', star_red: '#ff7a5c', star_blue: '#9cc4ff', star_white: '#f4f8ff',
@@ -612,7 +614,7 @@
   // Always checked: hull size (the Hull dropdown), node conflicts (SkillType.isExclusiveWith: a node's hull mods against
   // another's, via hullmod_conflicts.csv) and the logistics limit (LogisticsNodes). Facts about the actual ship and the
   // campaign come from the Ship rules dialog; anything left unset there isn't checked.
-  const SHIELDS = { FRONT: 'Front shield', OMNI: 'Omni shield', NONE: 'No shield', PHASE: 'Phase cloak' };
+  const SHIELDS = { FRONT: tr('ship.shield.front'), OMNI: tr('ship.shield.omni'), NONE: tr('ship.shield.none'), PHASE: tr('ship.shield.phase') };
   const TRI_FACTS = ['civilian', 'charges', 'modules', 'builtInWings'];
   function blankShip() {
     return { shield: null, armor: null, civilian: null, charges: null, modules: null, builtInWings: null,
@@ -710,7 +712,7 @@
       : tag === 'req_modules' ? sh.modules === false : false;
     return unmet ? blockText('node.requires.' + tag, humanize(tag.slice(4)) + ' required.') : null;
   }
-  const HULL_SIZE_NAMES = { FRIGATE: 'frigates', DESTROYER: 'destroyers', CRUISER: 'cruisers', CAPITAL_SHIP: 'capitals' };
+  const HULL_SIZE_NAMES = { FRIGATE: tr('name.hull.frigate.plural'), DESTROYER: tr('name.hull.destroyer.plural'), CRUISER: tr('name.hull.cruiser.plural'), CAPITAL_SHIP: tr('name.hull.capital.plural') };
   const listWords = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
 
   // Why `n` (as `optionId`, for choice nodes) can't be allocated after the entries in `list`, or null.
@@ -796,9 +798,15 @@
   // come from a hidden per-item seed).
   const SUBS = new Map((D.subroutines || []).map(s => [s.id, s]));
   // Rarity 0 in subroutines.csv: no drop pool picks it (ItemDrops.isDroppable). Still socketable here, for copies already owned.
-  const UNOBTAINABLE_TEXT = 'Unobtainable.';
+  const UNOBTAINABLE_TEXT = tr('label.unobtainable');
   const AFFINITY_KEYS = ['LOW_TECH_AFFINITY_FLAT', 'MIDLINE_AFFINITY_FLAT', 'HIGH_TECH_AFFINITY_FLAT'];
-  const GATE_LINES = { GATES_RADIUS_WHILE_PHASED: 'While phased', GATES_RADIUS_BELOW_HALF_HULL: 'Below 50% hull', GATES_RADIUS_WHILE_SYSTEM_ACTIVE: 'While the ship system is active' };
+  // Gating subroutines: the effect that gates, its condition (the id is the mod's summary.gated.* key), and the
+  // condition's name as a heading and inside a sentence.
+  const GATE_OF = { GATES_RADIUS_WHILE_PHASED: 'PHASED', GATES_RADIUS_BELOW_HALF_HULL: 'LOW_HULL', GATES_RADIUS_WHILE_SYSTEM_ACTIVE: 'SYSTEM_ACTIVE' };
+  const GATE_NAMES = { PHASED: tr('name.gate.phased'), LOW_HULL: tr('name.gate.lowHull'), SYSTEM_ACTIVE: tr('name.gate.systemActive') };
+  const GATE_IN_SENTENCE = { PHASED: tr('name.gate.phased.inSentence'), LOW_HULL: tr('name.gate.lowHull.inSentence'), SYSTEM_ACTIVE: tr('name.gate.systemActive.inSentence') };
+  const RADIUS_NAMES = { small: tr('label.radius.small'), medium: tr('label.radius.medium'), large: tr('label.radius.large'), extra_large: tr('label.radius.extra_large') };
+  const radiusName = r => RADIUS_NAMES[r] || tr('label.radius.other', { radius: String(r).replace(/_/g, ' ') });
   const subRadius = def => (def && def.radius && D.nodeRadii ? D.nodeRadii[def.radius] || 0 : 0);
   const radiusExcluded = n => n.volume === 'exotech' || n.type.id === 'exoship';
   const radiusMembers = new Map();
@@ -832,11 +840,11 @@
         sc.shellCount.set(a.socket.id, smalls.length);
         for (const n of smalls) if (state.alloc.has(n.id)) sc.silent.add(n.id);
       }
-      const gate = (a.def.lines || []).find(l => GATE_LINES[l.effect]);
+      const gate = (a.def.lines || []).find(l => GATE_OF[l.effect]);
       if (gate && r) {
         // GatedSubroutines: the first socket (by id) claims a node.
         for (const n of nodesInRadius(a.socket, r)) {
-          if (RADIUS_TIERS.has(n.tier) && !sc.gated.has(n.id)) sc.gated.set(n.id, { when: GATE_LINES[gate.effect], strength: gate.max, def: a.def, socket: a.socket });
+          if (RADIUS_TIERS.has(n.tier) && !sc.gated.has(n.id)) sc.gated.set(n.id, { when: GATE_OF[gate.effect], strength: gate.max, def: a.def, socket: a.socket });
         }
       }
       if (a.def.kind === 'DOCTRINE' && !sc.doctrine && r) {
@@ -935,7 +943,9 @@
   const TEMPLATE_NAME_MAX = 32;
   const HULL_ENUM = { frigate: 'FRIGATE', destroyer: 'DESTROYER', cruiser: 'CRUISER', capitalShip: 'CAPITAL_SHIP' };
   const HULL_ENUM_VALUES = new Set(Object.values(HULL_ENUM));
-  const HULL_ENUM_LABEL = { FRIGATE: 'Frigate', DESTROYER: 'Destroyer', CRUISER: 'Cruiser', CAPITAL_SHIP: 'Capital' };
+  const HULL_ENUM_LABEL = { FRIGATE: tr('name.hull.frigate'), DESTROYER: tr('name.hull.destroyer'), CRUISER: tr('name.hull.cruiser'), CAPITAL_SHIP: tr('name.hull.capital') };
+  // A hull size inside a sentence, by the Hull dropdown's value.
+  const HULL_IN_SENTENCE = { frigate: tr('name.hull.frigate.inSentence'), destroyer: tr('name.hull.destroyer.inSentence'), cruiser: tr('name.hull.cruiser.inSentence'), capitalShip: tr('name.hull.capital.inSentence') };
   const anchorByExit = new Map((D.wormholeAnchors || []).map(a => [a.exit, a]));
 
   function templateSteps() {
@@ -1284,7 +1294,7 @@
       stat = e.weaponScope && !e.unqualified ? fill(S['weapon.qualified'] || '{scope} {stat}', { scope: S['weapon.scope.' + e.weaponScope], stat: statName }) : statName;
       if (e.weaponFamily === 'GUIDANCE' && mode === 'flat' && S['weapon.guidanceImproved']) return S['weapon.guidanceImproved'];
     } else if (e.stat) stat = S[e.stat];
-    else if (/_AFFINITY_FLAT$/.test(name)) stat = AFFINITY_NAMES[name] ? AFFINITY_NAMES[name].toLowerCase() + ' affinity' : null;
+    else if (/_AFFINITY_FLAT$/.test(name)) stat = AFFINITY_STATS[name] || null;
     if (stat && mode) {
       // As the mod's describeStat: `negate` words -magnitude (the survey cost reductions are stored as positive amounts),
       // and `subject` puts "Your fleet has" first (desc.<mode>.<up|down>.subject).
@@ -1431,7 +1441,7 @@
     if (!grantedNames) { grantedNames = new Map(); for (const t of D.types) for (const h of grantedHullMods(t)) if (!grantedNames.has(h)) grantedNames.set(h, t.name); }
     return grantedNames.get(id) || id;
   };
-  const hullLabel = () => ({ frigate: 'frigate', destroyer: 'destroyer', cruiser: 'cruiser', capitalShip: 'capital' }[state.hull]);
+  const hullLabel = () => HULL_IN_SENTENCE[state.hull];
   const volumeName = v => VOLUME_NAMES[v] || humanize(v);
 
   // ------------------------------------------------------------------ summary math
@@ -1459,7 +1469,7 @@
       into.set(effect, cur);
     };
     // Gated nodes: only effects read live in combat survive, at the gate's strength (SkillTreeEffectSource.gatedEffects).
-    const gated = new Map(); // condition text -> { sums, nodes, strength, item }
+    const gated = new Map(); // condition (GATE_OF id) -> { sums, nodes, strength, item }
     // Temporary nodes (temporaryAfterDeploymentSeconds): their effects only last that long after deployment, so they're
     // kept apart from the permanent totals, as the game's EffectTotals groups them.
     const temp = new Map(); // seconds -> { sums, nodes }
@@ -1497,19 +1507,21 @@
     }
     return { sums, aff, affBonuses, gated, temp };
   }
+  // The Effects tab's groups, in order: [heading, effect name pattern]. Effects matching none go under Other.
   const GROUPS = [
-    ['Affinity', /AFFINITY/],
-    ['Strike craft', /FIGHTER|STRIKECRAFT|HANGAR|BOMBER|WING|INTERCEPTOR|CARRIER/],
-    ['Weapons', /WEAPON|MISSILE|BEAM|BALLISTIC|DAMAGE_TO|PD_|PIERCE|EMP_DAMAGE(?!_TAKEN)/],
-    ['Flux', /FLUX|VENT|OVERLOAD/],
-    ['Defense', /HULL|ARMOR|DAMAGE_TAKEN|SHIELD|ENGINE_DURABILITY/],
-    ['Mobility', /SPEED|MANEUVER|ACCELERATION|DECELERATION|TURN|BURN|MASS/],
-    ['Phase', /PHASE|TIMEFLOW/],
-    ['Ship system', /SYSTEM/],
-    ['Combat readiness', /CR_|COMBAT_READINESS|REPAIR_RATE/],
-    ['Logistics', /CREW|CARGO|FUEL|SUPPLIES|REPAIR|SALVAGE|SENSOR|SURVEY|DMOD|D_MOD|COMMAND|NAV|ELECTRONIC|OBJECTIVE|CORONA/],
+    [tr('name.group.affinity'), /AFFINITY/],
+    [tr('name.group.strikeCraft'), /FIGHTER|STRIKECRAFT|HANGAR|BOMBER|WING|INTERCEPTOR|CARRIER/],
+    [tr('name.group.weapons'), /WEAPON|MISSILE|BEAM|BALLISTIC|DAMAGE_TO|PD_|PIERCE|EMP_DAMAGE(?!_TAKEN)/],
+    [tr('name.group.flux'), /FLUX|VENT|OVERLOAD/],
+    [tr('name.group.defense'), /HULL|ARMOR|DAMAGE_TAKEN|SHIELD|ENGINE_DURABILITY/],
+    [tr('name.group.mobility'), /SPEED|MANEUVER|ACCELERATION|DECELERATION|TURN|BURN|MASS/],
+    [tr('name.group.phase'), /PHASE|TIMEFLOW/],
+    [tr('name.group.shipSystem'), /SYSTEM/],
+    [tr('name.group.combatReadiness'), /CR_|COMBAT_READINESS|REPAIR_RATE/],
+    [tr('name.group.logistics'), /CREW|CARGO|FUEL|SUPPLIES|REPAIR|SALVAGE|SENSOR|SURVEY|DMOD|D_MOD|COMMAND|NAV|ELECTRONIC|OBJECTIVE|CORONA/],
   ];
-  const groupOf = name => (GROUPS.find(([, re]) => re.test(name)) || ['Other'])[0];
+  const OTHER_GROUP = tr('name.group.other');
+  const groupOf = name => (GROUPS.find(([, re]) => re.test(name)) || [OTHER_GROUP])[0];
   // The totals without the integration preview (null while it's off), to show what the preview changes.
   function integPreviewBase() {
     if (!integPreview) return null;
@@ -2636,7 +2648,7 @@
         if (!groups.has(g)) groups.set(g, []);
         groups.get(g).push(s);
       }
-      const order = [...GROUPS.map(g => g[0]), 'Other'];
+      const order = [...GROUPS.map(g => g[0]), OTHER_GROUP];
       const base = integPreviewBase();
       for (const b of previewGone(base && base.sums, t.sums)) {
         const g = groupOf(b.effect);
@@ -2673,7 +2685,7 @@
       // Gated nodes: their live-in-combat effects at the gate's strength, only under its condition.
       for (const [when, g] of t.gated || []) {
         const lines = [...g.sums.values()].filter(s => Math.abs(s.magnitude) > 1e-9);
-        html += `<div class="stat-group"><h3>${esc(when)} (${esc(g.item)}, ×${g.strength})</h3>` +
+        html += `<div class="stat-group"><h3>${esc(GATE_NAMES[when])} (${esc(g.item)}, ×${g.strength})</h3>` +
           (lines.length ? lines.map(s => `<div class="stat-line">${describe(s.effect, s.magnitude)}</div>`).join('') : '<div class="stat-line muted">Nothing: none of their effects are read live in combat.</div>') +
           `<div class="stat-line muted">${g.nodes} allocated node${g.nodes === 1 ? '' : 's'} in its radius give these instead of their usual effects.</div></div>`;
       }
@@ -2948,7 +2960,7 @@
       html += '<div class="tt-note">Inside Empty Shell Axion\'s radius: no effects granted if allocated.</div>';
     }
     const g = sc.gated.get(n.id);
-    if (g) html += `<div class="tt-note">${esc(g.def.name)}: applies only ${esc(g.when.toLowerCase())}, at ×${g.strength}. Effects not read live in combat are lost.</div>`;
+    if (g) html += `<div class="tt-note">${esc(g.def.name)}: applies only ${esc(GATE_IN_SENTENCE[g.when])}, at ×${g.strength}. Effects not read live in combat are lost.</div>`;
     const d = sc.doctrine;
     if (d && d.nodes.has(n.id)) {
       if (d.def.behaviour === 'REWRITE') {
@@ -3126,11 +3138,11 @@
     }
     return html;
   }
-  const subKindText = s => s.kind === 'DOCTRINE' ? `Doctrine (${s.behaviour === 'REWRITE' ? 'rewrites' : 'augments'} nodes in a ${s.radius.replace('_', ' ')} radius)`
-    : s.kind === 'ROOT_CONDUIT' ? 'Affinity for each node between the root and its socket'
-    : s.kind === 'MODSPEC_CACHE' ? 'Allocates 1 to 3 notables for free'
-    : s.lines && s.lines.some(l => GATE_LINES[l.effect]) ? `Gates nodes in a ${s.radius} radius: ${GATE_LINES[s.lines.find(l => GATE_LINES[l.effect]).effect].toLowerCase()}, ×${s.lines[0].max}`
-    : s.lines && subLine(s, 'EVERY_AFFINITY_FLAT_PER_EMPTY_SHELL_NODE') ? `Silences small nodes in an ${s.radius.replace('_', ' ')} radius for affinity` : humanize(s.kind);
+  const subKindText = s => s.kind === 'DOCTRINE' ? tr(s.behaviour === 'REWRITE' ? 'label.subKind.doctrine.rewrite' : 'label.subKind.doctrine.augment', { radius: radiusName(s.radius) })
+    : s.kind === 'ROOT_CONDUIT' ? tr('label.subKind.conduit')
+    : s.kind === 'MODSPEC_CACHE' ? tr('label.subKind.cache')
+    : s.lines && s.lines.some(l => GATE_OF[l.effect]) ? tr('label.subKind.gate', { radius: radiusName(s.radius), when: GATE_IN_SENTENCE[GATE_OF[s.lines.find(l => GATE_OF[l.effect]).effect]], strength: s.lines[0].max })
+    : s.lines && subLine(s, 'EVERY_AFFINITY_FLAT_PER_EMPTY_SHELL_NODE') ? tr('label.subKind.shell', { radius: radiusName(s.radius) }) : humanize(s.kind);
   // One line on what a socketed subroutine does right now.
   function subSummary(def, e, socket) {
     const sc = subState();
@@ -3144,11 +3156,11 @@
       const k = sc.shellCount.get(socket.id) || 0, silent = [...sc.silent].length;
       return `+${k} to every affinity (${k} small nodes in its radius). ${silent} allocated small node${silent === 1 ? '' : 's'} in it grant nothing.`;
     }
-    const gate = (def.lines || []).find(l => GATE_LINES[l.effect]);
+    const gate = (def.lines || []).find(l => GATE_OF[l.effect]);
     if (gate) {
       const mine = [...sc.gated.values()].filter(g => g.socket === socket);
       const allocatedIn = [...sc.gated].filter(([id, g]) => g.socket === socket && held(id)).length;
-      return `${GATE_LINES[gate.effect]}: ${allocatedIn} allocated node${allocatedIn === 1 ? '' : 's'} of ${mine.length} in its radius apply ×${gate.max}, live-in-combat effects only.`;
+      return `${GATE_NAMES[GATE_OF[gate.effect]]}: ${allocatedIn} allocated node${allocatedIn === 1 ? '' : 's'} of ${mine.length} in its radius apply ×${gate.max}, live-in-combat effects only.`;
     }
     if (def.kind === 'DOCTRINE') {
       const d = sc.doctrine && sc.doctrine.socket === socket ? sc.doctrine : null;
@@ -3915,7 +3927,7 @@
   const THEME_IDS = new Set(THEME_LIST.map(t => t.id));
   const NO_THEME = '_none';
   const STRUCTURAL_TIERS = new Set(['ROOT', 'WORMHOLE', 'WORMHOLE_EXIT', 'SOCKET']);
-  const themeName = id => (id === NO_THEME ? 'No theme' : (THEME_LIST.find(t => t.id === id) || {}).name || humanize(id));
+  const themeName = id => (id === NO_THEME ? tr('name.theme.none') : (THEME_LIST.find(t => t.id === id) || {}).name || humanize(id));
   const nodeThemeCache = new Map();
   function nodeThemes(n) {
     if (STRUCTURAL_TIERS.has(n.tier)) return null;
@@ -4103,7 +4115,6 @@
   // row covers. Temporary and gated effects stay in their section with the game's own wording around them. Hovering a
   // row shows its sources (each node or affinity step and its share), like the game's breakdown.
   const STAT_GROUPS = D.statGroups && D.statGroups.length ? D.statGroups : ['MECHANICS'];
-  const GATE_KEYS = { 'While phased': 'PHASED', 'Below 50% hull': 'LOW_HULL', 'While the ship system is active': 'SYSTEM_ACTIVE' };
   const gameString = (k, fallback) => (k && D.strings && D.strings[k]) || fallback;
   const SHEET_MIN_COLUMN = 400, SHEET_COLUMN_GAP = 24; // StatSheetLayout.MIN_COLUMN_WIDTH, COLUMN_GAP
   function statSheet() {
@@ -4135,7 +4146,7 @@
       if (base) pushGone(bs, g.sums, wrap);
     }
     for (const [when, g] of t.gated || []) {
-      const tpl = gameString(GATE_KEYS[when] ? `summary.gated.${GATE_KEYS[when]}` : '', `${when}: {text}`);
+      const tpl = gameString(`summary.gated.${when}`, `${GATE_NAMES[when]}: {text}`);
       const wrap = raw => tpl.replace('{text}', raw);
       const bs = base && (base.gated.get(when)?.sums || new Map());
       for (const s of g.sums.values()) push(s, wrap, bs);
@@ -5116,7 +5127,7 @@
 
   // --- import
   const HULL_FROM_ENUM = Object.fromEntries(Object.entries(HULL_ENUM).map(([k, v]) => [v, k]));
-  const hullLabelFor = h => ({ frigate: 'frigate', destroyer: 'destroyer', cruiser: 'cruiser', capitalShip: 'capital' }[h]);
+  const hullLabelFor = h => HULL_IN_SENTENCE[h];
   const anchorById = new Map((D.wormholeAnchors || []).map(a => [a.id, a]));
   // Old node and option ids map to current ones the way the mod reads them (NodeReplacements, AffinityOptions).
   function currentNodeId(id) {
