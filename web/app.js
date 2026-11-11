@@ -3894,7 +3894,7 @@
     return s;
   }
   // Where a node sits, short form for list and search rows: "Hegemony volume", or "Core" (one tree).
-  const shortPlace = n => n.volume === 'core' ? 'Core' : `${volumeName(n.volume)} volume`;
+  const shortPlace = n => n.volume === 'core' ? tr('list.place.core') : tr('list.place.volume', { volume: volumeName(n.volume) });
   let searchTerms = [];
   // Results are listed core first, then by volume, side and name; Enter cycles in the same order.
   function sortSearchResults(list) {
@@ -3916,20 +3916,22 @@
     return '';
   }
   function searchResultsHtml() {
-    if (!searchOrder.length) return `<div class="empty">No nodes match ${filterCount() && searchTerms.length ? 'that search and filter' : filterCount() ? 'that filter' : 'that search'}.</div>`;
+    if (!searchOrder.length) return `<div class="empty">${esc(tr(filterCount() && searchTerms.length ? 'search.none.both' : filterCount() ? 'search.none.filter' : 'search.none.search'))}</div>`;
     const have = searchOrder.filter(n => sat(n.id)).length;
     const filterParts = [];
-    if (themeFilter.size) filterParts.push(`${themeFilter.size > 1 ? (themeMatchAll ? 'all of the themes' : 'any of the themes') : 'the theme'} ${[...themeFilter].map(themeName).join(', ')}`);
-    if (showAffinity) filterParts.push('affinity nodes');
-    const themesText = filterParts.length ? ` for ${filterParts.join(' or ')}` : '';
-    let html = `<div class="search-head">${searchOrder.length} match${searchOrder.length === 1 ? '' : 'es'}${esc(themesText)}` +
-      `${state.root ? `, ${have} allocated` : ''}. Click one to jump to it.</div>`;
+    if (themeFilter.size) {
+      const kind = themeFilter.size > 1 ? (themeMatchAll ? 'search.filter.allThemes' : 'search.filter.anyTheme') : 'search.filter.theme';
+      filterParts.push(tr(kind, { themes: [...themeFilter].map(themeName).join(tr('common.listComma')) }));
+    }
+    if (showAffinity) filterParts.push(tr('search.filter.affinity'));
+    const head = filterParts.length ? (state.root ? 'search.head.filterAllocated' : 'search.head.filter') : state.root ? 'search.head.allocated' : 'search.head';
+    let html = `<div class="search-head">${esc(tr(head, { matches: tr('search.matches', { count: searchOrder.length }), filter: filterParts.join(tr('common.listOr')), have }))}</div>`;
     searchOrder.forEach((n, i) => {
       const t = effectiveType(n);
       const snippet = matchSnippet(n);
       html += `<div class="node-row ${n.tier.toLowerCase()}${i === searchCursor ? ' current' : ''}" data-node="${esc(n.id)}">` +
         nodeIconHtml(n, t) +
-        `<div><div class="nm">${esc(t.name)}${sat(n.id) ? '<span class="have">allocated</span>' : ''}</div>` +
+        `<div><div class="nm">${esc(t.name)}${sat(n.id) ? `<span class="have">${esc(tr('search.allocatedTag'))}</span>` : ''}</div>` +
         `<div class="tr">${esc(TIER_LABEL[n.tier] || n.tier)} · ${esc(shortPlace(n))}</div>` +
         (snippet ? `<div class="match">${esc(snippet)}</div>` : '') + '</div></div>';
     });
@@ -3942,7 +3944,7 @@
   function updateSearchTab(active) {
     if (active) {
       searchTab.hidden = false;
-      searchTab.textContent = `Search (${searchOrder.length})`;
+      searchTab.textContent = tr('search.tab', { n: searchOrder.length });
       if (els.panel.classList.contains('closed')) { togglePanel(); panelOpenedBySearch = true; }
       if (panelTab !== 'search') { tabBeforeSearch = panelTab; setPanelTab('search'); } else renderPanel();
     } else if (!searchTab.hidden) {
@@ -4033,7 +4035,7 @@
   const affinityNodeCount = nodes.filter(isAffinityNode).length;
   function renderFilterButton() {
     const k = filterCount();
-    themeBtnEl.textContent = k ? `Filter (${k})` : 'Filter';
+    themeBtnEl.textContent = k ? tr('filter.button.set', { n: k }) : tr('filter.button');
     themeBtnEl.setAttribute('aria-pressed', String(k > 0));
     const clear = document.getElementById('theme-clear');
     if (clear) clear.disabled = !k;
@@ -4044,12 +4046,12 @@
     const row = id => `<label><input type="checkbox" data-theme-tag="${esc(id)}"${themeFilter.has(id) ? ' checked' : ''}> ${esc(themeName(id))} <span class="muted">${themeCounts.get(id) || 0}</span></label>`;
     const used = THEME_LIST.filter(t => themeCounts.get(t.id)).map(t => t.id);
     themeEl.innerHTML =
-      `<div class="theme-head"><b>Filter</b></div>` +
-      `<p class="filter-affinity"><label title="Highlight every affinity node (the Low / Mid / High choice nodes)"><input type="checkbox" id="filter-affinity"${showAffinity ? ' checked' : ''}> Show affinity nodes <span class="muted">${affinityNodeCount}</span></label></p>` +
-      `<div class="theme-head"><b>Themes</b><label>Match <select id="theme-match">` +
-      `<option value="any"${themeMatchAll ? '' : ' selected'}>any ticked</option><option value="all"${themeMatchAll ? ' selected' : ''}>all ticked</option></select></label></div>` +
+      `<div class="theme-head"><b>${esc(tr('filter.heading'))}</b></div>` +
+      `<p class="filter-affinity"><label title="${esc(tr('filter.affinityTitle'))}"><input type="checkbox" id="filter-affinity"${showAffinity ? ' checked' : ''}> ${esc(tr('filter.affinity'))} <span class="muted">${affinityNodeCount}</span></label></p>` +
+      `<div class="theme-head"><b>${esc(tr('filter.themes'))}</b><label>${esc(tr('filter.match'))} <select id="theme-match">` +
+      `<option value="any"${themeMatchAll ? '' : ' selected'}>${esc(tr('filter.matchAny'))}</option><option value="all"${themeMatchAll ? ' selected' : ''}>${esc(tr('filter.matchAll'))}</option></select></label></div>` +
       `<div class="theme-list">${used.map(row).join('')}${themeCounts.get(NO_THEME) ? row(NO_THEME) : ''}</div>` +
-      `<div class="export-actions"><button id="theme-clear"${filterCount() ? '' : ' disabled'}>Clear</button><button id="theme-close">Close</button></div>`;
+      `<div class="export-actions"><button id="theme-clear"${filterCount() ? '' : ' disabled'}>${esc(tr('filter.clear'))}</button><button id="theme-close">${esc(tr('common.close'))}</button></div>`;
   }
   function toggleThemeFilter(show = themeEl.hidden) {
     themeEl.hidden = !show;
@@ -4304,11 +4306,11 @@
     const meta = [TIER_LABEL[n.tier] || n.tier, shortPlace(n)];
     if (n.tier === 'SOCKET' && sat(n.id)) {
       const e = state.subs.get(n.id), d = e && SUBS.get(e.id), exit = state.links.get(n.id);
-      meta.push(d ? `Holds ${d.name}` : exit && byId.get(exit) ? `Anchor to the ${volumeName(byId.get(exit).volume)} volume` : 'Empty');
+      meta.push(d ? tr('list.holds', { item: d.name }) : exit && byId.get(exit) ? tr('list.anchorTo', { volume: volumeName(byId.get(exit).volume) }) : tr('list.socketEmpty'));
     }
-    if (n.tier === 'WORMHOLE' && n.pairedWith) meta.push(`Paired with ${n.pairedWith}`);
-    if (n.tier === 'WORMHOLE_EXIT') { const s = linkedSocketOf(n.id); if (s) meta.push(`Linked to ${s}`); }
-    if (themes && themes.size) meta.push(`Themes: ${[...themes].map(themeName).join(', ')}`);
+    if (n.tier === 'WORMHOLE' && n.pairedWith) meta.push(tr('list.pairedWith', { id: n.pairedWith }));
+    if (n.tier === 'WORMHOLE_EXIT') { const s = linkedSocketOf(n.id); if (s) meta.push(tr('list.linkedTo', { socket: s })); }
+    if (themes && themes.size) meta.push(tr('list.themes', { themes: [...themes].map(themeName).join(tr('common.listComma')) }));
     const lines = isChoice(n) && !held(n.id)
       ? n.type.options.map(id => types.get(id)).filter(Boolean).map(o => `<div><span class="muted">${esc(o.name)}:</span> ${typeLines(o).join(' ')}</div>`)
       : integrable(t) && !isChoice(n) ? [integrationCompareHtml(n, t)]
@@ -4318,11 +4320,11 @@
     const mark = targets.want.has(n.id) ? 'want' : targets.forbid.has(n.id) ? 'forbid' : '';
     const marks = listMode !== 'all' || n.id === state.root ? ''
       : targets.mode ? `<span class="lv-target">` +
-        `<button type="button" data-mark="want" aria-pressed="${mark === 'want'}" aria-label="Wanted" title="${mark === 'want' ? 'Clear the mark' : 'Mark wanted: the plan reaches it'}">O</button>` +
-        `<button type="button" data-mark="forbid" aria-pressed="${mark === 'forbid'}" aria-label="Forbidden" title="${mark === 'forbid' ? 'Clear the mark' : 'Mark forbidden: the plan avoids it'}">X</button></span>`
-      : mark ? `<span class="lv-mark ${mark}" title="${mark === 'want' ? 'Wanted' : 'Forbidden'}">${mark === 'want' ? 'O' : 'X'}</span>` : '';
+        `<button type="button" data-mark="want" aria-pressed="${mark === 'want'}" aria-label="${esc(tr('list.mark.wanted'))}" title="${esc(tr(mark === 'want' ? 'list.mark.clear' : 'list.mark.wantTitle'))}">O</button>` +
+        `<button type="button" data-mark="forbid" aria-pressed="${mark === 'forbid'}" aria-label="${esc(tr('list.mark.forbidden'))}" title="${esc(tr(mark === 'forbid' ? 'list.mark.clear' : 'list.mark.forbidTitle'))}">X</button></span>`
+      : mark ? `<span class="lv-mark ${mark}" title="${esc(tr(mark === 'want' ? 'list.mark.wanted' : 'list.mark.forbidden'))}">${mark === 'want' ? 'O' : 'X'}</span>` : '';
     return `<div class="node-row lv-row ${n.tier.toLowerCase()}${listMode === 'all' && mark ? ` lv-${mark}` : ''}" data-node="${esc(n.id)}">${nodeIconHtml(n, t)}<div class="lv-main">` +
-      `<div class="nm">${esc(listName(n))}${sat(n.id) && listMode !== 'build' ? '<span class="have">allocated</span>' : ''}${state.integrated.has(n.id) && integrable(t) ? '<span class="have builtin">integrated</span>' : ''}</div>` +
+      `<div class="nm">${esc(listName(n))}${sat(n.id) && listMode !== 'build' ? `<span class="have">${esc(tr('search.allocatedTag'))}</span>` : ''}${state.integrated.has(n.id) && integrable(t) ? `<span class="have builtin">${esc(tr('list.integratedTag'))}</span>` : ''}</div>` +
       `<div class="tr">${esc(meta.join(' · '))}</div>` +
       (lines.length ? `<div class="lv-effects">${lines.join('')}</div>` : '') + `</div>${marks}</div>`;
   }
@@ -4330,7 +4332,7 @@
   // wormholes, exits and sockets, and the affinity nodes summed into one row per tech). Each row is an entry with a
   // place (its tree), a rank (tier), a name, an allocation order and a count, so both lists sort and group alike.
   const AFF_ORDER = ['low_tech_affinity', 'midline_affinity', 'high_tech_affinity'];
-  const AFF_GROUP = 'Affinity nodes';
+  const AFF_GROUP = tr('list.place.affinity');
   let listMode = 'all';
   try { listMode = localStorage.getItem('esp.listMode') === 'build' ? 'build' : 'all'; } catch { /* storage unavailable */ }
   const listModeBtns = [...document.querySelectorAll('#listview [data-mode]')];
@@ -4341,7 +4343,7 @@
     const lines = typeEffects(t).map(e => `<div>${describe(e.effect, e.magnitude * k)}</div>`);
     return `<div class="node-row lv-row lv-aff" data-node="${esc(g.nodes[0].id)}">${nodeIconHtml(g.nodes[0], t)}<div class="lv-main">` +
       `<div class="nm">${esc(t.name)} <span class="lv-count">×${k}</span></div>` +
-      `<div class="tr">${k} affinity node${k === 1 ? '' : 's'}</div>` +
+      `<div class="tr">${esc(tr('list.affinityRow', { count: k }))}</div>` +
       (lines.length ? `<div class="lv-effects">${lines.join('')}</div>` : '') + '</div></div>';
   }
   function listEntries(hits) {
@@ -4368,16 +4370,12 @@
     if (!listOpen()) return;
     for (const b of listModeBtns) b.setAttribute('aria-pressed', String(b.dataset.mode === listMode));
     const buildSize = state.root ? state.alloc.size + 1 : 0;
-    listModeBtns.find(b => b.dataset.mode === 'build').textContent = `Build (${buildSize})`;
+    listModeBtns.find(b => b.dataset.mode === 'build').textContent = tr('list.mode.build', { n: buildSize });
     const orderOpt = listSort.querySelector('option[value="order"]');
     orderOpt.hidden = orderOpt.disabled = listMode !== 'build';
     const sortMode = listSortMode === 'order' && listMode !== 'build' ? 'name' : listSortMode;
     listSort.value = sortMode;
-    listHint.textContent = listMode === 'build'
-      ? 'Click a node to see it on the map.'
-      : targets.mode
-        ? 'Target mode: mark nodes Desired or Forbidden (clicking a node cycles its mark, as on the map), then Allocate.'
-        : 'Click a node to see it on the map.';
+    listHint.textContent = tr(listMode !== 'build' && targets.mode ? 'list.hint.target' : 'list.hint');
     const entries = listEntries(searchHits);
     const total = entries.reduce((a, e) => a + e.count, 0);
     const byName = (a, b) => nameCollator.compare(a.name, b.name) || nameCollator.compare(a.place, b.place);
@@ -4399,7 +4397,7 @@
         if (!collapsed) visible += n;
         const cap = place.charAt(0).toUpperCase() + place.slice(1);
         // Each tree's heading collapses or expands it (remembered in esp.listCollapsed).
-        html += `<h3 class="lv-group"><button type="button" data-group="${esc(place)}" aria-expanded="${!collapsed}" title="${collapsed ? 'Show' : 'Hide'} this tree's nodes">` +
+        html += `<h3 class="lv-group"><button type="button" data-group="${esc(place)}" aria-expanded="${!collapsed}" title="${esc(tr(collapsed ? 'list.group.show' : 'list.group.hide'))}">` +
           `<span class="lv-caret">${collapsed ? '▸' : '▾'}</span> ${esc(cap)} <span class="muted">${n}</span></button></h3>` +
           (collapsed ? '' : g.list.map(e => e.html()).join(''));
       }
@@ -4410,18 +4408,18 @@
       visible = total;
     }
     listOrder = entries;
-    const filtered = searchHits ? ' matching the search and Filter' : '';
     const inCollapsed = total - visible;
-    const collapsedNote = inCollapsed ? `, ${inCollapsed} in collapsed trees` : '';
+    // list.count.all, .filtered, .collapsed, .filteredCollapsed (and the same for build)
+    const variant = searchHits ? (inCollapsed ? '.filteredCollapsed' : '.filtered') : inCollapsed ? '.collapsed' : '';
     if (listMode === 'build') {
       const affCount = entries.filter(e => e.affinity).reduce((a, e) => a + e.count, 0);
-      listCount.textContent = !state.root ? 'No build yet.'
-        : `${total} of ${buildSize} allocated nodes${filtered} (${affCount} affinity)${collapsedNote}`;
-    } else listCount.textContent = `${total} of ${listNodes.filter(n => !switchedOff(n)).length} nodes${filtered}${collapsedNote}`;
+      listCount.textContent = !state.root ? tr('list.noBuild')
+        : tr(`list.count.build${variant}`, { total, size: buildSize, affinity: affCount, collapsed: inCollapsed });
+    } else listCount.textContent = tr(`list.count.all${variant}`, { total, all: listNodes.filter(n => !switchedOff(n)).length, collapsed: inCollapsed });
     listGroupBtns.hidden = sortMode !== 'tree';
-    const empty = listMode === 'build' && !state.root ? 'Pick a root on the map to start a build.'
-      : listMode === 'build' && !searchHits ? 'Nothing allocated yet besides the root.' : 'No nodes match. Change search term or Filters.';
-    listBody.innerHTML = html || `<div class="empty">${empty}</div>`;
+    const empty = listMode === 'build' && !state.root ? 'list.empty.noRoot'
+      : listMode === 'build' && !searchHits ? 'list.empty.rootOnly' : 'list.empty.noMatch';
+    listBody.innerHTML = html || `<div class="empty">${esc(tr(empty))}</div>`;
     listCursor = -1;
   }
   for (const b of listModeBtns) {
@@ -4434,9 +4432,9 @@
   }
   function setView(list) {
     listEl.hidden = !list;
-    viewBtn.textContent = list ? 'Map' : 'List';
+    viewBtn.textContent = tr(list ? 'list.view.map' : 'list.view.list');
     viewBtn.setAttribute('aria-pressed', String(list));
-    viewBtn.title = list ? 'Skill tree map (L)' : 'List view of every non-affinity node (L)';
+    viewBtn.title = tr(list ? 'list.view.mapTitle' : 'list.view.listTitle');
     closePicker(); hideTooltip(); setHover(null);
     // The Targets bar (Allocate, Keep current build) floats over the map; while the list shows it's docked inside the
     // list, above the rows, so it isn't covered.

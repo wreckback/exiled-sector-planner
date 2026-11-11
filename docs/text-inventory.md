@@ -13,7 +13,7 @@ Tick an area when its migration step is committed and its output matches the bas
 - [x] Rule refusals and node rules (step 4c, `text/rules.js`; list joiners ", ", " and ", " or " in `common.js`). Also the waypoint's hidden-volume refusal ("Waypoint …: …"), missed by the scan. The fallbacks for the mod's `node.block.*`/`node.requires.*` strings moved too; the mod has all of them today, so none shows. The mod's gate wording is still lowercased in code to fit "Locked until …".
 - [x] Toasts (step 4d, `text/toast.js`; "Choose a root." is `common.chooseRoot`, and the new-problems toast reuses `ship.problemCount`, the same text)
 - [x] Top bar, summary panel and stat sheet (step 4e, `text/bar.js`, `text/panel.js`, `text/sheet.js`; the map's region labels in `names.js`). Also moved, missed by the scan: the Notables tab's "(unobtainable)", the Full Sheet button's hover text. The "Root Conduit" source label now comes from the mod data (the subroutine's own name, the same text). The Full Sheet's hull size uses `name.hull.*` instead of capitalising in code.
-- [ ] Search, filter and list view
+- [x] Search, filter and list view (step 4f, `text/search.js`, `text/filter.js`, `text/list.js`). Also moved, missed by the scan: the Search tab's "Search (12)", the Build button's "Build (23)", the "allocated"/"integrated" row tags. The list's collapsed trees are still remembered by their place name (`esp.listCollapsed`), so renaming a place forgets that tree's collapsed state once.
 - [ ] Pickers
 - [ ] Target mode
 - [x] Ship rules and Optional rules (step 3, with their `index.html` parts: the Ship tab and the Optional rules dialog; `text/ship.js`, `text/optional.js`, shared words in `text/common.js`)
