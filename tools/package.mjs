@@ -132,6 +132,8 @@ try {
         `--add-virtual-file=${name}/README.txt:${readme}`,
         `--add-file=${join(licenseDir, 'LICENSE')}`,
         `refs/tags/${tag}:web`, 'index.html', 'style.css', 'app.js', 'data/planner-data.js',
+        // The text files (from the text overhaul on; older tags have none).
+        ...(git(repoRoot, ['cat-file', '-e', `refs/tags/${tag}:web/text`], { allowFail: true }) !== null ? ['text'] : []),
     ]);
 } finally {
     rmSync(licenseDir, { recursive: true, force: true });

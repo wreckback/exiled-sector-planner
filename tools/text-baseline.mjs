@@ -165,8 +165,26 @@ const sections = (text) => {
 };
 
 // ---------------------------------------------------------------- compare
+// What moving text into text/*.js may change without changing what's shown: index.html's data-t* attributes,
+// <span data-t> holders around text next to a form field, and the order of a tag's attributes (applyText sets title
+// and placeholder after the others). Both sides are compared without them.
+// Also the footer's short planner version, which changes with every commit.
+function normalize(text) {
+    return text
+        .replace(/(Planner )v\d[^<"]*/g, '$1<planner-version>')
+        // The capture breaks the line between two tags; a holder's tags go with it.
+        .replace(/>\n<span data-t="[^"]*">([^<]*)<\/span>\n</g, '>$1<')
+        .replace(/>\n<span data-t="[^"]*">([^<]*)<\/span>/g, '>$1')
+        .replace(/<span data-t="[^"]*">([^<]*)<\/span>\n</g, '$1<')
+        .replace(/<span data-t="[^"]*">([^<]*)<\/span>/g, '$1')
+        .replace(/ data-t(?:-[a-z-]+)?="[^"]*"/g, '')
+        .replace(/<([a-zA-Z][\w-]*)((?:\s+[^\s=>/]+(?:="[^"]*")?)+)\s*>/g, (_, tag, attrs) => {
+            const list = [...attrs.matchAll(/\s+([^\s=>/]+)(?:="([^"]*)")?/g)].map((m) => m[0].trim());
+            return `<${tag} ${list.sort().join(' ')}>`;
+        });
+}
 function compare(before, after) {
-    const a = sections(before), b = sections(after);
+    const a = sections(normalize(before)), b = sections(normalize(after));
     let diffs = 0;
     for (const label of new Set([...a.keys(), ...b.keys()])) {
         if (a.get(label) === b.get(label)) continue;

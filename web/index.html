@@ -109,45 +109,45 @@
   </div>
   <div id="panel-body"></div>
   <div id="panel-ship" hidden>
-    <p class="muted">Set ship-specific limitations here. Anything left as "Not set" isn't checked. Set hull size in the Hull size dropdown in the main header.</p>
+    <p class="muted" data-t="ship.intro"></p>
     <p id="ship-summary"></p>
     <div id="ship-problems"></div>
 
-    <h3>Ship Options</h3>
+    <h3 data-t="ship.optionsHeading"></h3>
     <table class="ship-form">
-      <tr><td><label for="ship-shield">Shield</label></td><td>
+      <tr><td><label for="ship-shield" data-t="ship.shield.label"></label></td><td>
         <select id="ship-shield">
-          <option value="">Not set</option>
-          <option value="FRONT">Front shield</option>
-          <option value="OMNI">Omni shield</option>
-          <option value="NONE">No shield</option>
-          <option value="PHASE">Phase cloak</option>
+          <option value="" data-t="common.notSet"></option>
+          <option value="FRONT" data-t="ship.shield.front"></option>
+          <option value="OMNI" data-t="ship.shield.omni"></option>
+          <option value="NONE" data-t="ship.shield.none"></option>
+          <option value="PHASE" data-t="ship.shield.phase"></option>
         </select></td></tr>
-      <tr><td><label for="ship-armor">Base armor</label> <span class="muted">(before hullmods and skills)</span></td><td>
-        <input id="ship-armor" type="number" min="0" max="99999" step="1" placeholder="Not set"></td></tr>
+      <tr><td><label for="ship-armor" data-t="ship.armor.label"></label> <span class="muted" data-t="ship.armor.hint"></span></td><td>
+        <input id="ship-armor" type="number" min="0" max="99999" step="1" data-t-placeholder="common.notSet"></td></tr>
       <tr><td colspan="2" id="ship-armor-note" class="muted"></td></tr>
-      <tr><td><label for="ship-civilian">Civilian-grade hull</label></td><td>
-        <select id="ship-civilian" data-tri="civilian"><option value="">Not set</option><option value="1">Yes</option><option value="0">No</option></select></td></tr>
-      <tr><td><label for="ship-charges">System uses charges</label></td><td>
-        <select id="ship-charges" data-tri="charges"><option value="">Not set</option><option value="1">Yes</option><option value="0">No</option></select></td></tr>
-      <tr><td><label for="ship-modules">Has station modules</label></td><td>
-        <select id="ship-modules" data-tri="modules"><option value="">Not set</option><option value="1">Yes</option><option value="0">No</option></select></td></tr>
-      <tr><td><label for="ship-wings">Only built-in fighter wings</label></td><td>
-        <select id="ship-wings" data-tri="builtInWings"><option value="">Not set</option><option value="1">Yes</option><option value="0">No</option></select></td></tr>
+      <tr><td><label for="ship-civilian" data-t="ship.civilian.label"></label></td><td>
+        <select id="ship-civilian" data-tri="civilian"><option value="" data-t="common.notSet"></option><option value="1" data-t="common.yes"></option><option value="0" data-t="common.no"></option></select></td></tr>
+      <tr><td><label for="ship-charges" data-t="ship.charges.label"></label></td><td>
+        <select id="ship-charges" data-tri="charges"><option value="" data-t="common.notSet"></option><option value="1" data-t="common.yes"></option><option value="0" data-t="common.no"></option></select></td></tr>
+      <tr><td><label for="ship-modules" data-t="ship.modules.label"></label></td><td>
+        <select id="ship-modules" data-tri="modules"><option value="" data-t="common.notSet"></option><option value="1" data-t="common.yes"></option><option value="0" data-t="common.no"></option></select></td></tr>
+      <tr><td><label for="ship-wings" data-t="ship.wings.label"></label></td><td>
+        <select id="ship-wings" data-tri="builtInWings"><option value="" data-t="common.notSet"></option><option value="1" data-t="common.yes"></option><option value="0" data-t="common.no"></option></select></td></tr>
     </table>
 
-    <h3>Installed Hullmods</h3>
+    <h3 data-t="ship.hullmodsHeading"></h3>
     <div id="ship-mods"></div>
-    <p><label for="ship-mod-input">Add a hullmod</label><br>
-      <input id="ship-mod-input" list="ship-mod-list" type="text" autocomplete="off" placeholder="Type the hullmod's name" style="width:100%">
+    <p><label for="ship-mod-input" data-t="ship.addHullmod.label"></label><br>
+      <input id="ship-mod-input" list="ship-mod-list" type="text" autocomplete="off" data-t-placeholder="ship.addHullmod.placeholder" style="width:100%">
       <datalist id="ship-mod-list"></datalist></p>
     <p id="ship-mod-status" class="bad" role="status"></p>
 
-    <h3>Logistics</h3>
-    <p><label for="ship-logistics">Extra logistics slots</label> <input id="ship-logistics" type="number" min="0" max="20" step="1" value="0"></p>
+    <h3 data-t="ship.logisticsHeading"></h3>
+    <p><label for="ship-logistics" data-t="ship.logistics.label"></label> <input id="ship-logistics" type="number" min="0" max="20" step="1" value="0"></p>
     <p id="ship-logistics-note" class="muted"></p>
 
-    <div class="export-actions"><button id="ship-clear">Reset ship rules</button></div>
+    <div class="export-actions"><button id="ship-clear" data-t="ship.reset"></button></div>
   </div>
   <footer id="panel-foot"></footer>
 </aside>
@@ -307,45 +307,45 @@
 
 <div id="story" role="dialog" aria-modal="true" aria-labelledby="story-title" hidden>
   <div class="keys-head">
-    <h2 id="story-title">Optional rules</h2>
-    <button id="story-close" title="Close (Esc)">Close</button>
+    <h2 id="story-title" data-t="optional.title"></h2>
+    <button id="story-close" data-t-title="common.closeEsc" data-t="common.close"></button>
   </div>
   <div class="keys-body">
     <p id="story-summary"></p>
 
-    <h3>Wormholes</h3>
+    <h3 data-t="optional.wormholesHeading"></h3>
     <div id="story-other" class="ship-checks"></div>
 
-    <h3>Optional Volumes</h3>
-    <p class="muted">Volumes built around other mods. Install the corresponding mod or turn on its LunaLib option.</p>
+    <h3 data-t="optional.volumesHeading"></h3>
+    <p class="muted" data-t="optional.volumes.intro"></p>
     <div id="story-volumes" class="ship-checks"></div>
 
-    <h3>Game state reached</h3>
+    <h3 data-t="optional.gatesHeading"></h3>
     <div class="export-actions">
-      <button id="story-gate-all">Tick all</button>
-      <button id="story-gate-none">Untick all</button>
+      <button id="story-gate-all" data-t="common.tickAll"></button>
+      <button id="story-gate-none" data-t="common.untickAll"></button>
     </div>
     <div id="story-gates" class="ship-checks"></div>
 
-    <h3>Unlocked hullmods</h3>
+    <h3 data-t="optional.unlocksHeading"></h3>
     <div class="export-actions">
-      <button id="story-unlock-all">Tick all</button>
-      <button id="story-unlock-none">Untick all</button>
+      <button id="story-unlock-all" data-t="common.tickAll"></button>
+      <button id="story-unlock-none" data-t="common.untickAll"></button>
     </div>
     <div id="story-unlocks" class="ship-checks"></div>
 
-    <h3>Integration cost</h3>
-    <p class="muted">The mod's LunaLib setting Integration Story Point Cost. Only changes the story points shown.</p>
-    <label>Story points per integration
+    <h3 data-t="optional.integHeading"></h3>
+    <p class="muted" data-t="optional.integ.intro"></p>
+    <label><span data-t="optional.integ.label"></span>
       <select id="story-integ-cost">
-        <option value="EXPONENTIAL">Exponential: 1, 2, 4, 8… (default)</option>
-        <option value="ADDITIVE">Additive: 1, 2, 3, 4…</option>
-        <option value="STATIC">Static: 2 each</option>
+        <option value="EXPONENTIAL" data-t="optional.integ.exponential"></option>
+        <option value="ADDITIVE" data-t="optional.integ.additive"></option>
+        <option value="STATIC" data-t="optional.integ.static"></option>
       </select>
     </label>
 
     <div class="export-actions" style="margin-top:12px">
-      <button id="story-clear">Reset optional rules</button>
+      <button id="story-clear" data-t="optional.reset"></button>
     </div>
   </div>
 </div>
@@ -414,6 +414,10 @@
 
 <script src="version.js"></script>
 <script src="data/planner-data.js"></script>
+<!-- The planner's own text, one file per area (see text/common.js). -->
+<script src="text/common.js"></script>
+<script src="text/ship.js"></script>
+<script src="text/optional.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

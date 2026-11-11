@@ -16,10 +16,12 @@ Tick an area when its migration step is committed and its output matches the bas
 - [ ] Search, filter and list view
 - [ ] Pickers
 - [ ] Target mode
-- [ ] Ship rules and Optional rules
+- [x] Ship rules and Optional rules (step 3, with their `index.html` parts: the Ship tab and the Optional rules dialog; `text/ship.js`, `text/optional.js`, shared words in `text/common.js`)
 - [ ] Templates
 - [ ] Mod assets
-- [ ] `index.html` (all sections)
+- [ ] `index.html` (the other sections)
+
+Already keyed for later areas: the shield names (`ship.shield.*`, also `SHIELDS` in `app.js`, Names step) and `common.*` (Close, Not set, Yes, No, Tick all, Untick all).
 
 ## Counts
 

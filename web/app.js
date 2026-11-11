@@ -11,6 +11,31 @@
     return;
   }
 
+  // ------------------------------------------------------------------ text lookup
+  // The planner's own text is in text/*.js (loaded before this file), one "key": "text" per line.
+  // tr(key, args) fills {name} placeholders from args. With args.count and no plain key, it takes key.one for a count
+  // of 1 and key.other otherwise. A missing key shows as the key itself (and a console warning), so it stands out.
+  // (Named tr, not t: t is the usual name for a node type in this file.)
+  const TEXT = window.ESP_TEXT || {};
+  const missingText = new Set();
+  function tr(key, args = {}) {
+    let s = TEXT[key];
+    if (s === undefined && 'count' in args) s = TEXT[`${key}.${args.count === 1 ? 'one' : 'other'}`];
+    if (s === undefined) {
+      if (!missingText.has(key)) { missingText.add(key); console.warn(`Missing text: ${key}`); }
+      return key;
+    }
+    return s.replace(/\{(\w+)\}/g, (m, k) => (k in args ? String(args[k]) : m));
+  }
+  // index.html names its text by key: data-t (the element's text), data-t-title, data-t-placeholder, data-t-aria-label.
+  function applyText(root = document) {
+    for (const el of root.querySelectorAll('[data-t]')) el.textContent = tr(el.dataset.t);
+    for (const attr of ['title', 'placeholder', 'aria-label']) {
+      for (const el of root.querySelectorAll(`[data-t-${attr}]`)) el.setAttribute(attr, tr(el.getAttribute(`data-t-${attr}`)));
+    }
+  }
+  applyText();
+
   // ------------------------------------------------------------------ constants
   const NODE_SIZE = 64;
   const ICON_INSET = 0.9;
@@ -4490,7 +4515,7 @@
   // Allocated nodes that break a rule, as a sentence after the Ship tab's and Optional rules dialog's summaries (or nothing).
   const problemSummary = () => {
     const problems = rules().problems.size;
-    return problems ? ` ${problems} illegal allocated node${problems === 1 ? '' : 's'}.` : '';
+    return problems ? ` ${tr('ship.problemCount', { count: problems })}` : '';
   };
   function renderShipPane() {
     if (!shipListBuilt) {
@@ -4502,16 +4527,16 @@
     ship.shield.value = sh.shield || '';
     if (document.activeElement !== ship.armor) ship.armor.value = sh.armor ?? '';
     const cut = D.effects.ARMOR_FLAT_FOR_LOW_BASE_ARMOR?.hullArgs?.[HULL_ENUM[state.hull]];
-    ship.armorNote.textContent = cut ? `Low-armor nodes need ${fmt(evalExpr(cut.cutoff, 1))} or less on a ${hullLabel()} (only Critical Point Refit for now).` : '';
+    ship.armorNote.textContent = cut ? tr('ship.armor.note', { armor: fmt(evalExpr(cut.cutoff, 1)), hull: hullLabel() }) : '';
     for (const sel of ship.tris) sel.value = sh[sel.dataset.tri] == null ? '' : sh[sel.dataset.tri] ? '1' : '0';
     ship.mods.innerHTML = sh.hullMods.size ? [...sh.hullMods].map(h => {
       const hits = relevantHullMods.get(h) || [];
-      return `<span class="chip" title="${esc(`${hullModName(h)} (${h}). ` + (hits.length ? 'Refuses ' + hits.map(t => t.name).join(', ') : 'No node clashes with this hullmod'))}">${esc(hullModLabel(h))} <button data-rm="${esc(h)}" title="Remove" aria-label="Remove ${esc(hullModName(h))}">×</button></span>`;
-    }).join('') : '<span class="muted">None listed.</span>';
+      const title = tr(hits.length ? 'ship.hullmod.refuses' : 'ship.hullmod.noClash', { name: hullModName(h), id: h, nodes: hits.map(x => x.name).join(', ') });
+      return `<span class="chip" title="${esc(title)}">${esc(hullModLabel(h))} <button data-rm="${esc(h)}" title="${esc(tr('ship.hullmod.remove'))}" aria-label="${esc(tr('ship.hullmod.removeNamed', { name: hullModName(h) }))}">×</button></span>`;
+    }).join('') : `<span class="muted">${esc(tr('ship.hullmods.none'))}</span>`;
     if (document.activeElement !== ship.logistics) ship.logistics.value = sh.extraLogistics || 0;
-    ship.logisticsNote.textContent = `Limit: ${logisticsCap()} logistics notables and keystones. Some items add slots in game.`;
-    const n = shipRuleCount();
-    ship.summary.textContent = `${n} ship rule${n === 1 ? '' : 's'} set.${problemSummary()}`;
+    ship.logisticsNote.textContent = tr('ship.logistics.note', { limit: logisticsCap() });
+    ship.summary.textContent = tr('ship.summary', { count: shipRuleCount() }) + problemSummary();
     ship.problems.innerHTML = problemsHtml();
   }
   function renderStory() {
@@ -4525,15 +4550,15 @@
       }
       // A gate whose nodes all sit in one optional volume toggle is listed under that toggle; the rest stay in Story gates.
       const gateToggle = g => OPTIONAL_VOLUMES.find(t => [...gateVolumes.get(g)].every(v => t.volumes.includes(v))) || null;
-      const gateRow = g => `<label><input type="checkbox" data-gate="${esc(g)}"> ${esc(gateText(g))} <span class="muted">(${gateCounts.get(g)} node${gateCounts.get(g) > 1 ? 's' : ''})</span></label>`;
+      const gateRow = g => `<label><input type="checkbox" data-gate="${esc(g)}"> ${esc(gateText(g))} <span class="muted">${esc(tr('optional.nodeCount', { count: gateCounts.get(g) }))}</span></label>`;
       const sortedGates = [...gateCounts.keys()].sort((a, b) => gateText(a).localeCompare(gateText(b)));
       story.gates.innerHTML = sortedGates.filter(g => !gateToggle(g)).map(gateRow).join('');
       story.volumes.innerHTML = OPTIONAL_VOLUMES.map(t => {
         const count = nodes.filter(n => t.volumes.includes(n.volume)).length;
         const gates = sortedGates.filter(g => gateToggle(g) === t);
-        return `<label><input type="checkbox" data-volgroup="${esc(t.id)}"> ${esc(t.name)} <span class="muted">(${count} node${count === 1 ? '' : 's'})</span></label>` +
-          (gates.length ? `<div class="vol-gates" data-for="${esc(t.id)}"><span class="muted">Game state reached:</span>${gates.map(gateRow).join('')}</div>` : '');
-      }).join('') || '<span class="muted">None in this mod version.</span>';
+        return `<label><input type="checkbox" data-volgroup="${esc(t.id)}"> ${esc(t.name)} <span class="muted">${esc(tr('optional.nodeCount', { count }))}</span></label>` +
+          (gates.length ? `<div class="vol-gates" data-for="${esc(t.id)}"><span class="muted">${esc(tr('optional.volumes.gates'))}</span>${gates.map(gateRow).join('')}</div>` : '');
+      }).join('') || `<span class="muted">${esc(tr('optional.volumes.none'))}</span>`;
       // Blueprint unlocks are hull mods (Unlocked hullmods, by name only; the condition is in the hover title). Anything
       // else (today only the Wormhole, unlocked by $playerCanUseGates) goes in the section at the top, with its condition.
       const unlockTypes = treeTypes.filter(t => (t.unlockConditions || []).length).sort((a, b) => a.name.localeCompare(b.name));
@@ -4555,10 +4580,8 @@
     for (const cb of [...story.unlocks.querySelectorAll('input'), ...story.other.querySelectorAll('input')]) cb.checked = !sh.lockedTypes.has(cb.dataset.type);
     story.integCost.value = sh.integCost;
     const n = storyRuleCount(), hv = state.hiddenVolumes.size;
-    const parts = [];
-    if (n) parts.push(`${n} gate${n === 1 ? ' or unlock' : 's or unlocks'}`);
-    if (hv) parts.push(`${hv} optional volume toggle${hv === 1 ? '' : 's'}`);
-    story.summary.textContent = `${parts.length ? `Unticked: ${parts.join(' and ')}.` : 'Everything is ticked.'}${problemSummary()}`;
+    const counts = { gates: tr('optional.count.gates', { count: n }), volumes: tr('optional.count.volumes', { count: hv }) };
+    story.summary.textContent = tr(n && hv ? 'optional.summary.both' : n ? 'optional.summary.gates' : hv ? 'optional.summary.volumes' : 'optional.summary.none', counts) + problemSummary();
   }
   function setShip(fn) {
     const before = rules().problems.size;
@@ -4605,7 +4628,7 @@
     const folded = raw.toLowerCase();
     const id = inParens && relevantHullMods.has(inParens[1]) ? inParens[1]
       : [...relevantHullMods.keys()].find(h => hullModLabel(h).toLowerCase() === folded || hullModName(h).toLowerCase() === folded || h.toLowerCase() === folded);
-    if (!id) { ship.modStatus.textContent = `No node clashes with "${raw}", so it doesn't change anything. Pick one from the list.`; return; }
+    if (!id) { ship.modStatus.textContent = tr('ship.addHullmod.unknown', { name: raw }); return; }
     ship.modStatus.textContent = '';
     ship.modInput.value = '';
     if (!state.ship.hullMods.has(id)) setShip(s => { s.hullMods.add(id); });
