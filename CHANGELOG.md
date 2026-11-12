@@ -107,6 +107,16 @@ On the `text-editor` branch. Without `--edit` the page is unchanged (the text ba
 - The logic is `tools/auto-release.mjs`, which never pushes and can run locally (`--dry-run` undoes its commit and tag).
 - `update.mjs --verdict <file>` saves its outcome as JSON. The newest-mod-release rule and the planner tag parsing moved into `tools/lib/common.mjs`, shared by `update.mjs`, `release.mjs` and `auto-release.mjs`.
 
+## Nested theme tags (mod `Dev` after 0.12.6-alpha, 2026-11-12)
+
+On the `theme-tags` branch, ready for the next mod release. With 0.12.6-alpha data the page is unchanged.
+
+- The mod moved its theme list from `SkillTags.THEME` to `data/config/exiledSector/theme_tags.csv`, with names under `tag.<id>`. The tags now nest (Beam is inside Energy, which is inside Weapons), and every node was retagged. `extract.mjs` reads the CSV (the tags scoped to `ship`, in its order, with each tag's `parent`), and still reads `SkillTags.THEME` for older releases. Against `Dev` the Filter has 54 themes, where it had 24.
+- The Filter matches and counts a node under its tags and all their parents, as the mod's `ThemeTags.allWithAncestors` does: Weapons finds the Beam nodes too, and Defense finds 109 nodes though no node carries `defence` itself. Tooltips and the list still show a node's own tags.
+- The affinity nodes are now tagged Low Tech, Midline and High Tech (inside Affinity) instead of Flux, Hull and Armor. With that data they match those themes like any other node; with older data they still never match a theme. Show affinity nodes is unchanged.
+- Names for the renamed and new requirements: Strikecraft bays and No strikecraft bays (`req_fighter_bays` and `req_no_fighter_bays` before), Front shield and Omni shield. The old two stay until the data is synced past 0.12.6-alpha.
+- `update.mjs` flags an empty theme list, so an automatic release stops on it, and it watches `ThemeTags` and `theme_tags.csv`.
+
 ## Planner (`web/`)
 
 **Tree view**

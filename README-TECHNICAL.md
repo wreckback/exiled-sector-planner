@@ -190,10 +190,11 @@ The planner ships no images. Click **Show mod art** in the top bar and choose th
      - Clearing the search puts the panel back how it was.
    - **Filter** (next to the search box) highlights groups of nodes:
      - **Show affinity nodes** highlights all 155 affinity nodes (the Low / Mid / High choice nodes).
-     - **Themes** are the mod's own theme tags: Flux, Shield, Armor, Hull, Speed, Weapons, Strikecraft, Logistics and so on, each with its node count.
+     - **Themes** are the mod's own theme tags: Flux, Shield, Armor, Hull, Weapons, Strikecraft, Logistics and so on, each with its node count.
+     - From the mod release after 0.12.6-alpha, tags can sit inside other tags: Beam is inside Energy, which is inside Weapons. A theme then also finds the nodes of the tags inside it, as the game reads them, so Weapons finds the Beam nodes too. Themes with no nodes aren't listed.
      - Ticked themes highlight and list their nodes the same way as search. Match **any ticked** or **all ticked**, and combine with search text (for example Weapons plus "emp").
      - A choice node matches if any of its options has the theme. Roots, wormholes and sockets never match. **No theme** finds the few nodes without a theme tag.
-     - Affinity nodes never match a theme, only Show affinity nodes. The mod tags the affinity options too (Low Tech: Hull, Armor; Midline: Flux, Hull; High Tech: Flux), so they would otherwise drown out Flux, Hull and Armor. Show affinity nodes adds to whatever the themes match.
+     - Up to mod 0.12.6-alpha, affinity nodes never match a theme, only Show affinity nodes. The mod tags the affinity options there with Low Tech: Hull, Armor; Midline: Flux, Hull; High Tech: Flux, so they would otherwise drown out Flux, Hull and Armor. From the next release they're tagged Low Tech, Midline and High Tech (inside Affinity) and match those themes like any other node. Show affinity nodes adds to whatever the themes match.
      - Tooltips list a node's themes.
    - When zoomed out, each tree is labelled. Click a label to zoom into that tree.
    - **List** in the top bar (or `L`) swaps the map for a list of every node except affinity nodes: icon, name, tier, tree, themes, an "allocated" tag and its effects. The core's six wormholes and six sockets show their id, e.g. "Wormhole (hightech_wormhole_1)" or "Subroutine Socket (subroutine_socket_16)", wormholes with the one they're paired with and allocated sockets with what they hold; the exits in the other trees say which socket they're linked to when anchored.
