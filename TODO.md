@@ -26,6 +26,17 @@ The text editor (`node tools/serve.mjs --edit`; `TOOLS.md`, Text tools) was buil
    - `release.mjs --dry-run`
    - a test zip from `package.mjs` that opens from `file://`
 
+# Next: merge the nested theme tags at the next mod release (2026-11-12)
+
+The mod's `Dev` work after 0.12.6-alpha moved the theme list to `data/config/exiledSector/theme_tags.csv`, nested the tags, retagged every node (affinity nodes included) and renamed `req_fighter_bays`/`req_no_fighter_bays` to `req_strikecraft_bays`/`req_no_strikecraft_bays`. The planner's support for it was built on `theme-tags` and is on `development` (`4acfc5b`, pushed), not on `main`, at the user's choice: it waits for the mod release. `CHANGELOG.md` on `development` ("Nested theme tags") has the details.
+
+**The mod's `Dev` work is probably not finished** (it was checked at `9be677e1`, 2026-11-12, still changing the tags that day). Keep looking out for changes until it's released: from time to time, `git -C <mod> fetch` and run `node tools/update.mjs --preview --mod-root <mod>` against `Dev`, and compare the report with the one at `9be677e1` (54 themes, "rule files changed" its only flagged item). Look especially at `theme_tags.csv`, `ThemeTags`, `SkillTags`, `NodeRequirements` and the tags in `data/skilltrees/skill_types.json`. Fix anything new on `development`.
+
+1. The automatic release will stop on that mod release (rule files changed: `SkillTags`, `NodeRequirements`, `SkillTier` and others) and open an issue. Do that sync by hand.
+2. Merge `development` into `main` before syncing, so the sync runs with the new extractor. With 0.12.6-alpha data the page is unchanged (text baseline identical), so the merge is safe on its own.
+3. After the sync, remove the two old `name.requirement.req_fighter_bays` and `req_no_fighter_bays` lines in `web/text/names.js` (and their comment), and run `node tools/text-check.mjs`.
+4. Check the Filter in the page: 54 themes against mod `Dev` `9be677e1`, Weapons also finding the Beam nodes, and Low Tech, Midline and High Tech finding the 155 affinity nodes.
+
 # Next: follow-ups from the PR #1 review (`node-tools`)
 
 From the code review of PR #1 (2026-11-09). Already fixed in `4fe0eaa`: `/dist/` in `.gitignore`, `update.mjs --commit` commits only `SyncFiles`, and `git()` allows 64 MB of output. The rest, with the suggested fix for each. Suggested order: 1 and 2 in one commit, then 3 and 6. After each, check that `extract.mjs` output is byte-identical apart from `generated` and that `update.mjs` gives the same report, on Windows and under WSL (item 2 is a Linux problem).
