@@ -7,19 +7,19 @@ Inside the planner folder or beside it. Check how the other work environment has
 On branch `text-overhaul` (off `main`). Steps 1 to 7 are done (2026-11-11): every text the planner writes is in `web/text/*.js` (`CLAUDE.md`, Text; `CHANGELOG.md`), checked by `tools/text-check.mjs` (also in `release.mjs`), with `tools/text-baseline.mjs` to compare the page's text before and after a change (`TOOLS.md`, Text tools). `docs/text-inventory.md` records what moved and how. Left:
 
 1. **Text review** (step 8): the wording slips listed in `docs/text-inventory.md` ("Wording inconsistencies spotted"), and whatever else reads badly now that the text is in one place. Save a baseline first, then check the differences are the intended ones.
-2. **Merge `text-overhaul` into `main`** (after the review, or before it if the review takes long). `main` has had no commits since the branch started.
+2. **Merge `text-overhaul` into `main`** (after the review, or before it if the review takes long), but only after the text editor passes its test on the other machine (next section), since the editor is on `text-overhaul` now. `main` has had no commits since the branch started.
 3. **Later, not now:** `tools/text.mjs` (list, search, rename a key everywhere, find duplicates), once it's clear which commands would be used.
 
 # Now: test the text editor on the other machine (2026-11-11)
 
-The text editor (`node tools/serve.mjs --edit`, branch `text-editor`; `TOOLS.md`, Text tools) was built and tested on this machine only, in headless Edge. On the other work environment, in a real browser:
+The text editor (`node tools/serve.mjs --edit`; `TOOLS.md`, Text tools) was built on branch `text-editor` and tested on this machine only, in headless Edge. It was merged into `text-overhaul` on 2026-11-12, before this test, at the user's request (a fast-forward to `2030afa`). On the other work environment, on `text-overhaul`, in a real browser:
 
 1. Start `node tools/serve.mjs --edit` and open the page: the Text editor panel shows at the bottom left, with no errors in the browser console.
 2. Pick a text from `index.html` (a toolbar button) and a built one (a panel line or a tooltip), type, and check that the page changes as you type. Then Revert.
 3. Save a change, check with `git diff` that only that line (and its `// e.g.` line, if the wording left it behind) changed, then run `node tools/text-check.mjs`. Undo the change with `git checkout -- web/text`.
 4. Check that the page without `--edit`, and the release zip, show no editor.
-5. Once that passes, merge `text-editor` into `text-overhaul`.
-6. Then test `text-overhaul` again, and merge it into `main` (item 2 under "Now: text externalization"). Check at least:
+5. ~~Merge `text-editor` into `text-overhaul`.~~ (done 2026-11-12, before the test.)
+6. Once 1 to 4 pass, test `text-overhaul` again, and merge it into `main` (item 2 under "Now: text externalization"). Check at least:
    - `node tools/text-check.mjs`
    - `node tools/text-baseline.mjs --check` against a baseline saved from `main`
    - `extract.mjs` output byte-identical
