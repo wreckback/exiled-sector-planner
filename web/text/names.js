@@ -92,16 +92,22 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "name.requirement.req_civilian_hull": "Civilian hull",
     "name.requirement.req_crewed": "Crewed",
     "name.requirement.req_energy": "Energy",
-    "name.requirement.req_fighter_bays": "Fighter bays",
     "name.requirement.req_flagship": "Flagship",
+    "name.requirement.req_front_shield": "Front shield",
     "name.requirement.req_missile": "Missile",
-    "name.requirement.req_no_fighter_bays": "No fighter bays",
     "name.requirement.req_no_shields": "No shields",
+    "name.requirement.req_no_strikecraft_bays": "No strikecraft bays",
     "name.requirement.req_non_beam_energy": "Non beam energy",
     "name.requirement.req_non_phase_hull": "Non phase hull",
+    "name.requirement.req_omni_shield": "Omni shield",
     "name.requirement.req_phase": "Phase",
     "name.requirement.req_shields": "Shields",
+    "name.requirement.req_strikecraft_bays": "Strikecraft bays",
     "name.requirement.req_system_charges": "System charges",
+    // Mod 0.12.6-alpha and earlier, renamed to req_strikecraft_bays and req_no_strikecraft_bays after it.
+    // Remove these two once the planner data is synced past 0.12.6-alpha.
+    "name.requirement.req_fighter_bays": "Fighter bays",
+    "name.requirement.req_no_fighter_bays": "No fighter bays",
     "name.requirement.req_unscripted_hull": "Unscripted hull",
 
     // Game states that unlock nodes (their gate_* tags), in tooltips ("Unlocked by: …") and the anchor list
