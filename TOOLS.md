@@ -12,6 +12,7 @@ node tools/extract.mjs   # rebuild the data from the mod as checked out (--web-r
 node tools/serve.mjs     # http://localhost:8765/  (--port to change, --root to serve another folder, --edit for the text editor)
 node tools/release.mjs   # tag vX.Y.Z[-alpha.N|-beta.N|-rc.N]+es<mod release> (--version, --bump, --pre, --rc, --plain, --push, --dry-run)
 node tools/package.mjs   # dist/exiled-sector-planner-<tag>.zip (--tag, default: the planner tag on HEAD)
+node tools/auto-release.mjs   # a new mod release, if simple: sync, tag, package; never pushes (--dry-run, --out, --no-fetch)
 node tools/text-check.mjs     # check web/text/*.js against app.js and index.html (errors exit 1)
 node tools/text-baseline.mjs  # capture every text the page shows into baseline/ (--check to compare, --out, --browser)
 ```
@@ -25,7 +26,25 @@ node tools/text-baseline.mjs  # capture every text the page shows into baseline/
 - `extract.mjs` prints how many effects have no wording, plus any image the data refers to that the mod doesn't ship. A jump in either usually means the mod's Java or CSV layout changed and a regex in the extractor needs updating.
 - `update.mjs` compares against `tools/mod-sync.json` (last synced release and commit, plus the lists of effects without wording and absent images, so only new ones are flagged). Its `rulePattern` lists the mod files whose logic the planner reimplements. Add a class there when you port new mod logic into `app.js` or `extract.mjs`. If app.js's template versions change, update `PlannerTemplateVersion` and `PlannerFileVersion` at its top. It compares type fields with sorted keys (`canon`), so key order never shows up as a change. It compares a type's `integrated` block too, and prints how many types have one. It also flags effects whose `mode`, `stat`, `lowerIsBetter` or `live` changed from the previous data (the fields `app.js` computes with), since a field disappearing usually means the extractor no longer reads the mod's code for that effect.
 - `update.mjs --preview` tries the mod checkout as it is (for example unreleased work on `Dev`) without touching the release data. It implies `--no-checkout`, refuses `--tag` and `--commit`, and builds into the git-ignored `preview/`: a fresh copy of `web/` (except `data/` and `version.js`), the extracted data, and a `version.js` saying `preview`. The report compares with the committed `web/data/planner-data.js` and lists rule files changed since the last sync, but `mod-sync.json` isn't written, so `release.mjs` never sees preview data. View it with `node tools/serve.mjs --root preview --port 8766`.
+- `update.mjs --verdict <file>` writes the outcome as JSON at the very end (so a run that stops early leaves none): `release`, `modVersion`, `previous` (the last synced release), `summary` (the Result line's changes), `structural` (nodes added, removed, retyped, moved or relinked, skill types added or removed) and `attention` (everything it flagged). Both empty is what `auto-release.mjs` calls a simple update.
 - `update.mjs --report <file>` also saves the report as plain text (colours stripped), relative to the planner folder, with or without `--preview` (`preview/report.txt` keeps it beside the preview and out of git). It wraps `process.stdout`/`stderr.write` and pipes `extract.mjs`'s output through itself, and writes the file on exit, so a run that stops early still leaves its report. `--commit` stages and commits only `web/data/planner-data.js` and `tools/mod-sync.json` (`SyncFiles`), so other edits, staged files and untracked files stay out of the sync commit. If a sync ever writes another file, add it to `SyncFiles`.
+
+## Automatic releases
+
+`.github/workflows/mod-sync.yml` runs hourly (`cron: '17 * * * *'`) and on **Run workflow** (`workflow_dispatch`, with a `dry_run` input that defaults to on). It checks out `main` with its history and tags, sets up Node from `.nvmrc`, clones the mod into `ExiledSector/` with `--filter=blob:none` (history and tags, file contents fetched for the release checked out), sets the git identity to `github-actions[bot]`, and runs `tools/auto-release.mjs`. On `released` it pushes `main` and the tag and runs `gh release create --prerelease` with the zip and `notes.md`. On `needs-you` (not in a dry run) it opens an issue from `issue.md` unless one with the same title is open. It uses the built-in `GITHUB_TOKEN` (`contents: write`, `issues: write`), and `concurrency` keeps two runs from overlapping.
+
+`auto-release.mjs` holds the logic, so it can be run and tested locally; it never pushes:
+
+1. Refuses unless the planner repo is clean and on `main`.
+2. Fetches the mod's tags and takes the newest release (`newestModTag` in `common.mjs`, the same rule as `update.mjs`). If `mod-sync.json` already has it: `up-to-date`.
+3. Runs `update.mjs --tag <it> --commit --report --verdict`, always, so a refusal still has the report.
+4. Refuses to release (`needs-you`; resets `main` to where it started, writes `issue.md`) when the verdict's `attention` or `structural` isn't empty (only number and wording changes go out unattended), or when HEAD isn't the newest planner tag's commit (commits on `main` that aren't released would ship with it), or when there's no planner tag at all.
+5. Otherwise runs `release.mjs --pre <the newest tag's stage>` (`--bump patch --pre alpha` after a final release) and `package.mjs --tag <it>`, and writes `notes.md`: the mod line, the update's Tree changes section and the tag message.
+6. `--dry-run` then deletes the tag and resets `main`, with the outcome `would-release`.
+
+Outcomes go to `<out>/outcome.json` (`--out`, default `dist/auto-release/`, with `update-report.txt`, `verdict.json` and `notes.md` or `issue.md`), and in GitHub Actions also to `$GITHUB_OUTPUT` (`outcome`, `release`, `tag`, `zip`, `notes`, `title`, `body`, paths relative to the planner folder). `--test-attention <text>` adds a flagged item, to try the `needs-you` path.
+
+Test changes to it in a scratch clone whose `origin` is a scratch bare repo, with a scratch clone of the mod (`--mod-root`), on `main`, with HEAD tagged as a planner pre-release and `mod-sync.json` on an older mod release.
 
 ## Text tools
 

@@ -10,7 +10,8 @@ A static web planner for the ship skill tree of the Exiled Sector Starsector mod
 - Every machine should have a `CLAUDE.local.md` here (git-ignored) about its local environment. Read it first: where the mod checkout actually lives can differ from the `ExiledSector/` layout described here.
   - If there isn't one, tell the user and ask whether to create it, offering a draft from what can be checked on the machine. Don't create it without asking.
   - It should cover: the OS and shells, and which shell finds `node`; the Node, npm and git versions and how they're installed (nvm or other); what isn't installed (Python, for example); where the mod checkout lives and whether `--mod-root` or `ESP_MOD_ROOT` is needed; the git identity this repo commits and pushes as; how to test on Linux (WSL or other) and with which browser; and anything undecided about the setup, with its date.
-- The planner folder is its own git repo (branch `main`, pushed to a private GitHub repo).
+- The planner folder is its own git repo (branch `main`, pushed to a public GitHub repo).
+  - A GitHub workflow (`.github/workflows/mod-sync.yml`, `tools/auto-release.mjs`; see `TOOLS.md`) follows mod releases on its own: a simple update is synced, tagged, pushed and published by `github-actions[bot]`, so `main` and the tags can move without a local commit. Pull before starting work. Anything else opens a GitHub issue asking for a manual sync.
   - Ignored: `ExiledSector/`, personal template files, and `web/assets/` (an old local art copy, no longer read or written).
   - The art belongs to the mod and the authors it credits, so it's never republished: not in git, not in the release zip. The page reads it from the mod folder each user chooses (see Mod art below).
   - The generated `planner-data.js` is committed, so each mod sync shows up as one diff.
@@ -20,7 +21,7 @@ A static web planner for the ship skill tree of the Exiled Sector Starsector mod
 
 ## Tools
 
-The Node scripts in `tools/` (update, extract, serve, release, package) have their own guide: **`TOOLS.md`**. It holds the commands, the release and version rules, and how the extractor reads the mod. Read it before running or changing any of them.
+The Node scripts in `tools/` (update, extract, serve, release, package, auto-release) have their own guide: **`TOOLS.md`**. It holds the commands, the release and version rules, and how the extractor reads the mod. Read it before running or changing any of them.
 
 ## Text
 

@@ -15,6 +15,7 @@ The mod itself:
 - `tools/mod-sync.json`: the mod release the data was last built from (written by `update.mjs`)
 - `tools/serve.mjs`: a small local web server
 - `tools/release.mjs` and `tools/package.mjs`: tag a release and build its zip
+- `tools/auto-release.mjs` and `.github/workflows/mod-sync.yml`: follow mod releases on their own (see Automatic releases)
 - `tools/text-check.mjs` and `tools/text-baseline.mjs`: check the text files against the code, and record the page's text to compare before and after a change
 - `web/`: the site. `data/planner-data.js` is generated. `text/` holds the planner's own text, one file per part of the page (see Edit the text). It holds none of the mod's art; see below.
 
@@ -61,6 +62,7 @@ The last line says either "All checks passed, no rule files changed", in which c
 - `--tag 0.11.1-alpha` picks a specific release. `--no-checkout` uses the mod checkout as it is (for example, unreleased work on `Dev`). `--no-fetch` skips the network.
 - `--preview` is for trying unreleased mod work without changing the planner: it uses the mod checkout as it is, builds into a separate `preview/` folder and records nothing, so the planner's own data stays on the last release. Open it with `node tools/serve.mjs --root preview --port 8766`; its footer shows the mod's nearest release plus the branch and commit, for example "Exiled Sector 0.11.2-alpha + Dev 93ceafe2 · Planner preview".
 - `--report <file>` also saves the report to a text file, for example `--preview --report preview/report.txt` (the `preview/` folder isn't committed).
+- `--verdict <file>` also saves the outcome as JSON (the release, the changes, and the items that need a look), for `auto-release.mjs`.
 - It refuses to switch the mod if the mod checkout has uncommitted changes.
 - To go back to the mod's branch, run `git switch main` inside the mod checkout.
 - `node tools/extract.mjs` alone still just rebuilds the data from whatever is checked out.
@@ -95,6 +97,19 @@ node tools/package.mjs --tag "v0.2.0-rc.1+es0.11.1-alpha"   # or no --tag for th
 ```
 
 It writes `dist/exiled-sector-planner-<tag>.zip`. The site files come from the tag itself, so any tag can be packaged, and the zip's `version.js` holds the tag, so its footer shows that version. The zip has no art: its README.txt tells users to choose their mod folder under **Show mod art**. Attach the zip to the GitHub release for that tag, marked as a pre-release for an alpha, beta or rc. The zip's README.txt says which stage it is.
+
+## Automatic releases
+
+A GitHub workflow (`.github/workflows/mod-sync.yml`) checks every hour whether the mod has a release the planner hasn't synced yet, and runs `tools/auto-release.mjs`:
+
+- **A simple update** (only numbers and wording changed: `update.mjs` flags nothing, the tree's shape is the same (no nodes added, removed, retyped, moved or relinked, no skill types added or removed), and `main` has no commits that aren't in a planner release yet): it syncs the data, tags the next pre-release of the current version (`v0.4.0-alpha.1` → `v0.4.0-alpha.2+es<mod release>`; after a final release, the next patch's `alpha.1`), pushes `main` and the tag, and publishes a GitHub pre-release with the zip attached. The commit and tag are made by `github-actions[bot]`.
+- **Anything else:** it pushes nothing and opens one GitHub issue, "Mod release … needs a manual sync", with the reasons and the full update report. Sync by hand as above; once `tools/mod-sync.json` records that release, the hourly check stops reporting it.
+
+To run it at once (for example right after a mod release), use **Run workflow** on the workflow's Actions page. It defaults to a dry run, which does everything on GitHub's runner but pushes, publishes and opens nothing; untick it for a real run.
+
+Locally, `node tools/auto-release.mjs` does the same up to the tag and the zip, and never pushes. `--dry-run` undoes its commit and tag at the end. Results go to `dist/auto-release/`. It moves the mod checkout to the new release, as `update.mjs` does.
+
+GitHub turns off scheduled workflows in a public repository after 60 days with no activity in it. It emails first; re-enable the workflow on its Actions page.
 
 ## Edit the text
 

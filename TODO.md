@@ -86,7 +86,6 @@ Ideas noted for a future pass. Not built yet.
 - **Consider a bundler (esbuild) for `web/`.** Write real modules in `src/`, and bundle them into one classic script (`--format=iife`) at `web/app.js`, so users get exactly what they get now: one file, working from `file://`, the same size (scope hoisting adds almost nothing).
   - Settings: target modern browsers (`--target=es2022` or so) so no helpers or rewritten syntax get added, add no runtime libraries, and don't minify (the zip runs locally, the data file is the larger half anyway, and readable shipped code helps debugging).
   - Commit the built `web/app.js` so `package.mjs` keeps zipping the tag as now. Release flow: build, commit source and build together, `release.mjs`, `package.mjs`, upload the zip to a GitHub Release. Have `release.mjs` run the build and refuse to tag if it changes `web/app.js`. (The alternative, building only in `package.mjs`, can't be forgotten but means a fresh clone needs a build before the page runs.)
-  - Optional later: a GitHub Actions workflow that packages and publishes the GitHub Release when a tag is pushed.
   - Cost is developer-side only: `esbuild` (about 10 MB) as the first npm devDependency, and a build step (well under a second, can watch). `CLAUDE.md`'s "no build step, no npm dependencies" wording changes; it stays true for users.
 
 - **Consider TypeScript.** Users must still get plain JavaScript; the choice is where it gets converted:

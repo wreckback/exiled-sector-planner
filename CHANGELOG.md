@@ -101,6 +101,12 @@ On the `text-editor` branch. Without `--edit` the page is unchanged (the text ba
 - Save rewrites that one line in `web/text/*.js` through `serve.mjs`, updates the `// e.g.` example when it no longer fits, and reports the text check. Only the page served by `serve.mjs` can save.
 - The editor lives in `web/editor/` (not in the release zip); `app.js` only reports which keys it uses when the editor is there.
 
+## Automatic releases (2026-11-12)
+
+- `.github/workflows/mod-sync.yml` checks the mod for a new release every hour. A simple update (only numbers and wording changed, nothing flagged) is synced, tagged as the next planner pre-release, pushed and published as a GitHub pre-release with the zip; anything else opens one issue with the reasons and the update report, and changes nothing. It can also be run by hand, as a dry run by default.
+- The logic is `tools/auto-release.mjs`, which never pushes and can run locally (`--dry-run` undoes its commit and tag).
+- `update.mjs --verdict <file>` saves its outcome as JSON. The newest-mod-release rule and the planner tag parsing moved into `tools/lib/common.mjs`, shared by `update.mjs`, `release.mjs` and `auto-release.mjs`.
+
 ## Planner (`web/`)
 
 **Tree view**
