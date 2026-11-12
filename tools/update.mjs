@@ -240,6 +240,12 @@ const newAbsent = prevAbsent ? absent.filter((p) => !prevAbsent.includes(p)) : [
 if (newAbsent.length) flag(`newly missing images (drawn as placeholders): ${joinShort(newAbsent)}`);
 else ok(`images: ${absent.length} not shipped by the mod (vanilla art)${prevAbsent ? ', none new' : ''}`);
 
+// Theme tags: an empty list leaves the Filter with nothing to tick, which usually means the mod moved the list
+// (it moved from SkillTags.THEME to theme_tags.csv after 0.12.6-alpha) and extract.mjs no longer finds it.
+const themeCount = list(neu.themes).length;
+if (!themeCount) flag('no theme tags in the data, so the Filter would be empty; find where the mod keeps them now and update extract.mjs');
+else ok(`theme tags: ${themeCount}`);
+
 // Node types and tiers.
 const typeIds = new Map(list(neu.types).map((t) => [t.id, t]));
 const tierBlock = /const TIER_SIZE\s*=\s*\{([^}]*)\}/.exec(appJs)?.[1] ?? '';
@@ -403,12 +409,12 @@ const rulePattern = new RegExp('/src/main/java/.*/(AllocationCheck|TemplateCaptu
     'AffinitySteps|AffinityOptions|AffinityScaling|SkillTier|NodeReplacements|ShipLevelConfig|SkillTreeNodeConnectorRenderer|' +
     'WormholeAnchorLinks|WormholeAnchorDefinitions|ScopedWeaponEffect|WeaponStatFamily|HullSizeTable|StatMode|' +
     'NodeEligibility|VolumeToggles|TreeVolumeFilter|SkillTreeSettings|AllocatedNode|SkillType|HullModConflicts|LogisticsNodes|NodeRequirements|LowBaseArmorBonus|' +
-    'SkillTypeUnlockStatus|NodeGates|ShieldSkillEffect|SkillTags|StatGroup|ShipStatSheets|SkillTreeBonusSummary|' +
+    'SkillTypeUnlockStatus|NodeGates|ShieldSkillEffect|SkillTags|ThemeTags|StatGroup|ShipStatSheets|SkillTreeBonusSummary|' +
     'Subroutine|SubroutineKind|SubroutineDefinitions|SubroutineRadius|SubroutineSocketLimits|NodeRadii|NodeRadiusCache|ExoshipNodes|' +
     'RootConduits|EmptyShells|GatedSubroutines|SkillTreeEffectSource|ModspecCaches|NodeAllocator|DoctrineOverrides|DoctrineArchive|StatTarget)\\.java$', 'i');
 const wordingPattern = /\/src\/main\/java\/.*SkillEffect\.java$/i;
 const inputPattern = new RegExp('^(data/skilltrees/|data/strings/exiledSector/(core|skillTree)/|' +
-    'data/config/exiledSector/(wormhole_anchors|node_replacements|node_id_renames|type_id_renames|hullmod_conflicts)\\.csv|' +
+    'data/config/exiledSector/(wormhole_anchors|node_replacements|node_id_renames|type_id_renames|hullmod_conflicts|theme_tags)\\.csv|' +
     'data/config/exiledSector/node_gates\\.json|data/config/exiledSector/(subroutines|doctrine_archives|item_modifiers)\\.csv|' +
     'data/config/exiledSector/node_radii\\.json|data/hullmods/hull_mods\\.csv|' +
     'exiledsector-core/src/test/resources/i18n/hullmod_names\\.csv|docs/analysis/balance\\.csv|mod_info\\.json)', 'i');
