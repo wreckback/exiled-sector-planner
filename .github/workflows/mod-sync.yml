@@ -1,0 +1,86 @@
+# Follows Exiled Sector releases: every hour, checks the mod for a release the planner hasn't synced. A simple update is
+# synced, tagged as the next planner pre-release, pushed and published as a GitHub Release with the zip. Anything else
+# opens one issue explaining why, and changes nothing. The logic is in tools/auto-release.mjs (see TOOLS.md).
+name: Mod sync
+
+on:
+  schedule:
+    - cron: '17 * * * *' # hourly, off the top of the hour, when GitHub's runners are busiest
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run: do everything on the runner, but push, publish and open nothing'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write # push the sync commit and the tag, create the release
+  issues: write # report an update that needs a person
+
+concurrency:
+  group: mod-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the planner
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0 # the tags and history release.mjs reads
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      - name: Clone the mod
+        # History and tags without file contents up front (git fetches those for the release it checks out).
+        run: git clone --quiet --filter=blob:none https://github.com/ExiledPortals/ExiledSector.git ExiledSector
+
+      - name: Git identity
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Sync, tag and package
+        id: auto
+        run: node tools/auto-release.mjs ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Push and publish
+        if: steps.auto.outputs.outcome == 'released'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.auto.outputs.tag }}
+          ZIP: ${{ steps.auto.outputs.zip }}
+          NOTES: ${{ steps.auto.outputs.notes }}
+        run: |
+          git push origin HEAD:main "refs/tags/$TAG"
+          gh release create "$TAG" "$ZIP" --verify-tag --prerelease --title "$TAG" --notes-file "$NOTES"
+
+      - name: Open an issue
+        if: steps.auto.outputs.outcome == 'needs-you' && !inputs.dry_run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: ${{ steps.auto.outputs.title }}
+          BODY: ${{ steps.auto.outputs.body }}
+        run: |
+          # One issue per mod release: the hourly runs find the same release until it's synced by hand.
+          open=$(gh issue list --state open --limit 100 --json title --jq '.[].title')
+          if printf '%s\n' "$open" | grep -qxF "$TITLE"; then
+            echo "Already open: $TITLE"
+          else
+            gh issue create --title "$TITLE" --body-file "$BODY"
+          fi
+
+      - name: Summary
+        if: always() && steps.auto.outputs.outcome != ''
+        env:
+          OUTCOME: ${{ steps.auto.outputs.outcome }}
+          RELEASE: ${{ steps.auto.outputs.release }}
+          TAG: ${{ steps.auto.outputs.tag }}
+        run: |
+          echo "**${OUTCOME}**: mod ${RELEASE}${TAG:+, planner ${TAG}}" >> "$GITHUB_STEP_SUMMARY"
