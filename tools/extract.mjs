@@ -625,18 +625,36 @@ if (aof) {
     if (block) for (const m of allMatches(block[1], /"([^"]+)"\s*,\s*"([^"]+)"/g)) retiredOptions[m[1]] = m[2];
 }
 
-// Theme tags (SkillTags.THEME, in the mod's order) with their display names (theme.<id>), for the theme filter.
+// Theme tags for the theme filter, in the mod's order.
+// Mod Dev after 0.12.6-alpha: theme_tags.csv (tag, parent, scopes), as ThemeTags reads it. Only tags with the
+// `ship` scope apply to the skill tree (ThemeTags.ids(SHIP)). Names come from tag.<id>. A parent outside the
+// ship tags is dropped, like ThemeTags.dropBrokenParents.
+// Older releases: SkillTags.THEME, with names from theme.<id> and no parents.
 const themes = [];
-const stf = javaByBase('SkillTags');
-if (stf) {
-    const block = /THEME\s*=\s*List\.of\((.*?)\);/s.exec(readText(stf.full));
+const themeCsv = configPath('theme_tags.csv');
+let themeSource;
+if (exists(themeCsv)) {
+    themeSource = 'theme_tags.csv';
+    const rows = readCsv(themeCsv).filter((row) => row.tag && (row.scopes ?? '').split(';').map((s) => s.trim()).includes('ship'));
+    const ids = new Set(rows.map((row) => row.tag.trim()));
+    for (const row of rows) {
+        const id = row.tag.trim();
+        const parent = row.parent?.trim();
+        const theme = { id, name: strings.has(`tag.${id}`) ? strings.get(`tag.${id}`) : id };
+        if (parent && ids.has(parent)) theme.parent = parent;
+        themes.push(theme);
+    }
+} else {
+    themeSource = 'SkillTags.THEME';
+    const stf = javaByBase('SkillTags');
+    const block = stf && /THEME\s*=\s*List\.of\((.*?)\);/s.exec(readText(stf.full));
     for (const m of allMatches(block ? block[1] : '', /"([^"]+)"/g)) {
         const id = m[1];
         themes.push({ id, name: strings.has(`theme.${id}`) ? strings.get(`theme.${id}`) : id });
     }
 }
-if (themes.length) say(`Themes: ${themes.length}`);
-else warn('  ! no theme list found (SkillTags.THEME); the theme filter will be empty');
+if (themes.length) say(`Themes: ${themes.length} (${themeSource})`);
+else warn(`  ! no theme list found (${themeSource}); the theme filter will be empty`);
 
 // Optional volumes (the mod settings' Optional Volumes toggles): each toggle's volumes come from VolumeToggles
 // (<X>_VOLUMES = Set.of(...)), its key and name from SkillTreeSettings (<X>_FIELD_ID -> settings.volumes.<key>.name).
