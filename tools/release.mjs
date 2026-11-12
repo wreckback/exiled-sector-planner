@@ -25,7 +25,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { fail, fromRepo, git, good, readJson, readText, repoRoot, say, toolsDir, warn } from './lib/common.mjs';
+import { cmpVersion, fail, fromRepo, git, good, plannerTags, readJson, readText, repoRoot, say, stageRank, toolsDir, warn } from './lib/common.mjs';
 import { checkText } from './lib/text-check.mjs';
 
 const { values: opt } = parseArgs({
@@ -96,19 +96,8 @@ if (opt.rc) {
     if (pre && pre !== 'rc') fail('release', `--rc and --pre ${pre} don't go together.`);
     pre = 'rc';
 }
-const stageRank = { alpha: 1, beta: 2, rc: 3 }; // a release ranks above all of them
-const pattern = /^v(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.(\d+))?(?:\+.*)?$/i;
-// Versions as [major, minor, patch]; cmp orders them like [version] in PowerShell.
-const cmp = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
-const tags = lines(git(repoRoot, ['tag', '-l', 'v*'])).flatMap((name) => {
-    const m = pattern.exec(name);
-    if (!m) return [];
-    const stage = m[4] ? m[4].toLowerCase() : null;
-    return [{ name, key: [Number(m[1]), Number(m[2]), Number(m[3])], stage, num: stage ? Number(m[5]) : 0, rank: stage ? stageRank[stage] : 4 }];
-});
-const byNewest = [...tags].sort((a, b) => cmp(b.key, a.key) || b.rank - a.rank || b.num - a.num);
-const lastRelease = byNewest.find((t) => t.stage === null);
-const latest = byNewest[0];
+const cmp = cmpVersion;
+const { tags, latest, lastRelease } = plannerTags(repoRoot);
 
 // 4. The version to tag.
 let base;

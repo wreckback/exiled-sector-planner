@@ -105,3 +105,27 @@ export function git(dir, args, { allowFail = false, keepIndent = false } = {}) {
         throw new Error(`git ${args.join(' ')} failed (${e.status ?? e.code}): ${detail}`);
     }
 }
+
+// ---------------------------------------------------------------- releases
+// The mod's newest release: its most recently created tag, which update.mjs checks out by default. Null without tags.
+export function newestModTag(modRoot) {
+    return git(modRoot, ['tag', '--sort=-creatordate']).split(/\r?\n/)[0] || null;
+}
+
+// Planner tags look like vX.Y.Z[-alpha.N|-beta.N|-rc.N][+build]; others (such as the old 0.11.1-alpha) are ignored.
+// Pre-release stages in order; a release ranks above all of them.
+export const stageRank = { alpha: 1, beta: 2, rc: 3 };
+const plannerTagPattern = /^v(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.(\d+))?(?:\+.*)?$/i;
+// Versions as [major, minor, patch].
+export const cmpVersion = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+// The repo's planner tags: all of them, the newest (release or pre-release), and the newest release.
+export function plannerTags(dir) {
+    const tags = git(dir, ['tag', '-l', 'v*']).split(/\r?\n/).filter(Boolean).flatMap((name) => {
+        const m = plannerTagPattern.exec(name);
+        if (!m) return [];
+        const stage = m[4] ? m[4].toLowerCase() : null;
+        return [{ name, key: [Number(m[1]), Number(m[2]), Number(m[3])], stage, num: stage ? Number(m[5]) : 0, rank: stage ? stageRank[stage] : 4 }];
+    });
+    const byNewest = [...tags].sort((a, b) => cmpVersion(b.key, a.key) || b.rank - a.rank || b.num - a.num);
+    return { tags, latest: byNewest[0] ?? null, lastRelease: byNewest.find((t) => t.stage === null) ?? null };
+}

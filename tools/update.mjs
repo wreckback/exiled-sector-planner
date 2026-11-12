@@ -7,6 +7,7 @@
 //   node tools/update.mjs --commit             # also commit the two synced files to the planner repo
 //   node tools/update.mjs --preview            # try the checkout as it is (e.g. unreleased Dev) in preview/
 //   node tools/update.mjs --report <file>      # also save the report (plain text), e.g. preview/report.txt
+//   node tools/update.mjs --verdict <file>     # also save the outcome as JSON, for tools/auto-release.mjs
 // The mod checkout is --mod-root, else ESP_MOD_ROOT, else ExiledSector/ in the planner folder.
 //
 // --preview builds into the git-ignored preview/ folder (a copy of the site plus the new data) instead of web/, and
@@ -25,7 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, sep } from 'node:path';
 import { parseArgs, stripVTControlCharacters, styleText } from 'node:util';
-import { existsCaseless, fail, fromRepo, git, good, heading, modRootFrom, readJson, readText, repoRoot, say, toolsDir, warn } from './lib/common.mjs';
+import { existsCaseless, fail, fromRepo, git, good, heading, modRootFrom, newestModTag, readJson, readText, repoRoot, say, toolsDir, warn } from './lib/common.mjs';
 
 // Template format versions the planner reads and writes (app.js: buildTemplate, mergeTemplate, templateToCode).
 const PlannerTemplateVersion = 1;
@@ -39,16 +40,20 @@ const { values: opt } = parseArgs({
         commit: { type: 'boolean' },
         preview: { type: 'boolean' },
         report: { type: 'string' },
+        verdict: { type: 'string' },
         'mod-root': { type: 'string' },
         help: { type: 'boolean', short: 'h' },
     },
 });
 if (opt.help) {
-    say('Usage: node tools/update.mjs [--tag <tag>] [--no-checkout] [--no-fetch] [--commit] [--preview] [--report <file>] [--mod-root <path>]');
+    say('Usage: node tools/update.mjs [--tag <tag>] [--no-checkout] [--no-fetch] [--commit] [--preview] [--report <file>]');
+    say('                             [--verdict <file>] [--mod-root <path>]');
     say('Checks out a mod release (default: the newest tag), extracts the data, checks it, compares it with the');
     say('previous data, lists changed mod rule files and records the sync in tools/mod-sync.json.');
     say('--preview uses the mod checkout as it is (e.g. unreleased work on Dev), builds into preview/ and records nothing.');
     say('--report <file> also saves everything printed, as plain text (relative paths are from the planner folder).');
+    say('--verdict <file> also saves the outcome as JSON: the release, the changes, and the items that need a look');
+    say('(none means a simple update, which tools/auto-release.mjs may release on its own).');
     process.exit(0);
 }
 
@@ -162,7 +167,7 @@ if (opt['no-checkout'] || opt.preview) {
         git(ModRoot, ['fetch', '--quiet', '--tags', 'origin']);
     }
     if (!tag) {
-        tag = firstLine(git(ModRoot, ['tag', '--sort=-creatordate']));
+        tag = newestModTag(ModRoot);
         if (!tag) fail('update', 'the mod has no tags. Pass --tag or use --no-checkout.');
     }
     git(ModRoot, ['checkout', '--quiet', '--detach', `refs/tags/${tag}`]);
@@ -305,6 +310,8 @@ else ok(`default node cap ${capApp}`);
 // ---------------------------------------------------------------- 4. tree changes
 section('Tree changes');
 const summary = [];
+// Changes to the tree's shape rather than its numbers and wording, for --verdict.
+const structural = [];
 if (!old) say('  No previous data to compare with.');
 else {
     const oldNodes = new Map(list(old.nodes).map((n) => [n.id, n]));
@@ -363,6 +370,13 @@ else {
     }
     if (wording) say(`  Wording strings changed or added: ${wording}`);
     if (!summary.length && !wording) say('  No changes to the tree.');
+    if (addedN.length) structural.push(`${addedN.length} nodes added`);
+    if (removedN.length) structural.push(`${removedN.length} nodes removed`);
+    if (retyped.length) structural.push(`${retyped.length} nodes with a new skill type`);
+    if (moved) structural.push(`${moved} nodes moved`);
+    if (relinked) structural.push(`${relinked} nodes with changed links`);
+    if (addedT.length) structural.push(`${addedT.length} skill types added`);
+    if (removedT.length) structural.push(`${removedT.length} skill types removed`);
     // Effect fields app.js computes with: mode, stat, lower-is-better and read-live-in-combat. A change, and above all
     // one that disappears, more often means the extractor lost track of the mod's code than a real change.
     const oldEffects = old.effects ?? {};
@@ -453,4 +467,20 @@ if (!opt.preview && existsSync(join(repoRoot, '.git'))) {
     } else {
         say(`  Planner repo: ${pending.length} synced file(s) changed. Review with 'git diff', or rerun with --commit.`);
     }
+}
+
+// --verdict: the outcome for tools/auto-release.mjs. Written last, so a run that stops early leaves none.
+if (opt.verdict) {
+    const verdict = {
+        release,
+        modVersion: neu.modVersion,
+        previous: state ? { release: state.release ?? null, modVersion: state.modVersion ?? null } : null,
+        summary,
+        structural,
+        attention,
+    };
+    const file = fromRepo(opt.verdict);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, `${JSON.stringify(verdict, null, 4)}\n`, 'utf8');
+    say(`  Verdict saved to ${file}`);
 }
