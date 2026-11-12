@@ -3984,10 +3984,19 @@
       panelOpenedBySearch = false;
     }
   }
-  // ---- theme filter: the mod's theme tags (SkillTags.THEME, names from theme.*), combined with the search text.
+  // ---- theme filter: the mod's theme tags (the extractor's `themes`), combined with the search text.
   // A choice node has the themes of all its options; roots, wormholes, exits and sockets have none and never match.
+  // Tags can have a parent (mod Dev after 0.12.6-alpha, theme_tags.csv): beam is inside energy, which is inside
+  // weapon. As the mod's ThemeTags.allWithAncestors, a node matches and counts under its own tags and all their
+  // ancestors, so Weapons finds the Beam nodes too. Tooltips and the list show only the node's own tags.
   const THEME_LIST = D.themes || [];
   const THEME_IDS = new Set(THEME_LIST.map(t => t.id));
+  const THEME_PARENT = new Map(THEME_LIST.filter(t => t.parent).map(t => [t.id, t.parent]));
+  function themeWithAncestors(id) {
+    const out = [];
+    for (let cur = id; cur && !out.includes(cur); cur = THEME_PARENT.get(cur)) out.push(cur);
+    return out;
+  }
   const NO_THEME = '_none';
   const STRUCTURAL_TIERS = new Set(['ROOT', 'WORMHOLE', 'WORMHOLE_EXIT', 'SOCKET']);
   const themeName = id => (id === NO_THEME ? tr('name.theme.none') : (THEME_LIST.find(t => t.id === id) || {}).name || humanize(id));
@@ -4002,17 +4011,33 @@
     }
     return set;
   }
+  // The node's themes with their ancestors, for matching and counting (null for structural tiers, as nodeThemes).
+  const nodeThemeMatchCache = new Map();
+  function nodeMatchThemes(n) {
+    const own = nodeThemes(n);
+    if (!own) return null;
+    let set = nodeThemeMatchCache.get(n.id);
+    if (!set) {
+      set = new Set([...own].flatMap(themeWithAncestors));
+      nodeThemeMatchCache.set(n.id, set);
+    }
+    return set;
+  }
   const themeFilter = new Set(); // theme ids, plus NO_THEME
   let themeMatchAll = false;
-  // Affinity nodes are their own Filter entry ("Show affinity nodes") and are never matched by a theme: the mod tags
-  // the affinity options too (Low Tech: hull, armour; Midline: flux, hull; High Tech: flux), so all 155 of them would
-  // otherwise bury the real Flux, Hull and Armor nodes.
+  // Affinity nodes are also their own Filter entry ("Show affinity nodes").
+  // Mod 0.12.6-alpha and earlier tag the affinity options with stat themes (Low Tech: hull, armour; Midline: flux,
+  // hull; High Tech: flux), so all 155 of them would bury the real Flux, Hull and Armor nodes: there they never match
+  // a theme. Later data has its own affinity tags (affinity, with low_tech, midline and high_tech inside it), and the
+  // affinity nodes match those like any other node.
   let showAffinity = false;
   const isAffinityNode = n => isChoice(n) && n.type.options.every(id => OPTION_TINT[id]);
+  const AFFINITY_TAGGED = THEME_IDS.has('affinity');
+  const themeSkips = n => !AFFINITY_TAGGED && isAffinityNode(n);
   const hasTheme = (set, id) => (id === NO_THEME ? set.size === 0 : set.has(id));
   function themeMatch(n) {
-    const set = nodeThemes(n);
-    if (!set || !themeFilter.size || isAffinityNode(n)) return false;
+    const set = nodeMatchThemes(n);
+    if (!set || !themeFilter.size || themeSkips(n)) return false;
     const ids = [...themeFilter];
     return themeMatchAll ? ids.every(id => hasTheme(set, id)) : ids.some(id => hasTheme(set, id));
   }
@@ -4054,11 +4079,11 @@
 
   const themeEl = document.getElementById('theme-filter');
   const themeBtnEl = document.getElementById('btn-themes');
-  // Node counts per theme (affinity nodes aside), and the affinity node count.
+  // Node counts per theme (without affinity nodes where themeSkips them), and the affinity node count.
   const themeCounts = new Map([[NO_THEME, 0]]);
   for (const n of nodes) {
-    const set = nodeThemes(n);
-    if (!set || isAffinityNode(n)) continue;
+    const set = nodeMatchThemes(n);
+    if (!set || themeSkips(n)) continue;
     if (!set.size) themeCounts.set(NO_THEME, themeCounts.get(NO_THEME) + 1);
     for (const id of set) themeCounts.set(id, (themeCounts.get(id) || 0) + 1);
   }
