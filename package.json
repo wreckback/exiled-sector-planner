@@ -12,6 +12,7 @@
     "update": "node tools/update.mjs",
     "package": "node tools/package.mjs",
     "release": "node tools/release.mjs",
+    "auto-release": "node tools/auto-release.mjs",
     "text-check": "node tools/text-check.mjs",
     "text-baseline": "node tools/text-baseline.mjs"
   }
