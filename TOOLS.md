@@ -38,7 +38,7 @@ node tools/text-baseline.mjs  # capture every text the page shows into baseline/
 1. Refuses unless the planner repo is clean and on `main`.
 2. Fetches the mod's tags and takes the newest release (`newestModTag` in `common.mjs`, the same rule as `update.mjs`). If `mod-sync.json` already has it: `up-to-date`.
 3. Runs `update.mjs --tag <it> --commit --report --verdict`, always, so a refusal still has the report.
-4. Refuses to release (`needs-you`; resets `main` to where it started, writes `issue.md`) when the verdict's `attention` or `structural` isn't empty (only number and wording changes go out unattended), or when HEAD isn't the newest planner tag's commit (commits on `main` that aren't released would ship with it), or when there's no planner tag at all.
+4. Refuses to release (`needs-you`; resets `main` to where it started, writes `issue.md`) when the verdict's `attention` or `structural` isn't empty (only number and wording changes go out unattended), or when `main` has commits since the newest planner tag that change what a release ships (`ShippedPaths`: `web/`, `LICENSE`, and `tools/package.mjs`, which writes the zip's README.txt), since they would ship unreviewed, or when there's no planner tag at all. Tool, doc and `TODO.md` commits don't block it; the tag message still lists them. If `package.mjs` starts packing another file, add it to `ShippedPaths`.
 5. Otherwise runs `release.mjs --pre <the newest tag's stage>` (`--bump patch --pre alpha` after a final release) and `package.mjs --tag <it>`, and writes `notes.md`: the mod line, the update's Tree changes section and the tag message.
 6. `--dry-run` then deletes the tag and resets `main`, with the outcome `would-release`.
 

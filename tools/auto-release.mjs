@@ -13,8 +13,10 @@
 //                  <out>/issue.md explains why (for a GitHub issue)
 // A new release needs a person when update.mjs flags anything (failed checks, new effects without wording, changed
 // rule files, ...; its --verdict), when the tree's shape changed (nodes added, removed, retyped, moved or relinked,
-// skill types added or removed: the verdict's structural list), or when main has commits that aren't in a planner
-// release yet, which an automatic release would ship unfinished. So only number and wording changes go out unattended.
+// skill types added or removed: the verdict's structural list), or when main has commits since the newest planner tag
+// that change what a release ships (web/, LICENSE, tools/package.mjs), which an automatic release would ship
+// unreviewed. So only number and wording changes go out unattended. Tool, doc and TODO commits don't block it; the tag
+// message still lists them.
 //
 // The tag continues the newest planner pre-release (v0.4.0-alpha.1 -> v0.4.0-alpha.2+es<mod release>); after a final
 // release it starts the next patch's alpha (v0.4.0 -> v0.4.1-alpha.1). The mod checkout is --mod-root, else
@@ -90,11 +92,16 @@ if (newest === sync.release) finish('up-to-date', { release: newest });
 // ---------------------------------------------------------------- 3. sync
 // Run in full even when main already rules out a release, so the issue has the update report.
 const reasons = [];
+// Commits since the newest planner tag that change what the zip is built from (the site, the license, and
+// package.mjs, which writes the README.txt). Tool, doc and TODO commits can't change a release, so they don't count.
+const ShippedPaths = ['web', 'LICENSE', 'tools/package.mjs'];
 const unreleased = [];
 if (!latest) reasons.push('The planner has no release tag yet, so there is no version to continue.');
-else if (git(repoRoot, ['rev-list', '-n', '1', latest.name]) !== before) {
-    unreleased.push(...git(repoRoot, ['log', '--format=- %h %s', `${latest.name}..HEAD`]).split(/\r?\n/).filter(Boolean));
-    reasons.push(`main has ${unreleased.length || 'some'} commit(s) that aren't in a planner release yet (since ${latest.name}); an automatic release would ship them.`);
+else {
+    unreleased.push(...git(repoRoot, ['log', '--format=- %h %s', `${latest.name}..HEAD`, '--', ...ShippedPaths]).split(/\r?\n/).filter(Boolean));
+    if (unreleased.length) {
+        reasons.push(`main has ${unreleased.length} commit(s) since ${latest.name} that change what a release ships (${ShippedPaths.join(', ')}); an automatic release would ship them unreviewed.`);
+    }
 }
 step(`Sync with ${newest}`);
 const reportFile = join(OutDir, 'update-report.txt');
@@ -126,7 +133,7 @@ if (reasons.length) {
         ...reasons.map((r) => `- ${r}`),
     ];
     if (verdict.attention.length) body.push('', '### Items update.mjs flagged', '', ...verdict.attention.map((a) => `- ${a}`));
-    if (unreleased.length) body.push('', '### Commits on main not in a release', '', ...unreleased);
+    if (unreleased.length) body.push('', '### Commits on main that change what a release ships, not in a release yet', '', ...unreleased);
     body.push('', '### What to do', '',
         'Sync by hand: `node tools/update.mjs`, deal with the items above, commit, and release with `node tools/release.mjs`.',
         `The hourly check keeps reporting this release until \`tools/mod-sync.json\` records it, and then stops; close this issue then.`,
