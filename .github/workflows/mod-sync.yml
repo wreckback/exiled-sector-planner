@@ -59,7 +59,8 @@ jobs:
           NOTES: ${{ steps.auto.outputs.notes }}
         run: |
           git push origin HEAD:main "refs/tags/$TAG"
-          gh release create "$TAG" "$ZIP" --verify-tag --prerelease --title "$TAG" --notes-file "$NOTES"
+          # A full release marked Latest, titled with the tag minus its +es<mod release> part, like the ones made by hand.
+          gh release create "$TAG" "$ZIP" --verify-tag --latest --title "Exiled Sector Planner ${TAG%%+*}" --notes-file "$NOTES"
 
       - name: Open an issue
         if: steps.auto.outputs.outcome == 'needs-you' && !inputs.dry_run
