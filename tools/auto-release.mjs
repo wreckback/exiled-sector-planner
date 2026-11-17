@@ -115,13 +115,6 @@ if (verdict.attention.length) reasons.push(`update.mjs flagged ${verdict.attenti
 // may read differently, and new nodes may bring mechanics the planner doesn't model).
 if (verdict.structural.length) reasons.push(`The tree's shape changed: ${verdict.structural.join(', ')}.`);
 const report = readFileSync(reportFile, 'utf8');
-// One section of the update report ("== Tree changes" up to the next "== ").
-const reportSection = (title) => {
-    const start = report.indexOf(`== ${title}`);
-    if (start < 0) return '';
-    const end = report.indexOf('\n== ', start + 3);
-    return report.slice(start, end < 0 ? undefined : end).trim();
-};
 const modLine = `**${verdict.release}** (mod version ${verdict.modVersion}; last synced ${verdict.previous?.release ?? 'unknown'})`;
 
 // ---------------------------------------------------------------- 4a. not one for a machine
@@ -157,17 +150,9 @@ runTool('package.mjs', ['--tag', tag]);
 const zip = fromRepo(join('dist', `exiled-sector-planner-${tag}.zip`));
 if (!existsSync(zip)) fail(TOOL, `package.mjs left no ${rel(zip)}`);
 
-// Release notes: the mod's changes, then the tag message (which lists the planner commits).
-const tagMessage = git(repoRoot, ['tag', '-l', '--format=%(contents)', tag]);
-const notes = [
-    `Automatic release for Exiled Sector ${modLine}.`, '',
-    `Changes in the mod data: ${verdict.summary.length ? verdict.summary.join(', ') : 'no tree changes'}.`,
-];
-const tree = reportSection('Tree changes');
-if (tree) notes.push('', '```text', tree, '```');
-notes.push('', '---', '', tagMessage, '');
+// Release notes: one line, since an automatic release only syncs the data (the tag message still lists the commits).
 const notesFile = join(OutDir, 'notes.md');
-writeFileSync(notesFile, notes.join('\n'), 'utf8');
+writeFileSync(notesFile, `- Synced to Exiled Sector ${newest}\n`, 'utf8');
 
 if (opt['dry-run']) {
     git(repoRoot, ['tag', '-d', tag]);
