@@ -1,8 +1,8 @@
 {
-    "release": "0.12.8-alpha",
-    "commit": "1f63806e1aa2724502bd9917081035c5c8b01556",
-    "modVersion": "0.12.8",
-    "synced": "2026-11-16 20:58",
+    "release": "0.12.9-alpha",
+    "commit": "9931604addac2d5c776bfb6d33174ba1ff42d00b",
+    "modVersion": "0.12.9",
+    "synced": "2026-11-20 22:57",
     "noWording": [
         "BOMBER_ROLE_ACCELERATION_PERCENT",
         "BOMBER_ROLE_TOP_SPEED_PERCENT",
