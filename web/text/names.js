@@ -46,6 +46,7 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "name.volume.exotech": "Exotech",
     "name.volume.enigma": "Enigma",
     "name.volume.threat": "Threat",
+    "name.volume.domain_drones": "Explorarium",
 
     // Hull sizes: on their own, inside a sentence ("on a cruiser"), and as a plural ("Not on frigates").
     "name.hull.frigate": "Frigate",
@@ -119,6 +120,7 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "name.gameState.gate_frost_fire_defeated": "Frost fire defeated",
     "name.gameState.gate_frozen_heart_visited": "Frozen heart visited",
     "name.gameState.gate_last_strive_completed": "Last strive completed",
+    "name.gameState.gate_mothership_defeated": "Survey mothership defeated",
     "name.gameState.gate_omega_found": "Omega found",
     "name.gameState.gate_pascal_visited": "Pascal visited",
     "name.gameState.gate_remnant_fought": "Remnant fought",
