@@ -117,6 +117,16 @@ On the `theme-tags` branch, ready for the next mod release. With 0.12.6-alpha da
 - Names for the renamed and new requirements: Strikecraft bays and No strikecraft bays (`req_fighter_bays` and `req_no_fighter_bays` before), Front shield and Omni shield. The old two stay until the data is synced past 0.12.6-alpha.
 - `update.mjs` flags an empty theme list, so an automatic release stops on it, and it watches `ThemeTags` and `theme_tags.csv`.
 
+## Ready for mod 0.13.0-alpha (2026-11-24)
+
+On `development`, before the 0.13.0 sync. Extracting 0.12.8-alpha with these changes gives the same data as before.
+
+- **Optional volumes:** the mod now registers each toggle as an Auto/On/Off setting (`radioSetting(..., "settings.volumes.<key>", ...)`). `extract.mjs` reads that form as well as the old one; without it the Optional rules list would be empty. The planner keeps a plain shown/hidden checkbox.
+- **Damage taken near the flagship, near a held objective and while retreating:** the mod words these through `ConditionalTemplatedStat`, which gets lower-is-better and the `{range}` arg from its factory. `backingOf` now picks the factory overload by argument count, fills string and value arguments as well as functions, and reads `lowerIsBetter` from what the factory passes to the record. Reductions are green again and the range reads 1500 su.
+- **Damage taken (plain):** its target is now the constant `StatTarget.DAMAGE_TAKEN`; the live check follows a constant to its declaration.
+- **Honor Guard** (`TOP_SPEED_SHARE_OF_FLAGSHIP_PERCENT`): a per-hull table in a helper class (`Map<HullSize, Float>` filled with `put`) becomes `hullArgs` for `Cls.m(hullSize)` and a joined list for `Cls.m()`. `describeRaw` now uses `hullArgs` even without an `effect.NAME.hullSize` sentence, so the cap is the Hull dropdown's (30/25/20/15 su/s).
+- Names for the Explorarium volume (`domain_drones`) and the Survey mothership defeated gate.
+
 ## Planner (`web/`)
 
 **Tree view**

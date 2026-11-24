@@ -26,6 +26,15 @@ The text editor (`node tools/serve.mjs --edit`; `TOOLS.md`, Text tools) was buil
    - `release.mjs --dry-run`
    - a test zip from `package.mjs` that opens from `file://`
 
+# Now: sync mod 0.13.0-alpha (2026-11-24)
+
+The mod released 0.13.0-alpha on 2026-11-22 with the `Dev` work (nested theme tags, the Explorarium volume; the Threat and Shrouded volumes and the `gate_threat_fought`/`gate_dweller_fought` gates removed). `main` is synced to 0.12.9-alpha; the `Mod sync` workflow is disabled, so this sync is by hand. The extractor fixes it needs (problems 1 to 5 of the preview: optional volume toggles, the damage-taken flags and `{range}`, the live flag, Honor Guard's cap, the two names) are done on `development` (`CHANGELOG.md`, "Ready for mod 0.13.0-alpha"). Left, in this order, at the user's word (not before):
+
+1. Merge `main` (the 0.12.9 sync) into `development`, then `development` into `main`.
+2. On `main`, run the 0.13.0 sync (`update.mjs --mod-root ../ExiledSector`).
+3. Then the "Next" steps below from step 3 on (old requirement names), plus: remove `name.volume.threat`, `name.volume.shrouded` (and their `VOLUME_NAMES` entries), `name.gameState.gate_threat_fought` and `gate_dweller_fought` once `text-check.mjs` lists them as unused (the user's choice). Saved builds with Threat or Shrouded nodes lose them; the mod has no replacement.
+4. Decide whether to turn the `Mod sync` workflow back on.
+
 # Next: merge the nested theme tags at the next mod release (2026-11-12)
 
 The mod's `Dev` work after 0.12.6-alpha moved the theme list to `data/config/exiledSector/theme_tags.csv`, nested the tags, retagged every node (affinity nodes included) and renamed `req_fighter_bays`/`req_no_fighter_bays` to `req_strikecraft_bays`/`req_no_strikecraft_bays`. The planner's support for it was built on `theme-tags` and is on `development` (`4acfc5b`, pushed), not on `main`, at the user's choice: it waits for the mod release. `CHANGELOG.md` on `development` ("Nested theme tags") has the details.
@@ -36,7 +45,7 @@ The mod released 0.12.7-alpha (2026-11-13) and 0.12.8-alpha (2026-11-17) from it
 
 Checked at `dc1376aa` (2026-11-13, 30 commits after `9be677e1`): nothing for the planner (Atlas officers and their scars, tag inhibitors, crafting; the new `SCAR_*` effects are for officers' flagships and no node uses them).
 
-**Last checked at `fbc884a3` (2026-11-17, 163 commits after `dc1376aa`).** Still 54 themes, and nothing new for theme tags. The report now flags more than "rule files changed". To fix on `development` (not done yet, at the user's choice):
+**Last checked at `fbc884a3` (2026-11-17, 163 commits after `dc1376aa`).** Still 54 themes, and nothing new for theme tags. The report now flags more than "rule files changed". To fix on `development` (all but the last item done 2026-11-24, see "Sync mod 0.13.0-alpha" above; Honor Guard shows the Hull dropdown's cap):
 
 - **Damage-taken effects lost their lower-is-better flag:** `DAMAGE_TAKEN_NEAR_FLAGSHIP_PERCENT`, `DAMAGE_TAKEN_NEAR_HELD_OBJECTIVE_PERCENT` and `DAMAGE_TAKEN_WHILE_RETREATING_PERCENT` would show reductions in the bad colour. The mod replaced `DamageTakenWhile` with `ConditionalTemplatedStat`, which takes the flag as a factory argument (`damageTakenWhile(...)` passes `true`) and the placeholder as `argName` (`"range"`). `extract.mjs` reads neither, so `{range}` is also shown as `?`.
 - **`DAMAGE_TAKEN_PERCENT` lost its live flag:** its stat is now the constant `StatTarget.DAMAGE_TAKEN` instead of inline `liveStat(...)` calls. `extract.mjs` should follow the constant.
