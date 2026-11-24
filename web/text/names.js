@@ -40,12 +40,10 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "name.volume.stargazer": "Stargazer",
     "name.volume.omega": "Omega",
     "name.volume.abyss": "Abyss",
-    "name.volume.shrouded": "Shrouded",
     "name.volume.nightcross": "Nightcross",
     "name.volume.kesteven": "Kesteven",
     "name.volume.exotech": "Exotech",
     "name.volume.enigma": "Enigma",
-    "name.volume.threat": "Threat",
     "name.volume.domain_drones": "Explorarium",
 
     // Hull sizes: on their own, inside a sentence ("on a cruiser"), and as a plural ("Not on frigates").
@@ -105,17 +103,12 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "name.requirement.req_shields": "Shields",
     "name.requirement.req_strikecraft_bays": "Strikecraft bays",
     "name.requirement.req_system_charges": "System charges",
-    // Mod 0.12.6-alpha and earlier, renamed to req_strikecraft_bays and req_no_strikecraft_bays after it.
-    // Remove these two once the planner data is synced past 0.12.6-alpha.
-    "name.requirement.req_fighter_bays": "Fighter bays",
-    "name.requirement.req_no_fighter_bays": "No fighter bays",
     "name.requirement.req_unscripted_hull": "Unscripted hull",
 
     // Game states that unlock nodes (their gate_* tags), in tooltips ("Unlocked by: …") and the anchor list
     // ("In game: …"). The Optional rules list uses the mod's own wording, and these only where it has none.
     "name.gameState.gate_ancient_prototype_found": "Ancient prototype found",
     "name.gameState.gate_blood_trail_defeated": "Blood trail defeated",
-    "name.gameState.gate_dweller_fought": "Dweller fought",
     "name.gameState.gate_existential_threat_defeated": "Existential threat defeated",
     "name.gameState.gate_frost_fire_defeated": "Frost fire defeated",
     "name.gameState.gate_frozen_heart_visited": "Frozen heart visited",
@@ -125,7 +118,6 @@ window.ESP_TEXT = Object.assign(window.ESP_TEXT || {}, {
     "name.gameState.gate_pascal_visited": "Pascal visited",
     "name.gameState.gate_remnant_fought": "Remnant fought",
     "name.gameState.gate_singularity_defeated": "Singularity defeated",
-    "name.gameState.gate_threat_fought": "Threat fought",
 
     // Subroutine kinds inside a sentence ("Only 1 doctrine per ship.").
     "name.subKind.DOCTRINE": "doctrine",

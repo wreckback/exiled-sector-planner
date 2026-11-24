@@ -26,39 +26,12 @@ The text editor (`node tools/serve.mjs --edit`; `TOOLS.md`, Text tools) was buil
    - `release.mjs --dry-run`
    - a test zip from `package.mjs` that opens from `file://`
 
-# Now: sync mod 0.13.0-alpha (2026-11-24)
+# Now: after the mod 0.13.0-alpha sync (2026-11-24)
 
-The mod released 0.13.0-alpha on 2026-11-22 with the `Dev` work (nested theme tags, the Explorarium volume; the Threat and Shrouded volumes and the `gate_threat_fought`/`gate_dweller_fought` gates removed). `main` is synced to 0.12.9-alpha; the `Mod sync` workflow is disabled, so this sync is by hand. The extractor fixes it needs (problems 1 to 5 of the preview: optional volume toggles, the damage-taken flags and `{range}`, the live flag, Honor Guard's cap, the two names) are done on `development` (`CHANGELOG.md`, "Ready for mod 0.13.0-alpha"). Left, in this order, at the user's word (not before):
+The mod released 0.13.0-alpha on 2026-11-22 with its `Dev` work (nested theme tags, the Explorarium volume; the Threat and Shrouded volumes and the `gate_threat_fought`/`gate_dweller_fought` gates removed, with no replacement, so saved builds lose those nodes). The `Mod sync` workflow was disabled, so it was synced by hand on 2026-11-24: `development` (the extractor fixes, `CHANGELOG.md` "Ready for mod 0.13.0-alpha") merged into `main`, then `update.mjs`. Left over from the report, nothing to do: `FIGHTER_ARMOR_PERCENT` has no wording in the mod either (see Later, fighter role-stat effects), and the survey station and aurorae images are vanilla art (placeholders). The old names (`req_fighter_bays`, `req_no_fighter_bays`, the Threat and Shrouded volumes, the two gates) were removed; Front shield and Omni shield stay, since the mod still defines them though no node uses them yet. The page was checked: 54 themes, Weapons finding the Beam nodes, the tech themes finding the affinity nodes, 4 optional volume toggles.
 
-1. Merge `main` (the 0.12.9 sync) into `development`, then `development` into `main`.
-2. On `main`, run the 0.13.0 sync (`update.mjs --mod-root ../ExiledSector`).
-3. Then the "Next" steps below from step 3 on (old requirement names), plus: remove `name.volume.threat`, `name.volume.shrouded` (and their `VOLUME_NAMES` entries), `name.gameState.gate_threat_fought` and `gate_dweller_fought` once `text-check.mjs` lists them as unused (the user's choice). Saved builds with Threat or Shrouded nodes lose them; the mod has no replacement.
-4. Decide whether to turn the `Mod sync` workflow back on.
-
-# Next: merge the nested theme tags at the next mod release (2026-11-12)
-
-The mod's `Dev` work after 0.12.6-alpha moved the theme list to `data/config/exiledSector/theme_tags.csv`, nested the tags, retagged every node (affinity nodes included) and renamed `req_fighter_bays`/`req_no_fighter_bays` to `req_strikecraft_bays`/`req_no_strikecraft_bays`. The planner's support for it was built on `theme-tags` and is on `development` (`4acfc5b`, pushed), not on `main`, at the user's choice: it waits for the mod release. `CHANGELOG.md` on `development` ("Nested theme tags") has the details.
-
-**The mod's `Dev` work is probably not finished** (it was checked at `9be677e1`, 2026-11-12, still changing the tags that day). Keep looking out for changes until it's released: from time to time, `git -C <mod> fetch` and run `node tools/update.mjs --preview --mod-root <mod>` against `Dev`, and compare the report with the one at the last check (below). Look especially at `theme_tags.csv`, `ThemeTags`, `SkillTags`, `NodeRequirements` and the tags in `data/skilltrees/skill_types.json`. Fix anything new on `development`.
-
-The mod released 0.12.7-alpha (2026-11-13) and 0.12.8-alpha (2026-11-17) from its `main`: hotfixes without the `Dev` work (no `theme_tags.csv`, still `req_fighter_bays`). The automatic release synced `main` to both on its own (`9f7f813`, `0e08e88`), so the release that brings the `Dev` work is still to come.
-
-Checked at `dc1376aa` (2026-11-13, 30 commits after `9be677e1`): nothing for the planner (Atlas officers and their scars, tag inhibitors, crafting; the new `SCAR_*` effects are for officers' flagships and no node uses them).
-
-**Last checked at `fbc884a3` (2026-11-17, 163 commits after `dc1376aa`).** Still 54 themes, and nothing new for theme tags. The report now flags more than "rule files changed". To fix on `development` (all but the last item done 2026-11-24, see "Sync mod 0.13.0-alpha" above; Honor Guard shows the Hull dropdown's cap):
-
-- **Damage-taken effects lost their lower-is-better flag:** `DAMAGE_TAKEN_NEAR_FLAGSHIP_PERCENT`, `DAMAGE_TAKEN_NEAR_HELD_OBJECTIVE_PERCENT` and `DAMAGE_TAKEN_WHILE_RETREATING_PERCENT` would show reductions in the bad colour. The mod replaced `DamageTakenWhile` with `ConditionalTemplatedStat`, which takes the flag as a factory argument (`damageTakenWhile(...)` passes `true`) and the placeholder as `argName` (`"range"`). `extract.mjs` reads neither, so `{range}` is also shown as `?`.
-- **`DAMAGE_TAKEN_PERCENT` lost its live flag:** its stat is now the constant `StatTarget.DAMAGE_TAKEN` instead of inline `liveStat(...)` calls. `extract.mjs` should follow the constant.
-- **Honor Guard's `{cap}` is shown as `?`** (`TOP_SPEED_SHARE_OF_FLAGSHIP_PERCENT`, `FlagshipPaceListener`): the cap is by hull size, 30/25/20/15 su/s. Decide how the planner words it (the selected hull's cap, or all four).
-- **New volume and gate without names:** `domain_drones` ("Explorarium" in the mod's player text) needs `name.volume.domain_drones` in `names.js` and an entry in `VOLUME_NAMES` in `app.js`. `gate_mothership_defeated` needs `name.gameState.gate_mothership_defeated`.
-- **Nothing to do:** 37 nodes added, 90 moved, 9 skill types added (the extractor handles them). `FIGHTER_ARMOR_PERCENT` has no wording in the mod either (see Later, fighter role-stat effects). The 3 survey station images are vanilla art (placeholders). `req_phase` now also allows Secrets of the Frontier Concord Shift hulls, none of which are in the planner's data. The other rule-file changes (`NodeAllocator`, `ModspecCaches`, `SkillTreeSettings`, `ShieldSkillEffect`'s new effects) don't affect the planner.
-
-Start the next check from `fbc884a3`.
-
-1. The automatic release will stop on the mod release that brings the `Dev` work (rule files changed: `SkillTags`, `NodeRequirements`, `SkillTier` and others) and open an issue. Do that sync by hand.
-2. Merge `development` into `main` before syncing, so the sync runs with the new extractor. With 0.12.6-alpha data the page is unchanged (text baseline identical), so the merge is safe on its own.
-3. After the sync, remove the two old `name.requirement.req_fighter_bays` and `req_no_fighter_bays` lines in `web/text/names.js` (and their comment), and run `node tools/text-check.mjs`.
-4. Check the Filter in the page: 54 themes against mod `Dev` `9be677e1`, Weapons also finding the Beam nodes, and Low Tech, Midline and High Tech finding the 155 affinity nodes.
+1. Decide whether to turn the `Mod sync` workflow back on.
+2. The next check of the mod's `Dev` branch starts from `0.13.0-alpha`.
 
 # Next: follow-ups from the PR #1 review (`node-tools`)
 

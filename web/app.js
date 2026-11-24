@@ -98,9 +98,8 @@
     core: tr('name.volume.core'), luddic: tr('name.volume.luddic'), pirate: tr('name.volume.pirate'), hegemony: tr('name.volume.hegemony'),
     persean_league: tr('name.volume.persean_league'), tritachyon: tr('name.volume.tritachyon'), sindrian_dictat: tr('name.volume.sindrian_dictat'),
     REDACTED: tr('name.volume.REDACTED'), tania: tr('name.volume.tania'), stargazer: tr('name.volume.stargazer'), omega: tr('name.volume.omega'),
-    abyss: tr('name.volume.abyss'), shrouded: tr('name.volume.shrouded'), nightcross: tr('name.volume.nightcross'), kesteven: tr('name.volume.kesteven'),
-    exotech: tr('name.volume.exotech'), enigma: tr('name.volume.enigma'), threat: tr('name.volume.threat'),
-    domain_drones: tr('name.volume.domain_drones'),
+    abyss: tr('name.volume.abyss'), nightcross: tr('name.volume.nightcross'), kesteven: tr('name.volume.kesteven'),
+    exotech: tr('name.volume.exotech'), enigma: tr('name.volume.enigma'), domain_drones: tr('name.volume.domain_drones'),
   };
   const STAR_COLOURS = {
     star_yellow: '#fff2b8', star_orange: '#ffc27a', star_red: '#ff7a5c', star_blue: '#9cc4ff', star_white: '#f4f8ff',
