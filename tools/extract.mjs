@@ -315,9 +315,12 @@ function backingOf(body) {
         const open = m.index + m[0].length - 1;
         const close = findClose(body, open);
         const callArgs = close < 0 ? [] : splitTopLevel(body.slice(open + 1, close));
-        const def = new RegExp(String.raw`\bstatic\s+\w+\s+${m[2]}\s*\(([^)]*)\)`).exec(src);
+        // The factory overload taking as many arguments as the call (ConditionalTemplatedStat.damageTakenWhile has three).
+        const defs = allMatches(src, new RegExp(String.raw`\bstatic\s+\w+\s+${m[2]}\s*\(([^)]*)\)`, 'g'));
+        const def = defs.find((d) => splitTopLevel(d[1]).length === callArgs.length) ?? defs[0];
         // Function arguments, applied to the context: a method reference Owner::method, or a lambda x -> expr.
-        const fns = new Map();
+        // Other arguments: a string literal names a message arg (.arg(argName, ...)), anything else is a value.
+        const fns = new Map(), names = new Map();
         if (def) {
             splitTopLevel(def[1]).forEach((p, k) => {
                 const a = callArgs[k] ?? '';
@@ -326,7 +329,29 @@ function backingOf(body) {
                 const lambda = /^\(?\s*\w+\s*\)?\s*->\s*(.+)$/s.exec(a);
                 if (ref) fns.set(name, `${ref[1]}.${ref[2]}(context)`);
                 else if (lambda) fns.set(name, `(${lambda[1]})`);
+                else if (/^"[^"]*"$/.test(a)) names.set(name, a);
+                else if (a && /^[\w.()+\-*/ ]+$/.test(a)) fns.set(name, `(${a})`);
             });
+        }
+        // lowerIsBetter as the factory passes it to the record (new X(..., true, ...)): true when every construction
+        // in the factory's overloads passes true at the record's lowerIsBetter position.
+        let lowerIsBetter = false;
+        const comps = new RegExp(String.raw`\brecord\s+${m[1]}\s*\(([^)]*)\)`).exec(src);
+        const lowerAt = comps ? splitTopLevel(comps[1]).findIndex((c) => c.split(/\s+/).at(-1) === 'lowerIsBetter') : -1;
+        if (lowerAt >= 0) {
+            const passed = [];
+            for (const d of defs) {
+                const bOpen = src.indexOf('{', d.index + d[0].length);
+                const bClose = findClose(src, bOpen);
+                if (bOpen < 0 || bClose < 0) continue;
+                const fb = src.slice(bOpen + 1, bClose);
+                for (const n of allMatches(fb, new RegExp(String.raw`\bnew\s+${m[1]}\s*\(`, 'g'))) {
+                    const nOpen = n.index + n[0].length - 1;
+                    const nClose = findClose(fb, nOpen);
+                    if (nClose >= 0) passed.push(splitTopLevel(fb.slice(nOpen + 1, nClose))[lowerAt]);
+                }
+            }
+            lowerIsBetter = passed.length > 0 && passed.every((v) => v === 'true');
         }
         const describe = [];
         for (const d of allMatches(src, /\b(?:description|describe)\s*\(\s*SkillEffect\s+\w+\s*,\s*float\s+magnitude\s*(?:,\s*DescribeContext\s+\w+\s*)?\)\s*\{/g)) {
@@ -335,9 +360,10 @@ function backingOf(body) {
             if (bClose < 0) continue;
             let b = src.slice(bOpen + 1, bClose);
             for (const [name, call] of fns) b = b.replace(new RegExp(String.raw`\b${name}\.apply\w*\(\s*\w+\s*\)`, 'g'), () => call);
+            for (const [name, lit] of names) b = b.replace(new RegExp(String.raw`\.arg\(\s*${name}\s*,`, 'g'), () => `.arg(${lit},`);
             describe.push(b);
         }
-        return { cls: m[1], src, describe };
+        return { cls: m[1], src, describe, lowerIsBetter };
     }
     return null;
 }
@@ -375,7 +401,7 @@ for (const f of javaFiles.filter((x) => lower(x.name).endsWith('skilleffect.java
             }
         }
         if (/,\s*true\s*\)\s*\)/i.test(body) || /lowerIsBetter\(\)\s*\{\s*return\s+true/i.test(body)
-            || (backing && /lowerIsBetter\(\)\s*\{\s*return\s+true/i.test(backing.src))) info.lowerIsBetter = true;
+            || (backing && (backing.lowerIsBetter || /lowerIsBetter\(\)\s*\{\s*return\s+true/i.test(backing.src)))) info.lowerIsBetter = true;
 
         const args = new Map();
         // Affinity-scaled effects (AffinityScaling backing) word themselves with {step} = the scaling's step size.
@@ -434,8 +460,10 @@ for (const f of javaFiles.filter((x) => lower(x.name).endsWith('skilleffect.java
             if (/\blive(Stat|Bonus)\(/i.test(body)) info.live = true;
             else {
                 // A helper as the target (statEffect(MODE, Maneuverability.target(), ...)): live if that class only builds live targets.
-                const helper = /statEffect\(\s*(?:StatMode\.)?\w+\s*,\s*([A-Z]\w+)\.\w+/.exec(body);
-                const src = helper ? classText.get(helper[1]) : null;
+                // A constant as the target (statEffect(MODE, StatTarget.DAMAGE_TAKEN, ...)): live if its declaration only builds live targets.
+                const helper = /statEffect\(\s*(?:StatMode\.)?\w+\s*,\s*([A-Z]\w+)\.(\w+)/.exec(body);
+                let src = helper ? classText.get(helper[1]) : null;
+                if (src && /^[A-Z][A-Z0-9_]*$/.test(helper[2])) src = new RegExp(String.raw`\b${helper[2]}\s*=\s*([^;]+);`).exec(src)?.[1] ?? null;
                 if (src && /\blive(Stat|Bonus)\(/i.test(src) && !/\b(stat|bonus|dynamicStat|dynamicMod)\(/i.test(src)) info.live = true;
             }
         }
