@@ -30,8 +30,7 @@ The text editor (`node tools/serve.mjs --edit`; `TOOLS.md`, Text tools) was buil
 
 The mod released 0.13.0-alpha on 2026-11-22 with its `Dev` work (nested theme tags, the Explorarium volume; the Threat and Shrouded volumes and the `gate_threat_fought`/`gate_dweller_fought` gates removed, with no replacement, so saved builds lose those nodes). The `Mod sync` workflow was disabled, so it was synced by hand on 2026-11-24: `development` (the extractor fixes, `CHANGELOG.md` "Ready for mod 0.13.0-alpha") merged into `main`, then `update.mjs`. Left over from the report, nothing to do: `FIGHTER_ARMOR_PERCENT` has no wording in the mod either (see Later, fighter role-stat effects), and the survey station and aurorae images are vanilla art (placeholders). The old names (`req_fighter_bays`, `req_no_fighter_bays`, the Threat and Shrouded volumes, the two gates) were removed; Front shield and Omni shield stay, since the mod still defines them though no node uses them yet. The page was checked: 54 themes, Weapons finding the Beam nodes, the tech themes finding the affinity nodes, 4 optional volume toggles.
 
-1. Decide whether to turn the `Mod sync` workflow back on.
-2. The next check of the mod's `Dev` branch starts from `0.13.0-alpha`.
+Released as `v0.4.0-alpha.5+es0.13.0-alpha` by hand (the workflow stops on an already-synced `main` and on unreleased `web/` changes), and the `Mod sync` workflow was turned back on, the same day. The next check of the mod's `Dev` branch starts from `0.13.0-alpha`.
 
 # Next: follow-ups from the PR #1 review (`node-tools`)
 
