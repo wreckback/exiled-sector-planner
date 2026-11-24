@@ -1,8 +1,8 @@
 {
-    "release": "0.12.9-alpha",
-    "commit": "9931604addac2d5c776bfb6d33174ba1ff42d00b",
-    "modVersion": "0.12.9",
-    "synced": "2026-11-20 22:57",
+    "release": "0.13.0-alpha",
+    "commit": "913dc00cb945398bfc2020f4fa174fd6f533b66e",
+    "modVersion": "0.13.0",
+    "synced": "2026-11-24 09:13",
     "noWording": [
         "BOMBER_ROLE_ACCELERATION_PERCENT",
         "BOMBER_ROLE_TOP_SPEED_PERCENT",
@@ -11,6 +11,7 @@
         "CONVERTED_HANGAR_REFIT_TIME_MULT",
         "CONVERTED_HANGAR_RELAUNCH_TIME_FLAT",
         "CONVERTED_HANGAR_REPLACEMENT_RATE_MULT",
+        "FIGHTER_ARMOR_PERCENT",
         "FIGHTER_DAMAGE_TAKEN_MULT",
         "FIGHTER_TOP_SPEED_PERCENT",
         "FIGHTER_WEAPON_DAMAGE_PERCENT",
@@ -18,5 +19,10 @@
         "FIGHTER_WEAPON_RANGE_PERCENT",
         "UNHIT_ARMOR_REGEN_LOW_CAP_PERCENT"
     ],
-    "absentImages": []
+    "absentImages": [
+        "graphics/planets/aurorae.png",
+        "graphics/stations/survey_mothership.png",
+        "graphics/stations/survey_probe.png",
+        "graphics/stations/survey_ship.png"
+    ]
 }
