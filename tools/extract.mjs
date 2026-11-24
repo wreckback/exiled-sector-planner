@@ -666,7 +666,9 @@ if (vtf && stsf) {
     for (const m of allMatches(readText(vtf.full), /static\s+final\s+Set<String>\s+(\w+)_VOLUMES\s*=\s*Set\.of\(([^)]*)\)/g)) {
         groupVolumes.set(m[1], allMatches(m[2], /"([^"]+)"/g).map((x) => x[1]));
     }
-    for (const m of allMatches(readText(stsf.full), /VolumeToggles\.(\w+)_FIELD_ID\s*,\s*Translation\.text\("settings\.volumes\.(\w+)\.name"\)/g)) {
+    // Up to mod 0.12.x a boolean setting named by Translation.text("settings.volumes.<key>.name"); from 0.13.0 an
+    // Auto/On/Off radioSetting given the key prefix "settings.volumes.<key>". The planner keeps a plain shown/hidden toggle.
+    for (const m of allMatches(readText(stsf.full), /VolumeToggles\.(\w+)_FIELD_ID\s*,\s*(?:Translation\.text\()?"settings\.volumes\.(\w+)(?:\.name)?"/g)) {
         const [, constName, key] = m;
         if (!groupVolumes.has(constName)) continue;
         const name = strings.has(`settings.volumes.${key}.name`) ? strings.get(`settings.volumes.${key}.name`) : key;
