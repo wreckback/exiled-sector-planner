@@ -437,6 +437,19 @@ for (const f of javaFiles.filter((x) => lower(x.name).endsWith('skilleffect.java
                 }
                 info.hullArgs = hullArgs;
             }
+            // Args from a per-hull-size table in a helper class (Map<HullSize, Float> filled with put(HullSize.X, n)):
+            // Cls.m(hullSize) is that hull's value (hullArgs, for the Hull dropdown's size), Cls.m() all four joined with "/".
+            for (const a of allMatches(body, /\.arg\(\s*"(\w+)"\s*,\s*([A-Z]\w*)\.(\w+)\(\s*(hullSize)?\s*\)\s*\)/g)) {
+                const [, argName, owner, , perHull] = a;
+                const puts = allMatches(classText.get(owner) ?? '', /\b(\w+)\.put\(\s*HullSize\.(\w+)\s*,\s*(-?[\d.]+)[fFdD]?\s*\)/g);
+                if (!puts.length || new Set(puts.map((p) => p[1])).size !== 1) continue;
+                if (perHull) {
+                    info.hullArgs ??= {};
+                    for (const p of puts) (info.hullArgs[p[2]] ??= {})[argName] = numText(toDouble(p[3]));
+                } else {
+                    args.set(argName, `join(${puts.map((p) => numText(toDouble(p[3]))).join(',')})`);
+                }
+            }
             if (/EffectText\.(signed)\(/.test(dbody)) info.signed = true;
             // StatMode.describeStat(±magnitude, [subject,] "stat.x"): the game words the effect with that mode and stat,
             // with the magnitude's sign flipped when it's passed as -magnitude (the survey cost reductions, stored as

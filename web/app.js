@@ -100,6 +100,7 @@
     REDACTED: tr('name.volume.REDACTED'), tania: tr('name.volume.tania'), stargazer: tr('name.volume.stargazer'), omega: tr('name.volume.omega'),
     abyss: tr('name.volume.abyss'), shrouded: tr('name.volume.shrouded'), nightcross: tr('name.volume.nightcross'), kesteven: tr('name.volume.kesteven'),
     exotech: tr('name.volume.exotech'), enigma: tr('name.volume.enigma'), threat: tr('name.volume.threat'),
+    domain_drones: tr('name.volume.domain_drones'),
   };
   const STAR_COLOURS = {
     star_yellow: '#fff2b8', star_orange: '#ffc27a', star_red: '#ff7a5c', star_blue: '#9cc4ff', star_white: '#f4f8ff',
@@ -1308,9 +1309,10 @@
     const key = 'effect.' + name;
     let tpl = S[key];
     let value = mag;
-    // Hull-specific wording (effect.NAME.hullSize) when the effect has per-hull values for the Hull dropdown's size.
-    const hullArgs = e.hullArgs && S[key + '.hullSize'] != null ? e.hullArgs[HULL_ENUM[state.hull]] : null;
-    if (hullArgs) tpl = S[key + '.hullSize'];
+    // Per-hull values for the Hull dropdown's size, with the hull-specific wording (effect.NAME.hullSize) when there is one
+    // (Honor Guard's cap has none: the game fills the same sentence with that hull's value).
+    const hullArgs = e.hullArgs ? e.hullArgs[HULL_ENUM[state.hull]] : null;
+    if (hullArgs && S[key + '.hullSize'] != null) tpl = S[key + '.hullSize'];
     if (tpl == null) {
       if (S[key + '.one'] != null || S[key + '.other'] != null) tpl = Math.abs(mag) === 1 ? (S[key + '.one'] ?? S[key + '.other']) : (S[key + '.other'] ?? S[key + '.one']);
       else if (S[key + '.more'] != null) { tpl = mag >= 0 ? S[key + '.more'] : S[key + '.less']; value = Math.abs(mag); }
